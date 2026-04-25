@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.0.4";
+const CARD_VERSION = "1.0.5";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 window.customCards = window.customCards || [];
@@ -715,7 +715,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       return;
     }
 
-    this.content.innerHTML = `
+    const liveHtml = `
       <div class="wrapper">
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
@@ -736,6 +736,11 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       </div>
       ${this.styles()}
     `;
+    // Only update DOM if HTML actually changed
+    if (liveHtml !== this._lastLiveHtml) {
+      this._lastLiveHtml = liveHtml;
+      this.content.innerHTML = liveHtml;
+    }
   }
 
 
