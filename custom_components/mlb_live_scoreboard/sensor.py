@@ -24,13 +24,13 @@ async def async_setup_entry(
 
 class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
     _attr_icon = "mdi:baseball"
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
 
     def __init__(self, coordinator: RuntimeData, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         team = str(entry.data.get("team", "mlb")).lower()
         self._attr_unique_id = f"{entry.entry_id}_scoreboard"
-        self._attr_name = "Scoreboard"
+        self._attr_name = f"MLB Live Scoreboard {team.upper()}"
         # Entity ID will be: sensor.mlb_live_scoreboard_lad (for LAD team)
         self._attr_suggested_object_id = f"mlb_live_scoreboard_{team}"
 

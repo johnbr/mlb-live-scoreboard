@@ -3,7 +3,7 @@
 A Home Assistant custom integration and Lovelace card for displaying live MLB game data from ESPN.
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 
 ## Features
 
@@ -13,6 +13,7 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Pre-game info** - Scheduled game times and probable pitchers
 - **Post-game results** - Final scores and game leaders
 - **Configurable display** - Toggle various UI elements on/off
+- **Auto-registered card** - The Lovelace card is automatically registered on install
 
 ## Installation
 
@@ -24,11 +25,12 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 4. Click "Install"
 5. Restart Home Assistant
 
+The JavaScript card is automatically served by the integration - no manual file copying needed!
+
 ### Manual Installation
 
 1. Copy the `custom_components/mlb_live_scoreboard` folder to your Home Assistant `config/custom_components/` directory
-2. Copy `dist/mlb-live-game-card.js` to your `config/www/` folder
-3. Restart Home Assistant
+2. Restart Home Assistant
 
 ## Configuration
 
@@ -43,13 +45,12 @@ This creates a sensor entity like `sensor.mlb_live_scoreboard_lad`.
 
 ### Lovelace Card Setup
 
-Add the card resource (if not automatically added):
+The card resource is automatically registered at `/mlb_live_scoreboard/mlb-live-game-card.js`.
 
-```yaml
-resources:
-  - url: /local/mlb-live-game-card.js
-    type: module
-```
+If the auto-registration doesn't work, manually add the resource:
+1. Go to **Settings → Dashboards → ⋮ → Resources**
+2. Add URL: `/mlb_live_scoreboard/mlb-live-game-card.js`
+3. Type: **JavaScript Module**
 
 Add the card to your dashboard:
 
