@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, PLATFORMS
@@ -14,7 +16,18 @@ _LOGGER = logging.getLogger(__name__)
 
 type RuntimeData = MlbLiveScoreboardCoordinator
 
-CARD_URL = f"/mlb_live_scoreboard/mlb-live-game-card.js"
+# Read version from manifest.json for cache busting
+_MANIFEST_PATH = Path(__file__).parent / "manifest.json"
+try:
+    with open(_MANIFEST_PATH) as f:
+        _VERSION = json.load(f).get("version", "0.0.0")
+except Exception:
+    _VERSION = "0.0.0"
+
+# Cache buster: convert 1.5.0 -> 150
+_VERSION_NUM = _VERSION.replace(".", "")
+CARD_URL_BASE = "/mlb_live_scoreboard/mlb-live-game-card.js"
+CARD_URL = f"{CARD_URL_BASE}?v={_VERSION_NUM}"
 CARD_NAME = "mlb-live-game-card"
 
 
@@ -28,31 +41,44 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         )
     ])
 
-    # Register the Lovelace resource
+    # Try to register card now, and also schedule for after HA fully starts
     await _async_register_card(hass)
+    
+    async def _register_on_start(event):
+        await _async_register_card(hass)
+    
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register_on_start)
     
     return True
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:
     """Register the custom card as a Lovelace resource."""
-    # Check if lovelace resources are available
-    if "lovelace" not in hass.data:
-        return
-
     try:
-        from homeassistant.components.lovelace import ResourceStorageCollection
+        from homeassistant.components.lovelace.resources import ResourceStorageCollection
         from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
         
         # Get the resources collection
-        resources = hass.data.get(LOVELACE_DOMAIN, {}).get("resources")
-        if resources is None:
+        lovelace_data = hass.data.get(LOVELACE_DOMAIN)
+        if lovelace_data is None:
+            _LOGGER.debug("Lovelace not ready yet")
             return
             
-        # Check if already registered
-        existing = [r for r in resources.async_items() if CARD_URL in r.get("url", "")]
+        resources = lovelace_data.get("resources")
+        if resources is None or not isinstance(resources, ResourceStorageCollection):
+            _LOGGER.debug("Lovelace resources not available")
+            return
+            
+        # Check if already registered (match base URL without version)
+        existing = [r for r in resources.async_items() if CARD_URL_BASE in r.get("url", "")]
         if existing:
-            _LOGGER.debug("MLB Live Game Card already registered")
+            # Update existing resource with new version if different
+            for res in existing:
+                if res.get("url") != CARD_URL:
+                    _LOGGER.info("Updating MLB Live Game Card resource with new version: %s", CARD_URL)
+                    await resources.async_update_item(res["id"], {"url": CARD_URL})
+                else:
+                    _LOGGER.debug("MLB Live Game Card already registered with current version")
             return
             
         # Register the resource
@@ -61,6 +87,8 @@ async def _async_register_card(hass: HomeAssistant) -> None:
             "res_type": "module",
         })
         _LOGGER.info("Registered MLB Live Game Card as Lovelace resource: %s", CARD_URL)
+    except ImportError:
+        _LOGGER.debug("Lovelace resources module not available")
     except Exception as err:
         _LOGGER.warning("Could not auto-register card resource: %s", err)
         _LOGGER.info("Manually add this resource: %s (type: module)", CARD_URL)
