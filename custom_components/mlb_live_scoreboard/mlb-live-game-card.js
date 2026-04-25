@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.0.4";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 window.customCards = window.customCards || [];
@@ -512,13 +512,52 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     `;
   }
 
+  _computeRenderFingerprint(stateObj) {
+    const attrs = stateObj?.attributes || {};
+    const comp = attrs.competition || {};
+    const sit = attrs.situation || {};
+    const fp = [
+      stateObj?.state,
+      attrs.mode,
+      attrs.game_state,
+      JSON.stringify(comp.competitors?.map(c => ({ ha: c.homeAway, score: c.score, rec: c.records })) || []),
+      comp.status?.type?.state,
+      comp.status?.type?.name,
+      comp.status?.period,
+      comp.status?.displayClock,
+      attrs.current_batter?.display_name,
+      attrs.current_pitcher?.display_name,
+      JSON.stringify(attrs.batter_stats || {}),
+      JSON.stringify(attrs.pitcher_stats || {}),
+      sit.balls,
+      sit.strikes,
+      sit.outs,
+      sit.onFirst,
+      sit.onSecond,
+      sit.onThird,
+      JSON.stringify(attrs.recent_plays?.slice(-3) || []),
+      attrs.inning_context?.is_between_halves,
+      this._thirdOutHoldUntil > Date.now() / 1000 ? this._thirdOutHoldPlayId : "",
+    ].join("||");
+    return fp;
+  }
+
   render() {
     if (!this._hass || !this.config) return;
     const stateObj = this._hass.states[this.config.entity];
     if (!stateObj) {
-      this.content.innerHTML = `<div class="empty">Entity not found: ${this.config.entity}</div>${this.styles()}`;
+      if (this._lastFingerprint !== "__NOT_FOUND__") {
+        this._lastFingerprint = "__NOT_FOUND__";
+        this.content.innerHTML = `<div class="empty">Entity not found: ${this.config.entity}</div>${this.styles()}`;
+      }
       return;
     }
+
+    const fingerprint = this._computeRenderFingerprint(stateObj);
+    if (fingerprint === this._lastFingerprint) {
+      return; // No changes, skip DOM update
+    }
+    this._lastFingerprint = fingerprint;
 
     const attrs = stateObj.attributes || {};
     const competition = attrs.competition || {};
@@ -657,7 +696,22 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       ? `<div class="state-panel final-panel"><span class="mini-state">F</span><span>Final</span><span class="totals-inline">Away H/E ${awayTotals.hits}/${awayTotals.errors} • Home H/E ${homeTotals.hits}/${homeTotals.errors}</span></div>`
       : "";
     if (stateInfo.pillClass === "next" || stateInfo.pillClass === "final") {
-      this.content.innerHTML = this.renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore);
+      // Compute compact fingerprint to see if we need to update DOM
+      const compactFp = [
+        stateInfo.pillClass,
+        awayTeam?.abbreviation || awayMeta?.abbreviation,
+        homeTeam?.abbreviation || homeMeta?.abbreviation,
+        competition?.date,
+        awayScore.text,
+        homeScore.text,
+        awayRecord,
+        homeRecord,
+      ].join("|");
+      if (compactFp !== this._lastCompactFp) {
+        // Fingerprint changed, need to re-render
+        this.content.innerHTML = this.renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore);
+      }
+      // else: fingerprint unchanged, skip DOM update entirely
       return;
     }
 
@@ -700,6 +754,22 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
   }
 
   renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore) {
+    // Compute a compact-specific fingerprint to avoid unnecessary DOM updates
+    const compactFp = [
+      stateInfo.pillClass,
+      awayTeam?.abbreviation || awayMeta?.abbreviation,
+      homeTeam?.abbreviation || homeMeta?.abbreviation,
+      competition?.date,
+      awayScore.text,
+      homeScore.text,
+      awayRecord,
+      homeRecord,
+    ].join("|");
+    if (compactFp === this._lastCompactFp) {
+      return this._lastCompactHtml; // Return cached HTML, don't recreate DOM
+    }
+    this._lastCompactFp = compactFp;
+
     const when = this.formatCompactDateTime(competition?.date);
     const awayLogo = requestCachedLogo(this, awayTeam?.logo || get(awayTeam, ["logos", 0, "href"], "") || awayMeta?.logo || "");
     const homeLogo = requestCachedLogo(this, homeTeam?.logo || get(homeTeam, ["logos", 0, "href"], "") || homeMeta?.logo || "");
@@ -718,7 +788,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
           <div class="compact-time">${when.time || ""}</div>
         </div>`;
     const rightHtml = isFinal ? finalMarker : nextRight;
-    return `
+    const html = `
       <div class="wrapper compact-mode">
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
@@ -747,6 +817,8 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
         </div>
       </div>
       ${this.styles()}`;
+    this._lastCompactHtml = html;
+    return html;
   }
 
   renderRheHeader() {
@@ -889,13 +961,13 @@ line-height: 1.25;
           min-width: 0;
         }
         .name {
-line-height: 1.15;
+          line-height: 1.15;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          font-size: 1.05em;
+          font-size: 16px !important;
           font-weight: 500;
-}
+        }
         .record {
 color: var(--secondary-text-color);
           line-height: 1.15;
@@ -1493,8 +1565,8 @@ opacity: 0.92;
           height:100%;
         }
         .compact-next-wrap.today-only .compact-time {
-          font-size:1.1em;
-          font-weight:500;
+          font-size: 14px !important;
+          font-weight: 400 !important;
         }
         .compact-final-wrap {
           display:flex;
