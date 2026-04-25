@@ -1,7 +1,7 @@
 {
   "domain": "mlb_live_scoreboard",
   "name": "MLB Live Scoreboard",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "documentation": "https://github.com/johnbr/mlb-live-scoreboard",
   "issue_tracker": "https://github.com/johnbr/mlb-live-scoreboard/issues",
   "config_flow": true,

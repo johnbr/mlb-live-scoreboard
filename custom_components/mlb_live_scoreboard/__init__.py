@@ -55,17 +55,17 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def _async_register_card(hass: HomeAssistant) -> None:
     """Register the custom card as a Lovelace resource."""
     try:
-        from homeassistant.components.lovelace.resources import ResourceStorageCollection
         from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
         
-        # Get the resources collection
+        # Get the lovelace data object
         lovelace_data = hass.data.get(LOVELACE_DOMAIN)
         if lovelace_data is None:
             _LOGGER.debug("Lovelace not ready yet")
             return
-            
-        resources = lovelace_data.get("resources")
-        if resources is None or not isinstance(resources, ResourceStorageCollection):
+        
+        # Access resources attribute (it's an object, not a dict)
+        resources = getattr(lovelace_data, "resources", None)
+        if resources is None:
             _LOGGER.debug("Lovelace resources not available")
             return
             

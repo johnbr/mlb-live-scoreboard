@@ -41,6 +41,14 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         data = self.coordinator.data
+        # Limit recent_plays to last 5 to stay under 16KB attribute limit
+        recent_plays = data.recent_plays or []
+        if len(recent_plays) > 5:
+            recent_plays = recent_plays[-5:]
+        # Limit current_pitches to last 10
+        current_pitches = data.current_pitches or []
+        if len(current_pitches) > 10:
+            current_pitches = current_pitches[-10:]
         return {
             "team_abbr": data.team_abbr,
             "team_id": data.team_id,
@@ -55,8 +63,8 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
             "next_event_id": data.next_event_id,
             "competition": data.selected_competition or {},
             "inning_context": data.inning_context,
-            "recent_plays": data.recent_plays,
-            "current_pitches": data.current_pitches,
+            "recent_plays": recent_plays,
+            "current_pitches": current_pitches,
             "away_team": data.away_team,
             "home_team": data.home_team,
             "current_batter": data.current_batter,
