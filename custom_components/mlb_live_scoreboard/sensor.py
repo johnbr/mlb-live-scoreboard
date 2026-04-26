@@ -41,14 +41,17 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         data = self.coordinator.data
-        # Limit recent_plays to last 5 to stay under 16KB attribute limit
-        recent_plays = data.recent_plays or []
-        if len(recent_plays) > 5:
-            recent_plays = recent_plays[-5:]
-        # Limit current_pitches to last 10
-        current_pitches = data.current_pitches or []
-        if len(current_pitches) > 10:
-            current_pitches = current_pitches[-10:]
+        # Strip plays to only the fields actually needed by the JS card
+        recent_plays = []
+        for play in (data.recent_plays or []):
+            recent_plays.append({
+                "id": play.get("id"),
+                "text": play.get("text"),
+                "outs": play.get("outs"),
+                "away_score": play.get("away_score"),
+                "home_score": play.get("home_score"),
+                "wallclock_ts": play.get("wallclock_ts"),
+            })
         return {
             "team_abbr": data.team_abbr,
             "team_id": data.team_id,
@@ -64,7 +67,7 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
             "competition": data.selected_competition or {},
             "inning_context": data.inning_context,
             "recent_plays": recent_plays,
-            "current_pitches": current_pitches,
+            "current_pitches": data.current_pitches or [],
             "away_team": data.away_team,
             "home_team": data.home_team,
             "current_batter": data.current_batter,
@@ -72,11 +75,9 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
             "batter_stats": data.batter_stats,
             "pitcher_stats": data.pitcher_stats,
             "situation": data.situation,
-            "probable_pitchers": data.probable_pitchers,
             "due_up": data.due_up,
             "third_out_play": data.third_out_play,
             "on_deck": data.on_deck,
-            "leaders": data.leaders,
         }
 
     @property

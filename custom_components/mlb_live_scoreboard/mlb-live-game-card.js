@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.5.2";
+const CARD_VERSION = "1.5.3";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 window.customCards = window.customCards || [];
