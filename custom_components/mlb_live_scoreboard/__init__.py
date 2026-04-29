@@ -68,6 +68,10 @@ async def _async_register_card(hass: HomeAssistant) -> None:
         if resources is None:
             _LOGGER.debug("Lovelace resources not available")
             return
+
+        if hasattr(resources, "loaded") and not resources.loaded:
+            await resources.async_load()
+            resources.loaded = True
             
         # Check if already registered (match base URL without version)
         existing = [r for r in resources.async_items() if CARD_URL_BASE in r.get("url", "")]
