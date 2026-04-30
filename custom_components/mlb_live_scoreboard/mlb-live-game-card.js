@@ -751,8 +751,13 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const isToday = startOfTarget.getTime() === startOfToday.getTime();
+    const dayDiff = Math.round((startOfTarget - startOfToday) / 86400000);
+    const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dateText = (dayDiff > 0 && dayDiff <= 7)
+      ? DAY_ABBR[d.getDay()]
+      : `${d.getMonth() + 1}/${d.getDate()}`;
     return {
-      date: `${d.getMonth() + 1}/${d.getDate()}`,
+      date: dateText,
       time: d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       isToday
     };
@@ -1569,10 +1574,7 @@ opacity: 0.92;
           justify-content:center;
           height:100%;
         }
-        .compact-next-wrap.today-only .compact-time {
-          font-size: 14px !important;
-          font-weight: 400 !important;
-        }
+
         .compact-final-wrap {
           display:flex;
           flex-direction:row;
@@ -1596,6 +1598,8 @@ white-space: nowrap;
 white-space: nowrap;
           line-height: 1.05;
           color: var(--primary-text-color);
+          font-size: 14px;
+          font-weight: 400;
         }
         .compact-pill {
 color: var(--secondary-text-color);
