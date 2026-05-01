@@ -7,6 +7,23 @@ CONF_NAME = "name"
 DEFAULT_NAME = "MLB Live Scoreboard"
 DEFAULT_SCAN_INTERVAL_SECONDS = 5
 
+# ESPN status state values that indicate a live game.
+LIVE_STATES = frozenset({"in", "live"})
+STATUS_NAME_IN_PROGRESS = "STATUS_IN_PROGRESS"
+STATUS_NAME_DELAYED = "STATUS_DELAYED"
+STATUS_NAME_FINAL = "STATUS_FINAL"
+STATUS_NAME_SCHEDULED = "STATUS_SCHEDULED"
+
+# Limits used when normalizing ESPN payloads.
+MAX_LINESCORES = 12
+BATTING_ORDER_SIZE = 9
+DUE_UP_LIMIT = 3
+LEADER_LIMIT = 3
+
+# Threshold for switching the displayed event from a completed prior game to
+# the next scheduled game (in seconds).
+SHOW_NEXT_AFTER_PREV_SECONDS = 16 * 60 * 60
+
 MLB_TEAM_MAP = {
   "ARI": 29,
   "ATH": 11,

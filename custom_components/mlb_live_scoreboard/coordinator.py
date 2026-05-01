@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 from typing import Any
 
@@ -10,9 +11,80 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_NAME, CONF_TEAM, DEFAULT_SCAN_INTERVAL_SECONDS, DOMAIN, MLB_TEAM_MAP
+from .const import (
+    BATTING_ORDER_SIZE,
+    CONF_NAME,
+    CONF_TEAM,
+    DEFAULT_SCAN_INTERVAL_SECONDS,
+    DOMAIN,
+    DUE_UP_LIMIT,
+    LEADER_LIMIT,
+    LIVE_STATES,
+    MAX_LINESCORES,
+    MLB_TEAM_MAP,
+    SHOW_NEXT_AFTER_PREV_SECONDS,
+    STATUS_NAME_DELAYED,
+    STATUS_NAME_IN_PROGRESS,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# Play-text keywords that signal the end of an at-bat. Used by
+# `_normalize_current_pitches` to know when to stop scanning back through plays.
+_AT_BAT_END_KEYWORDS: tuple[str, ...] = (
+    "singled", "doubled", "tripled", "homered", "walked", "struck out", "flied out",
+    "grounded out", "lined out", "popped out", "reached on", "hit by pitch",
+    "fouled out", "sacrifice", "sacrificed", "intentionally walked", "out at",
+    "reached first", "fielder's choice",
+)
+
+# Ordered list of (play-text keyword, abbreviation) used when classifying a
+# completed at-bat for the current batter's game outcomes.
+_BATTER_OUTCOME_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("homered", "HR"),
+    ("home run", "HR"),
+    ("tripled", "3B"),
+    ("doubled", "2B"),
+    ("singled", "1B"),
+    ("walked", "BB"),
+    ("intentionally walked", "IBB"),
+    ("hit by pitch", "HBP"),
+    ("struck out", "K"),
+    ("grounded out", "GO"),
+    ("flied out", "FO"),
+    ("lined out", "LO"),
+    ("popped out", "PO"),
+    ("fouled out", "FO"),
+    ("grounded into", "GIDP"),
+    ("reached on error", "E"),
+    ("reached on fielder's choice", "FC"),
+    ("fielder's choice", "FC"),
+    ("sacrifice fly", "SF"),
+    ("sacrificed", "SAC"),
+    ("sacrifice bunt", "SAC"),
+)
+
+# Outcomes excluded from the compact batter-outcome display string.
+_BATTER_OUTCOME_EXCLUDED: frozenset[str] = frozenset({"GO", "FO", "LO", "PO", "GIDP", "FC", "HBP"})
+
+# Display ordering for the compact batter-outcome string.
+_BATTER_OUTCOME_ORDER: tuple[str, ...] = ("HR", "3B", "2B", "1B", "BB", "IBB", "SF", "SAC", "K", "E")
+
+
+def _parse_iso_ts(date_raw: Any) -> float | None:
+    """Parse an ESPN-style ISO datetime string into a POSIX timestamp.
+
+    Returns None for missing or unparseable values. ESPN consistently uses a
+    trailing ``Z`` for UTC which `datetime.fromisoformat` does not accept on
+    older Python versions, so we normalize it to ``+00:00``.
+    """
+    if not date_raw:
+        return None
+    try:
+        return datetime.fromisoformat(str(date_raw).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass
@@ -74,29 +146,20 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             return await resp.json()
 
     def _select_event(self, events: list[dict[str, Any]]) -> tuple[str, str, str, str, dict[str, Any] | None]:
-        import time
-
         now_ts = time.time()
         prev: dict[str, Any] | None = None
         next_ev: dict[str, Any] | None = None
         live: dict[str, Any] | None = None
 
         for ev in events:
-            date_raw = ev.get("date")
-            ts = None
-            if date_raw:
-                try:
-                    from datetime import datetime
-                    ts = datetime.fromisoformat(date_raw.replace("Z", "+00:00")).timestamp()
-                except Exception:
-                    ts = None
+            ts = _parse_iso_ts(ev.get("date"))
 
             comp = ((ev.get("competitions") or [{}])[0]) if ev.get("competitions") else {}
             status = ((comp.get("status") or {}).get("type") or (ev.get("status") or {}).get("type") or {})
             state = str(status.get("state", "")).lower()
             name = str(status.get("name", "")).upper()
 
-            if not live and (state in {"in", "live"} or name == "STATUS_IN_PROGRESS"):
+            if not live and (state in LIVE_STATES or name == STATUS_NAME_IN_PROGRESS):
                 live = ev
 
             if ts is not None:
@@ -119,17 +182,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             prev_state = str(prev_status.get("state", "")).lower()
             prev_complete = prev_state == "post" or prev_status.get("completed") is True
 
-            prev_start = prev.get("date")
-            show_next = False
-            if prev_start:
-                try:
-                    from datetime import datetime
-                    prev_ts = datetime.fromisoformat(prev_start.replace("Z", "+00:00")).timestamp()
-                    show_next_after = prev_ts + (16 * 60 * 60)
-                    show_next = prev_complete and now_ts >= show_next_after
-                except Exception:
-                    show_next = False
-            if show_next:
+            prev_ts = _parse_iso_ts(prev.get("date"))
+            if prev_ts is not None and prev_complete and now_ts >= prev_ts + SHOW_NEXT_AFTER_PREV_SECONDS:
                 display_event = next_ev
 
         return (
@@ -152,7 +206,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             team = competitor.get("team") or {}
             logos = team.get("logos") or []
             compact_lines = []
-            for line in (competitor.get("linescores") or [])[:12]:
+            for line in (competitor.get("linescores") or [])[:MAX_LINESCORES]:
                 compact_lines.append({
                     "value": line.get("value"),
                     "displayValue": line.get("displayValue"),
@@ -237,13 +291,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if not relevant:
             return []
 
-        end_keywords = (
-            "singled", "doubled", "tripled", "homered", "walked", "struck out", "flied out",
-            "grounded out", "lined out", "popped out", "reached on", "hit by pitch",
-            "fouled out", "sacrifice", "sacrificed", "intentionally walked", "out at",
-            "reached first", "fielder's choice"
-        )
-
         current: list[str] = []
         saw_pitch = False
 
@@ -257,7 +304,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     break
                 return []
 
-            if play_type in {"play result", "play-result"} and any(key in low for key in end_keywords):
+            if play_type in {"play result", "play-result"} and any(key in low for key in _AT_BAT_END_KEYWORDS):
                 if saw_pitch:
                     break
                 return []
@@ -306,12 +353,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             outs = play.get("outs") or ((play.get("result") or {}).get("outs"))
             away_score = play.get("awayScore")
             home_score = play.get("homeScore")
-            wallclock_raw = str(play.get("wallclock") or "").strip()
-            try:
-                from datetime import datetime
-                wallclock_ts = datetime.fromisoformat(wallclock_raw.replace("Z", "+00:00")).timestamp() if wallclock_raw else None
-            except Exception:
-                wallclock_ts = None
+            wallclock_ts = _parse_iso_ts(play.get("wallclock"))
             results.append({
                 "id": str(play.get("id") or ""),
                 "text": txt,
@@ -378,7 +420,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     "value": str(leader.get("displayValue") or leader.get("value") or ""),
                     "name": athlete.get("shortName") or athlete.get("displayName") or "",
                 })
-                if len(compact) >= 3:
+                if len(compact) >= LEADER_LIMIT:
                     break
             result[side] = compact
         return result
@@ -525,32 +567,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             return []
         
         outcomes: list[str] = []
-        
-        # Keywords that indicate at-bat end results
-        outcome_patterns = [
-            ("homered", "HR"),
-            ("home run", "HR"),
-            ("tripled", "3B"),
-            ("doubled", "2B"),
-            ("singled", "1B"),
-            ("walked", "BB"),
-            ("intentionally walked", "IBB"),
-            ("hit by pitch", "HBP"),
-            ("struck out", "K"),
-            ("grounded out", "GO"),
-            ("flied out", "FO"),
-            ("lined out", "LO"),
-            ("popped out", "PO"),
-            ("fouled out", "FO"),
-            ("grounded into", "GIDP"),
-            ("reached on error", "E"),
-            ("reached on fielder's choice", "FC"),
-            ("fielder's choice", "FC"),
-            ("sacrifice fly", "SF"),
-            ("sacrificed", "SAC"),
-            ("sacrifice bunt", "SAC"),
-        ]
-        
+
         for play in plays:
             play_type = str(((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "")).lower()
             
@@ -574,7 +591,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 continue
             
             # Determine the outcome
-            for pattern, abbrev in outcome_patterns:
+            for pattern, abbrev in _BATTER_OUTCOME_PATTERNS:
                 if pattern in txt_lower:
                     outcomes.append(abbrev)
                     break
@@ -591,8 +608,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             return ""
         
         # Filter out routine outs that we don't want to display
-        excluded = {"GO", "FO", "LO", "PO", "GIDP", "FC", "HBP"}
-        filtered_outcomes = [o for o in outcomes if o.upper() not in excluded]
+        filtered_outcomes = [o for o in outcomes if o.upper() not in _BATTER_OUTCOME_EXCLUDED]
         
         if not filtered_outcomes:
             return ""
@@ -602,11 +618,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         for outcome in filtered_outcomes:
             counts[outcome] = counts.get(outcome, 0) + 1
         
-        # Order of display priority (excluding filtered items)
-        order = ["HR", "3B", "2B", "1B", "BB", "IBB", "SF", "SAC", "K", "E"]
-        
         parts: list[str] = []
-        for key in order:
+        for key in _BATTER_OUTCOME_ORDER:
             if key in counts:
                 count = counts[key]
                 if count > 1:
@@ -616,7 +629,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         
         # Add any we missed
         for key, count in counts.items():
-            if key not in order:
+            if key not in _BATTER_OUTCOME_ORDER:
                 if count > 1:
                     parts.append(f"{count}{key}")
                 else:
@@ -717,7 +730,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         situation = summary.get("situation") or {}
         due_up = situation.get("dueUp") or []
         result: list[dict[str, Any]] = []
-        for item in due_up[:3]:
+        for item in due_up[:DUE_UP_LIMIT]:
             player_id = str(item.get("playerId") or item.get("id") or "")
             entry, keys = cls._find_boxscore_athlete(summary, player_id)
             athlete = entry.get("athlete") or cls._find_roster_athlete(summary, player_id) or {}
@@ -746,7 +759,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
     @staticmethod
     def _extract_current_season_batter_stats(stats_payload: dict[str, Any]) -> dict[str, Any]:
         categories = stats_payload.get("categories") or []
-        from datetime import datetime
         current_year = datetime.now().year
         for category in categories:
             names = [str(n or "") for n in (category.get("names") or [])]
@@ -880,7 +892,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             return {}
         
         # Calculate next batter in order (wrap 9 -> 1)
-        next_bat_order = (current_bat_order % 9) + 1
+        next_bat_order = (current_bat_order % BATTING_ORDER_SIZE) + 1
         
         # Find the next batter
         for stat_block in batting_team_block.get("statistics") or []:
@@ -990,8 +1002,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             or status_type.get("description")
             or ""
         ).strip()
-        is_delayed = status_name == "STATUS_DELAYED" or "delayed" in status_detail.lower()
-        is_live = state in {"in", "live"} or status_name == "STATUS_IN_PROGRESS" or is_delayed
+        is_delayed = status_name == STATUS_NAME_DELAYED or "delayed" in status_detail.lower()
+        is_live = state in LIVE_STATES or status_name == STATUS_NAME_IN_PROGRESS or is_delayed
 
         mode = "live" if live_id and display_id == live_id else ("previous" if display_id == prev_id else "next")
 

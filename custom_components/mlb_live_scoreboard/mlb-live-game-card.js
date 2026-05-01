@@ -592,8 +592,6 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const basesSummary = buildBasesText(attrs.situation);
     const probablePitchers = attrs.probable_pitchers || {};
     const leaders = attrs.leaders || {};
-    const pregamePanel = "";
-    const finalLeaderPanel = "";
     const periodLower = String(inningState.lower || "");
     const inningContext = attrs.inning_context || {};
     const recentPlaysPanel = renderRecentPlays(attrs.recent_plays || [], attrs.current_pitches || [], attrs.situation || {}, this.config);
@@ -728,10 +726,8 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
         </div>
 
         ${this.config.show_linescore ? this.renderLinescore(competition) : ""}
-        ${pregamePanel}
         ${delayedExtras}
         ${finalExtras}
-        ${finalLeaderPanel}
         ${liveExtras}
       </div>
       ${this.styles()}
@@ -1594,12 +1590,16 @@ white-space: nowrap;
           justify-content:center;
           gap:1px;
         }
-        .compact-time {
-white-space: nowrap;
+        .compact-next-wrap .compact-date,
+        .compact-next-wrap .compact-time {
+          white-space: nowrap;
           line-height: 1.05;
-          color: var(--primary-text-color);
-          font-size: 14px;
-          font-weight: 400;
+          font-size: 1em !important;
+          font-weight: 400 !important;
+        }
+        .compact-next-wrap.today-only .compact-time {
+          font-size: 1em !important;
+          font-weight: 500 !important;
         }
         .compact-pill {
 color: var(--secondary-text-color);
