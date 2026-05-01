@@ -35,6 +35,11 @@ TEAM_METADATA_TTL_SECONDS = 3600
 # stat updates feel stale.
 BATTER_SEASON_STATS_TTL_SECONDS = 60
 
+# Maximum age of a cached schedule payload that is still acceptable as a
+# fallback when ESPN's schedule endpoint fails. Beyond this we let the
+# coordinator raise UpdateFailed so the sensor goes unavailable.
+SCHEDULE_STALE_FALLBACK_SECONDS = 5 * 60
+
 MLB_TEAM_MAP = {
   "ARI": 29,
   "ATH": 11,

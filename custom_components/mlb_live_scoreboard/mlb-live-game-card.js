@@ -537,33 +537,44 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
   }
 
   _computeRenderFingerprint(stateObj) {
+    // Cheap, scalar-only fingerprint: avoid JSON.stringify over arrays of
+    // objects (was costly on long play lists). Each field below is a single
+    // primitive whose change should trigger a re-render. Anything not listed
+    // here is either derived from these fields or visually irrelevant.
     const attrs = stateObj?.attributes || {};
     const comp = attrs.competition || {};
+    const status = comp.status || {};
+    const competitors = Array.isArray(comp.competitors) ? comp.competitors : [];
+    const away = competitors.find(c => c?.homeAway === "away") || {};
+    const home = competitors.find(c => c?.homeAway === "home") || {};
     const sit = attrs.situation || {};
-    const fp = [
+    const bs = attrs.batter_stats || {};
+    const ps = attrs.pitcher_stats || {};
+    const plays = Array.isArray(attrs.recent_plays) ? attrs.recent_plays : [];
+    const lastPlay = plays.length ? plays[plays.length - 1] : null;
+    const hold = this._getThirdOutHold();
+    return [
       stateObj?.state,
       attrs.mode,
       attrs.game_state,
-      JSON.stringify(comp.competitors?.map(c => ({ ha: c.homeAway, score: c.score, rec: c.records })) || []),
-      comp.status?.type?.state,
-      comp.status?.type?.name,
-      comp.status?.period,
-      comp.status?.displayClock,
+      // Visible scoreboard inputs
+      away.score, away.recordSummary,
+      home.score, home.recordSummary,
+      status.type?.state, status.type?.name, status.period, status.displayClock,
+      // Matchup
       attrs.current_batter?.display_name,
       attrs.current_pitcher?.display_name,
-      JSON.stringify(attrs.batter_stats || {}),
-      JSON.stringify(attrs.pitcher_stats || {}),
-      sit.balls,
-      sit.strikes,
-      sit.outs,
-      sit.onFirst,
-      sit.onSecond,
-      sit.onThird,
-      JSON.stringify(attrs.recent_plays?.slice(-3) || []),
+      bs.avg, bs.hits_ab, bs.hr, bs.rbi, bs.game_outcomes_display,
+      ps.era, ps.ip, ps.pitches_strikes, ps.strikeouts,
+      // Count + bases
+      sit.balls, sit.strikes, sit.outs,
+      sit.onFirst, sit.onSecond, sit.onThird,
+      // Recent plays — only the tail-most play affects rendering thresholds
+      plays.length, lastPlay?.id, lastPlay?.outs, lastPlay?.away_score, lastPlay?.home_score,
+      // Inning + third-out hold
       attrs.inning_context?.is_between_halves,
-      this._getThirdOutHold().until > Date.now() / 1000 ? this._getThirdOutHold().playId : "",
+      hold.until > Date.now() / 1000 ? hold.playId : "",
     ].join("||");
-    return fp;
   }
 
   render() {

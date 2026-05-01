@@ -23,6 +23,7 @@ from .const import (
     LIVE_STATES,
     MAX_LINESCORES,
     MLB_TEAM_MAP,
+    SCHEDULE_STALE_FALLBACK_SECONDS,
     SHOW_NEXT_AFTER_PREV_SECONDS,
     STATUS_NAME_DELAYED,
     STATUS_NAME_IN_PROGRESS,
@@ -134,6 +135,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # athlete_id -> (fetched_at_ts, payload). Avoids repeat fetches for the
         # same batter during a single at-bat.
         self._batter_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # (fetched_at_ts, payload) for the team schedule endpoint. Used as a
+        # short-lived fallback when ESPN's schedule endpoint has a transient
+        # failure, so a one-poll hiccup doesn't blank the card.
+        self._schedule_cache: tuple[float, dict[str, Any]] | None = None
 
         super().__init__(
             hass,
@@ -1059,12 +1064,24 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return status_detail, is_live, is_delayed
 
     async def _async_update_data(self) -> MlbLiveScoreboardData:
+        schedule_url = (
+            f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{self.team_abbr.lower()}/schedule"
+        )
         try:
-            schedule = await self._get_json(
-                f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{self.team_abbr.lower()}/schedule"
-            )
+            schedule = await self._get_json(schedule_url)
+            self._schedule_cache = (time.time(), schedule)
         except Exception as err:
-            raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
+            cached = self._schedule_cache
+            now_ts = time.time()
+            if cached is not None and (now_ts - cached[0]) < SCHEDULE_STALE_FALLBACK_SECONDS:
+                _LOGGER.warning(
+                    "Schedule fetch failed (%s); reusing cache from %.0fs ago",
+                    err,
+                    now_ts - cached[0],
+                )
+                schedule = cached[1]
+            else:
+                raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
 
         events = schedule.get("events") or []
         prev_id, next_id, live_id, display_id, display_event = self._select_event(events)
