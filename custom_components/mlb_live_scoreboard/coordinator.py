@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -12,8 +12,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
-    BATTING_ORDER_SIZE,
     BATTER_SEASON_STATS_TTL_SECONDS,
+    BATTING_ORDER_SIZE,
     CONF_NAME,
     CONF_TEAM,
     DEFAULT_SCAN_INTERVAL_SECONDS,
@@ -315,7 +315,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         saw_pitch = False
 
         for play in reversed(relevant):
-            play_type = str(((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "")).lower()
+            play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
             txt = str(play.get("text") or "").strip()
             low = txt.lower()
 
@@ -361,7 +361,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             period = play.get("period") or {}
             play_half = str(period.get("type") or "").lower()
             play_inning = int(period.get("number") or 0)
-            play_type = str(((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "")).lower()
+            play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
             txt = str(play.get("text") or "").strip()
             if not txt:
                 continue
@@ -385,7 +385,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 "scoring_play": play.get("scoringPlay") is True,
                 "score_value": int(play.get("scoreValue") or 0),
                 "play_type": play_type,
-                "alternative_type": str(((play.get("alternativeType") or {}).get("type") or (play.get("alternativeType") or {}).get("text") or "")).lower(),
+                "alternative_type": str((play.get("alternativeType") or {}).get("type") or (play.get("alternativeType") or {}).get("text") or "").lower(),
             })
         return results
 
@@ -573,36 +573,36 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         """Extract at-bat outcomes for the current batter from game plays."""
         if not batter_id:
             return []
-        
+
         plays = summary.get("plays") or []
         if not isinstance(plays, list) or not plays:
             return []
-        
+
         # Find the batter's name for matching in play text
         athlete = cls._find_any_athlete(summary, batter_id)
         last_name = str(athlete.get("lastName") or "").strip().lower()
         display_name = str(athlete.get("displayName") or athlete.get("shortName") or "").strip().lower()
         short_name = str(athlete.get("shortName") or "").strip().lower()
-        
+
         if not last_name and display_name:
             parts = display_name.split()
             last_name = parts[-1] if parts else ""
-        
+
         if not last_name:
             return []
-        
+
         outcomes: list[str] = []
 
         for play in plays:
-            play_type = str(((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "")).lower()
-            
+            play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
+
             # Only look at play results / end batter events
             if play_type not in {"play result", "play-result", "end batter/pitcher", "end batter pitcher"}:
                 continue
-            
+
             txt = str(play.get("text") or "").strip()
             txt_lower = txt.lower()
-            
+
             # Check if this play involves our batter (name appears at start of play text)
             name_match = False
             if txt_lower.startswith(last_name):
@@ -611,38 +611,38 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 name_match = True
             elif short_name and txt_lower.startswith(short_name):
                 name_match = True
-            
+
             if not name_match:
                 continue
-            
+
             # Determine the outcome
             for pattern, abbrev in _BATTER_OUTCOME_PATTERNS:
                 if pattern in txt_lower:
                     outcomes.append(abbrev)
                     break
-        
+
         return outcomes
 
     @classmethod
     def _format_batter_outcomes(cls, outcomes: list[str]) -> str:
         """Format outcomes list into compact display string like '2HR, 2B, BB, K'.
-        
+
         Excludes routine outs: GO, FO, LO, PO, GIDP, FC, HBP.
         """
         if not outcomes:
             return ""
-        
+
         # Filter out routine outs that we don't want to display
         filtered_outcomes = [o for o in outcomes if o.upper() not in _BATTER_OUTCOME_EXCLUDED]
-        
+
         if not filtered_outcomes:
             return ""
-        
+
         # Count occurrences
         counts: dict[str, int] = {}
         for outcome in filtered_outcomes:
             counts[outcome] = counts.get(outcome, 0) + 1
-        
+
         parts: list[str] = []
         for key in _BATTER_OUTCOME_ORDER:
             if key in counts:
@@ -651,7 +651,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     parts.append(f"{count}{key}")
                 else:
                     parts.append(key)
-        
+
         # Add any we missed
         for key, count in counts.items():
             if key not in _BATTER_OUTCOME_ORDER:
@@ -659,7 +659,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     parts.append(f"{count}{key}")
                 else:
                     parts.append(key)
-        
+
         return ", ".join(parts)
 
     @classmethod
@@ -902,17 +902,17 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         """Calculate the on-deck batter from the batting order."""
         if not batter_id:
             return {}
-        
+
         # Determine which team is batting: Top = away, Bottom = home
         period_prefix = str(inning_context.get("period_prefix") or "").lower()
         is_top = period_prefix.startswith("top")
         batting_team_key = "away" if is_top else "home"
-        
+
         # Find current batter's batOrder in the boxscore
         boxscore = summary.get("boxscore") or {}
         current_bat_order = 0
         batting_team_block = None
-        
+
         for team_block in boxscore.get("players") or []:
             team = team_block.get("team") or {}
             # Match by checking competitors in header or by position
@@ -929,13 +929,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     break
             if batting_team_block:
                 break
-        
+
         if not current_bat_order or not batting_team_block:
             return {}
-        
+
         # Calculate next batter in order (wrap 9 -> 1)
         next_bat_order = (current_bat_order % BATTING_ORDER_SIZE) + 1
-        
+
         # Find the next batter
         for stat_block in batting_team_block.get("statistics") or []:
             if stat_block.get("type") != "batting":
@@ -1033,7 +1033,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         plays = summary.get("plays") or []
         for play in reversed(plays):
-            play_type = str(((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "")).lower()
+            play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
             if play_type not in {"start batter/pitcher", "start batter pitcher", "start-batterpitcher"}:
                 continue
             for participant in play.get("participants") or []:
