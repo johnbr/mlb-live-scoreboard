@@ -2,6 +2,13 @@ const CARD_TAG = "mlb-live-game-card";
 const CARD_VERSION = "1.5.3";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
+// Number of seconds the card keeps showing the third-out play after it occurs,
+// before yielding to the due-up panel for the next half-inning.
+const THIRD_OUT_HOLD_SECONDS = 30;
+// Wallclock window (seconds) within which a stored play is treated as the
+// just-completed third out, even without an explicit `third_out_play` attribute.
+const THIRD_OUT_RECENT_WINDOW_SECONDS = 8;
+
 window.customCards = window.customCards || [];
 if (!window.customCards.find((c) => c.type === CARD_TAG)) {
   window.customCards.push({
@@ -445,6 +452,23 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     }
   }
 
+  // State machine for the "hold the third-out play on screen" UX:
+  //   gameKey               - which game this state belongs to; reset on game change
+  //   playId                - identifier of the third-out play being held
+  //   until                 - POSIX seconds; persistent hold expires once now > until
+  //   dueUpSeenForPlayId    - playId for which we've already revealed the due-up panel,
+  //                           preventing the hold from re-engaging on later renders
+  _getThirdOutHold() {
+    if (!this._thirdOutHold) {
+      this._thirdOutHold = { gameKey: "", playId: "", until: 0, dueUpSeenForPlayId: "" };
+    }
+    return this._thirdOutHold;
+  }
+
+  _resetThirdOutHold() {
+    this._thirdOutHold = { gameKey: "", playId: "", until: 0, dueUpSeenForPlayId: "" };
+  }
+
   _setupRefreshTimer() {
     this._clearRefreshTimer();
     const rate = Number(this.config.refresh_rate);
@@ -537,7 +561,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       sit.onThird,
       JSON.stringify(attrs.recent_plays?.slice(-3) || []),
       attrs.inning_context?.is_between_halves,
-      this._thirdOutHoldUntil > Date.now() / 1000 ? this._thirdOutHoldPlayId : "",
+      this._getThirdOutHold().until > Date.now() / 1000 ? this._getThirdOutHold().playId : "",
     ].join("||");
     return fp;
   }
@@ -600,53 +624,54 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const betweenHalves = (periodLower.startsWith("mid") || periodLower.startsWith("end") || inningContext.is_between_halves);
     const nowTs = Date.now() / 1000;
     const gameKey = String(attrs.event_id || competition?.id || `${awayTeam?.abbreviation || "A"}-${homeTeam?.abbreviation || "H"}`);
-    if (this._thirdOutHoldGameKey && this._thirdOutHoldGameKey !== gameKey) {
-      this._thirdOutHoldGameKey = "";
-      this._thirdOutHoldPlayId = "";
-      this._thirdOutHoldUntil = 0;
-      this._thirdOutDueUpSeenForPlayId = "";
+    const hold = this._getThirdOutHold();
+    if (hold.gameKey && hold.gameKey !== gameKey) {
+      this._resetThirdOutHold();
     }
     // Look for 3rd out play - first check recent (8s window), then check if betweenHalves with any 3rd out in recent_plays
-    const recentFallbackThirdOut = (!explicitThirdOutPlay && latestRecentPlay && Number(latestRecentPlay?.outs) === 3 && String(latestRecentPlay?.text || "").trim() && Number.isFinite(Number(latestRecentPlay?.wallclock_ts)) && ((nowTs - Number(latestRecentPlay.wallclock_ts)) < 8))
+    const recentFallbackThirdOut = (!explicitThirdOutPlay && latestRecentPlay && Number(latestRecentPlay?.outs) === 3 && String(latestRecentPlay?.text || "").trim() && Number.isFinite(Number(latestRecentPlay?.wallclock_ts)) && ((nowTs - Number(latestRecentPlay.wallclock_ts)) < THIRD_OUT_RECENT_WINDOW_SECONDS))
       ? latestRecentPlay
       : null;
     // Extended fallback: if betweenHalves and no hold active, look for ANY 3rd out in recent_plays (even older ones)
-    const anyThirdOutPlay = (!explicitThirdOutPlay && !recentFallbackThirdOut && betweenHalves && !this._thirdOutHoldPlayId && latestRecentPlay && Number(latestRecentPlay?.outs) === 3 && String(latestRecentPlay?.text || "").trim())
+    const anyThirdOutPlay = (!explicitThirdOutPlay && !recentFallbackThirdOut && betweenHalves && !this._getThirdOutHold().playId && latestRecentPlay && Number(latestRecentPlay?.outs) === 3 && String(latestRecentPlay?.text || "").trim())
       ? latestRecentPlay
       : null;
     const candidateThirdOutPlay = explicitThirdOutPlay || recentFallbackThirdOut || anyThirdOutPlay || null;
     if (candidateThirdOutPlay) {
       const candidateId = String(candidateThirdOutPlay?.id || `${gameKey}-${Number(candidateThirdOutPlay?.wallclock_ts) || nowTs}`);
-      const currentHoldId = String(this._thirdOutHoldPlayId || "");
+      const currentHoldId = String(this._getThirdOutHold().playId || "");
       if (candidateId && candidateId !== currentHoldId) {
-        this._thirdOutHoldGameKey = gameKey;
-        this._thirdOutHoldPlayId = candidateId;
-        this._thirdOutHoldUntil = nowTs + 30;
-        this._thirdOutDueUpSeenForPlayId = "";
+        this._thirdOutHold = {
+          gameKey: gameKey,
+          playId: candidateId,
+          until: nowTs + THIRD_OUT_HOLD_SECONDS,
+          dueUpSeenForPlayId: "",
+        };
       }
     }
-    const holdPlayAlreadyReleased = !!this._thirdOutHoldPlayId && this._thirdOutDueUpSeenForPlayId === this._thirdOutHoldPlayId;
+    const holdState = this._getThirdOutHold();
+    const holdPlayAlreadyReleased = !!holdState.playId && holdState.dueUpSeenForPlayId === holdState.playId;
     const persistentHoldActive = betweenHalves
       && !holdPlayAlreadyReleased
-      && this._thirdOutHoldGameKey === gameKey
-      && Number.isFinite(Number(this._thirdOutHoldUntil))
-      && Number(this._thirdOutHoldUntil) > nowTs;
+      && holdState.gameKey === gameKey
+      && Number.isFinite(Number(holdState.until))
+      && Number(holdState.until) > nowTs;
     const explicitThirdOutTs = Number(explicitThirdOutPlay?.wallclock_ts);
     const explicitHoldActive = !!explicitThirdOutPlay
       && !holdPlayAlreadyReleased
       && Number.isFinite(explicitThirdOutTs)
       && Number(explicitThirdOutPlay?.outs) === 3
-      && (nowTs - explicitThirdOutTs) < 30;
+      && (nowTs - explicitThirdOutTs) < THIRD_OUT_HOLD_SECONDS;
     const graceHoldActive = !!recentFallbackThirdOut && !holdPlayAlreadyReleased;
     const dueUpDesc = [String(inningContext.period_prefix || "").trim(), String(inningContext.display_period || attrs.competition?.status?.displayPeriod || "").trim()].filter(Boolean).join(" ").trim();
     const dueUpList = Array.isArray(attrs.due_up) ? attrs.due_up.filter(Boolean) : [];
     const dueUpReady = betweenHalves && dueUpList.length > 0;
-    if (dueUpReady && this._thirdOutHoldGameKey === gameKey && this._thirdOutHoldPlayId && Number(this._thirdOutHoldUntil || 0) <= nowTs) {
-      this._thirdOutDueUpSeenForPlayId = this._thirdOutHoldPlayId;
+    if (dueUpReady && holdState.gameKey === gameKey && holdState.playId && Number(holdState.until || 0) <= nowTs) {
+      holdState.dueUpSeenForPlayId = holdState.playId;
     }
     const holdThirdOut = betweenHalves && (persistentHoldActive || explicitHoldActive || (!dueUpReady && graceHoldActive));
-    if (betweenHalves && !holdThirdOut && this._thirdOutHoldGameKey === gameKey && this._thirdOutHoldPlayId && this._thirdOutDueUpSeenForPlayId !== this._thirdOutHoldPlayId) {
-      this._thirdOutDueUpSeenForPlayId = this._thirdOutHoldPlayId;
+    if (betweenHalves && !holdThirdOut && holdState.gameKey === gameKey && holdState.playId && holdState.dueUpSeenForPlayId !== holdState.playId) {
+      holdState.dueUpSeenForPlayId = holdState.playId;
     }
     const dueUpPanel = (betweenHalves && !holdThirdOut)
       ? renderDueUpCards(this, dueUpList, dueUpDesc)
