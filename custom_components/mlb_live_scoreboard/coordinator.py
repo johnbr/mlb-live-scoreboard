@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     BATTING_ORDER_SIZE,
+    BATTER_SEASON_STATS_TTL_SECONDS,
     CONF_NAME,
     CONF_TEAM,
     DEFAULT_SCAN_INTERVAL_SECONDS,
@@ -25,6 +26,7 @@ from .const import (
     SHOW_NEXT_AFTER_PREV_SECONDS,
     STATUS_NAME_DELAYED,
     STATUS_NAME_IN_PROGRESS,
+    TEAM_METADATA_TTL_SECONDS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -126,6 +128,12 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         self.team_id = MLB_TEAM_MAP[self.team_abbr]
         self.display_name = str(entry.data.get(CONF_NAME) or entry.title or self.team_abbr)
         self._session = async_get_clientsession(hass)
+        # team_id -> (fetched_at_ts, payload). Refreshed lazily once TTL expires;
+        # entries are also reused as a fallback when a refresh attempt fails.
+        self._team_payload_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # athlete_id -> (fetched_at_ts, payload). Avoids repeat fetches for the
+        # same batter during a single at-bat.
+        self._batter_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
         super().__init__(
             hass,
@@ -762,13 +770,27 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return result
 
     async def _get_public_batter_stats(self, athlete_id: str) -> dict[str, Any]:
+        """Fetch an athlete's season stats payload, served from a TTL cache.
+
+        Stats only change when the player completes an at-bat, so a short TTL
+        eliminates the repeat ESPN calls that occur every 5 s while the same
+        batter is at the plate. Falls back to a stale cache entry on fetch
+        failure rather than blanking the season HR/RBI display.
+        """
         if not athlete_id:
             return {}
+        cached = self._batter_stats_cache.get(athlete_id)
+        now_ts = time.time()
+        if cached is not None and (now_ts - cached[0]) < BATTER_SEASON_STATS_TTL_SECONDS:
+            return cached[1]
         url = f"https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{athlete_id}/stats?region=us&lang=en&contentorigin=espn"
         try:
-            return await self._get_json(url)
-        except Exception:
-            return {}
+            payload = await self._get_json(url)
+        except Exception as err:
+            _LOGGER.debug("Unable to fetch batter season stats for %s: %s", athlete_id, err)
+            return cached[1] if cached is not None else {}
+        self._batter_stats_cache[athlete_id] = (now_ts, payload)
+        return payload
 
     @staticmethod
     def _extract_current_season_batter_stats(stats_payload: dict[str, Any]) -> dict[str, Any]:
@@ -968,16 +990,27 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return away_id, home_id
 
     async def _fetch_team_payload(self, team_id: str, side: str) -> dict[str, Any]:
-        """Fetch team metadata; failures are logged at debug level and yield ``{}``."""
+        """Fetch team metadata, served from a TTL cache to avoid repeat ESPN calls.
+
+        Logs failures at debug level. On failure, falls back to the last-known
+        cached payload (even if expired) before returning ``{}``.
+        """
         if not team_id:
             return {}
+        cached = self._team_payload_cache.get(team_id)
+        now_ts = time.time()
+        if cached is not None and (now_ts - cached[0]) < TEAM_METADATA_TTL_SECONDS:
+            return cached[1]
         try:
-            return await self._get_json(
+            payload = await self._get_json(
                 f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}"
             )
         except Exception as err:
             _LOGGER.debug("Unable to fetch %s team metadata: %s", side, err)
-            return {}
+            # Re-use stale cache rather than blanking the UI.
+            return cached[1] if cached is not None else {}
+        self._team_payload_cache[team_id] = (now_ts, payload)
+        return payload
 
     @staticmethod
     def _resolve_batter_pitcher_ids(summary: dict[str, Any]) -> tuple[str, str]:

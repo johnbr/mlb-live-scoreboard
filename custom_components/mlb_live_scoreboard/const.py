@@ -24,6 +24,17 @@ LEADER_LIMIT = 3
 # the next scheduled game (in seconds).
 SHOW_NEXT_AFTER_PREV_SECONDS = 16 * 60 * 60
 
+# How long to cache ESPN team metadata (logo / record summary). Team metadata
+# changes only on roster moves and standings updates, so refetching every 5 s
+# is wasteful — re-use the previous payload until this many seconds have passed.
+TEAM_METADATA_TTL_SECONDS = 3600
+
+# How long to cache an athlete's season stats. Season stats only change when
+# the player completes a plate appearance, so a short cache eliminates the
+# repeat ESPN calls that happen during a long at-bat without making in-game
+# stat updates feel stale.
+BATTER_SEASON_STATS_TTL_SECONDS = 60
+
 MLB_TEAM_MAP = {
   "ARI": 29,
   "ATH": 11,
