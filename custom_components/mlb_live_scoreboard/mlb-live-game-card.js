@@ -525,9 +525,14 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const headers = Array.from({ length: innings }, (_, i) => `<div class="inning-head">${i + 1}</div>`).join("");
     const awayCells = Array.from({ length: innings }, (_, i) => `<div class="inning-cell">${awayLines[i]?.displayValue ?? awayLines[i]?.value ?? ""}</div>`).join("");
     const homeCells = Array.from({ length: innings }, (_, i) => `<div class="inning-cell">${homeLines[i]?.displayValue ?? homeLines[i]?.value ?? ""}</div>`).join("");
+    // Compute grid-template-columns inline: team-abbr | N inning cells | R total.
+    // Using `repeat(auto-fit, minmax(X, max-content))` is invalid per CSS Grid
+    // spec and causes browsers to collapse to a single column, which stacks
+    // every cell vertically. Setting an explicit track count avoids that.
+    const gridCols = `max-content repeat(${innings}, minmax(18px, 1fr)) max-content`;
     return `
       <div class="linescore">
-        <div class="linescore-grid">
+        <div class="linescore-grid" style="grid-template-columns: ${gridCols};">
           <div></div>${headers}<div class="inning-head">R</div>
           <div class="team-abbr">${away?.team?.abbreviation || "A"}</div>${awayCells}<div class="inning-total">${parseScore(away?.score).text || "—"}</div>
           <div class="team-abbr">${home?.team?.abbreviation || "H"}</div>${homeCells}<div class="inning-total">${parseScore(home?.score).text || "—"}</div>
@@ -1525,7 +1530,7 @@ white-space: nowrap;
         }
         .linescore-grid {
           display: grid;
-          grid-template-columns: max-content repeat(auto-fit, minmax(18px, max-content)) max-content;
+          grid-template-columns: max-content repeat(9, minmax(18px, 1fr)) max-content;
           gap: 4px 6px;
           align-items: center;
 }
