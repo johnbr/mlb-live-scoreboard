@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.5.3";
+const CARD_VERSION = "1.6.0";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -19,15 +19,84 @@ if (!window.customCards.find((c) => c.type === CARD_TAG)) {
 }
 
 
+// Image cache shared across all card instances on the page.
+//
+// Each entry is { src, status }, where:
+//   - src:    the URL to use as <img> src — initially the remote URL,
+//             upgraded to a blob: URL once the image has been fetched once.
+//   - status: "pending" while a fetch is in flight, "ready" once the blob
+//             URL is stored, "failed" if the fetch failed (we keep using
+//             the remote URL in that case so the image still loads).
+//
+// Why blob URLs? When the card re-renders we replace innerHTML, which
+// destroys and re-creates every <img>. Even when the URL string is
+// identical, ESPN's responses often arrive with cache-control headers
+// that force the browser to revalidate (= a fresh network request per
+// render). A blob: URL is a local in-memory reference — the browser
+// never makes another network request for it.
 window.__mlbLiveLogoCache = window.__mlbLiveLogoCache || new Map();
+
+function _scheduleRerender(card) {
+  // Cards that triggered a fetch should re-render once the blob URL is
+  // ready, so the new <img> uses the cached source. We rAF-coalesce so
+  // many concurrent fetch resolutions only fire one render.
+  if (!card || typeof card.render !== "function") return;
+  if (card._cacheRerenderPending) return;
+  card._cacheRerenderPending = true;
+  requestAnimationFrame(() => {
+    card._cacheRerenderPending = false;
+    // Clear the fingerprint so render() doesn't short-circuit.
+    card._lastFingerprint = "";
+    card.render();
+  });
+}
+
+function _prefetchImage(card, normalized) {
+  const cache = window.__mlbLiveLogoCache;
+  const entry = cache.get(normalized);
+  if (entry && entry.status !== "pending") return entry.src;
+  if (entry && entry.status === "pending") return entry.src;
+
+  // Mark as pending immediately so concurrent requests don't double-fetch.
+  cache.set(normalized, { src: normalized, status: "pending" });
+
+  // mode: "no-cors" works for cross-origin image hosts that don't send
+  // CORS headers — the resulting opaque blob still works as an <img> src.
+  // cache: "force-cache" lets the browser reuse its HTTP cache aggressively.
+  fetch(normalized, {
+    mode: "no-cors",
+    cache: "force-cache",
+    referrerPolicy: "no-referrer",
+    credentials: "omit",
+  })
+    .then((resp) => resp.blob())
+    .then((blob) => {
+      if (!blob || !blob.size) {
+        cache.set(normalized, { src: normalized, status: "failed" });
+        return;
+      }
+      const objUrl = URL.createObjectURL(blob);
+      cache.set(normalized, { src: objUrl, status: "ready" });
+      _scheduleRerender(card);
+    })
+    .catch(() => {
+      // Fetch failed (network, CORS opaque-with-error, etc.). Fall back to
+      // the remote URL — the <img> tag still works, we just don't get the
+      // blob-URL benefit for this asset.
+      cache.set(normalized, { src: normalized, status: "failed" });
+    });
+
+  return normalized;
+}
 
 function requestCachedLogo(card, url) {
   const raw = String(url || "").trim();
   if (!raw) return "";
   const normalized = raw.replace(/^http:/i, "https:");
   const cache = window.__mlbLiveLogoCache;
-  if (!cache.has(normalized)) cache.set(normalized, normalized);
-  return cache.get(normalized) || normalized;
+  const entry = cache.get(normalized);
+  if (entry) return entry.src || normalized;
+  return _prefetchImage(card, normalized);
 }
 
 function get(obj, path, fallback = undefined) {
