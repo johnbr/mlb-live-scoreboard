@@ -29,6 +29,21 @@ from .const import (
     STATUS_NAME_IN_PROGRESS,
     TEAM_METADATA_TTL_SECONDS,
 )
+from .types import (
+    BatterStats,
+    Competition,
+    CurrentBatter,
+    CurrentPitcher,
+    DueUpEntry,
+    InningContext,
+    Leaders,
+    OnDeck,
+    PitcherStats,
+    ProbablePitchers,
+    RecentPlay,
+    Situation,
+    TeamMetadata,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,22 +114,22 @@ class MlbLiveScoreboardData:
     live_event_id: str
     previous_event_id: str
     next_event_id: str
-    selected_competition: dict[str, Any] | None
-    inning_context: dict[str, Any]
-    recent_plays: list[dict[str, Any]]
+    selected_competition: Competition | None
+    inning_context: InningContext
+    recent_plays: list[RecentPlay]
     current_pitches: list[str]
-    away_team: dict[str, Any]
-    home_team: dict[str, Any]
-    current_batter: dict[str, Any]
-    current_pitcher: dict[str, Any]
-    batter_stats: dict[str, Any]
-    pitcher_stats: dict[str, Any]
-    situation: dict[str, Any]
-    probable_pitchers: dict[str, dict[str, Any]]
-    due_up: list[dict[str, Any]]
-    third_out_play: dict[str, Any]
-    on_deck: dict[str, Any]
-    leaders: dict[str, list[dict[str, Any]]]
+    away_team: TeamMetadata
+    home_team: TeamMetadata
+    current_batter: CurrentBatter
+    current_pitcher: CurrentPitcher
+    batter_stats: BatterStats
+    pitcher_stats: PitcherStats
+    situation: Situation
+    probable_pitchers: ProbablePitchers
+    due_up: list[DueUpEntry]
+    third_out_play: RecentPlay
+    on_deck: OnDeck
+    leaders: Leaders
     mode: str
     status_text: str
     is_live: bool
