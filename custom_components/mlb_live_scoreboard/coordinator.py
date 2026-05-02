@@ -33,6 +33,8 @@ from .const import (
     MLB_TEAM_MAP,
     SCHEDULE_STALE_FALLBACK_SECONDS,
     SHOW_NEXT_AFTER_PREV_SECONDS,
+    STANDINGS_STALE_FALLBACK_SECONDS,
+    STANDINGS_TTL_SECONDS,
     STATUS_NAME_DELAYED,
     STATUS_NAME_IN_PROGRESS,
     TEAM_METADATA_TTL_SECONDS,
@@ -50,6 +52,7 @@ from .types import (
     ProbablePitchers,
     RecentPlay,
     Situation,
+    Standings,
     TeamMetadata,
 )
 
@@ -218,6 +221,7 @@ class MlbLiveScoreboardData:
     third_out_play: RecentPlay
     on_deck: OnDeck
     leaders: Leaders
+    division_standings: Standings
     mode: str
     status_text: str
     is_live: bool
@@ -242,6 +246,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # short-lived fallback when ESPN's schedule endpoint has a transient
         # failure, so a one-poll hiccup doesn't blank the card.
         self._schedule_cache: tuple[float, dict[str, Any]] | None = None
+        # (fetched_at_ts, payload) for the league standings endpoint.
+        # Standings change a few times per day at most, so we re-fetch lazily
+        # once TTL expires and reuse the prior payload as a stale fallback if
+        # ESPN's standings endpoint fails.
+        self._standings_cache: tuple[float, dict[str, Any]] | None = None
 
         super().__init__(
             hass,
@@ -504,7 +513,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @staticmethod
     def _normalize_probable_pitchers(display_comp: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
-        """Extract probable starting pitcher (name + ERA) for both sides, used pre-game."""
+        """Extract probable starting pitcher (name, ERA, W-L, headshot) for both sides, used pre-game."""
         probables: dict[str, dict[str, Any]] = {"away": {}, "home": {}}
         for competitor in (display_comp or {}).get("competitors") or []:
             side = str(competitor.get("homeAway") or "")
@@ -514,18 +523,113 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             athlete = prob.get("athlete") or {}
             stats = prob.get("statistics") or []
             era = ""
+            wins = ""
+            losses = ""
             if isinstance(stats, list):
                 for item in stats:
                     name = str(item.get("name") or item.get("abbreviation") or "").lower()
-                    if name in {"era", "earned run average"}:
-                        era = str(item.get("displayValue") or item.get("value") or "")
-                        break
+                    value = str(item.get("displayValue") or item.get("value") or "")
+                    if name in {"era", "earned run average"} and not era:
+                        era = value
+                    elif name in {"wins", "w"} and not wins:
+                        wins = value
+                    elif name in {"losses", "l"} and not losses:
+                        losses = value
+            record = f"{wins}-{losses}" if wins and losses else ""
+            headshot = ""
+            head = athlete.get("headshot")
+            if isinstance(head, dict):
+                headshot = str(head.get("href") or "")
+            elif isinstance(head, str):
+                headshot = head
             probables[side] = {
                 "name": athlete.get("displayName") or athlete.get("shortName") or "",
                 "short_name": athlete.get("shortName") or athlete.get("displayName") or "",
                 "era": era,
+                "wins": wins,
+                "losses": losses,
+                "record": record,
+                "headshot": headshot,
             }
         return probables
+
+    @staticmethod
+    def _normalize_standings(
+        payload: dict[str, Any] | None, team_id: int
+    ) -> dict[str, Any]:
+        """Find the division containing ``team_id`` and return its standings rows.
+
+        The ESPN ``/standings?group=division`` payload nests divisions under
+        ``children[]`` (one per division), each with a ``standings.entries[]``
+        list. Each entry has a ``team`` and a ``stats[]`` list with W, L, and
+        ``gamesBehind``/``GB`` values. Returns an empty mapping when the team's
+        division can't be located.
+        """
+        if not payload:
+            return {"division_name": "", "entries": []}
+        team_id_str = str(team_id)
+        children = payload.get("children")
+        if not isinstance(children, list):
+            return {"division_name": "", "entries": []}
+        for division in children:
+            if not isinstance(division, dict):
+                continue
+            standings = division.get("standings") or {}
+            entries = standings.get("entries") if isinstance(standings, dict) else None
+            if not isinstance(entries, list):
+                continue
+            # Determine if this division contains the configured team.
+            contains_team = False
+            for entry in entries:
+                team = entry.get("team") if isinstance(entry, dict) else None
+                if isinstance(team, dict) and str(team.get("id") or "") == team_id_str:
+                    contains_team = True
+                    break
+            if not contains_team:
+                continue
+            normalized: list[dict[str, Any]] = []
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                team = entry.get("team") or {}
+                stats = entry.get("stats") if isinstance(entry.get("stats"), list) else []
+                wins = ""
+                losses = ""
+                games_back = ""
+                for stat in stats:
+                    if not isinstance(stat, dict):
+                        continue
+                    name = str(stat.get("name") or stat.get("type") or "").lower()
+                    abbr = str(stat.get("abbreviation") or "").lower()
+                    display = str(stat.get("displayValue") or stat.get("value") or "")
+                    if not wins and (name == "wins" or abbr == "w"):
+                        wins = display
+                    elif not losses and (name == "losses" or abbr == "l"):
+                        losses = display
+                    elif not games_back and (
+                        name in {"gamesbehind", "games behind", "gb"} or abbr == "gb"
+                    ):
+                        games_back = display
+                normalized.append({
+                    "team_id": str(team.get("id") or ""),
+                    "team_name": str(team.get("displayName") or team.get("name") or ""),
+                    "team_short_name": str(
+                        team.get("shortDisplayName")
+                        or team.get("name")
+                        or team.get("abbreviation")
+                        or ""
+                    ),
+                    "wins": wins,
+                    "losses": losses,
+                    "games_back": games_back,
+                })
+            return {
+                "division_name": str(
+                    division.get("name") or division.get("abbreviation") or ""
+                ),
+                "entries": normalized,
+            }
+        return {"division_name": "", "entries": []}
 
     @staticmethod
     def _normalize_leaders(summary: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -1111,6 +1215,29 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         self._team_payload_cache[team_id] = (now_ts, payload)
         return payload
 
+    async def _get_standings(self) -> dict[str, Any]:
+        """Fetch league standings, served from a TTL cache.
+
+        Standings change at most a few times per day, so a long TTL is
+        appropriate. On failure, returns the last-known payload (even if
+        beyond the stale-fallback window we'd let it go entirely empty).
+        """
+        cached = self._standings_cache
+        now_ts = time.time()
+        if cached is not None and (now_ts - cached[0]) < STANDINGS_TTL_SECONDS:
+            return cached[1]
+        try:
+            payload = await self._get_json(
+                "https://site.api.espn.com/apis/v2/sports/baseball/mlb/standings?group=division"
+            )
+        except Exception as err:
+            _LOGGER.debug("Unable to fetch standings: %s", err)
+            if cached is not None and (now_ts - cached[0]) < STANDINGS_STALE_FALLBACK_SECONDS:
+                return cached[1]
+            return {}
+        self._standings_cache = (now_ts, payload)
+        return payload
+
     @staticmethod
     def _resolve_batter_pitcher_ids(summary: dict[str, Any]) -> tuple[str, str]:
         """Return (batter_id, pitcher_id), falling back to the most recent
@@ -1346,6 +1473,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # (summary, display_comp), so previously calling it 5x per refresh was wasteful.
         inning_context = self._normalize_inning_context(summary, display_comp)
 
+        standings_payload = await self._get_standings()
+        division_standings = self._normalize_standings(standings_payload, self.team_id)
+
         new_data = MlbLiveScoreboardData(
             team_abbr=self.team_abbr,
             team_id=self.team_id,
@@ -1370,6 +1500,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             third_out_play=self._normalize_third_out_play(summary, inning_context),
             on_deck=self._normalize_on_deck(summary, inning_context, batter_id),
             leaders=self._normalize_leaders(summary),
+            division_standings=division_standings,
             mode=mode,
             status_text=status_detail,
             is_live=is_live,

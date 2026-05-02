@@ -408,6 +408,7 @@ def _make_data(
         third_out_play={},
         on_deck={},
         leaders={},
+        division_standings={"division_name": "", "entries": []},
         mode="live" if is_live else "previous",
         status_text="Top 5th",
         is_live=is_live,
@@ -610,3 +611,128 @@ def test_dispatch_handles_multiple_events():
     assert bus.async_fire.call_count == 2
 
 
+
+
+# ---------------------------------------------------------------------------
+# _normalize_probable_pitchers (extended fields)
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_probable_pitchers_extracts_record_and_headshot():
+    display_comp = {
+        "competitors": [
+            {
+                "homeAway": "away",
+                "probables": [{
+                    "athlete": {
+                        "displayName": "Jane Doe",
+                        "shortName": "J. Doe",
+                        "headshot": {"href": "https://e.com/jane.png"},
+                    },
+                    "statistics": [
+                        {"name": "wins", "displayValue": "10"},
+                        {"name": "losses", "displayValue": "4"},
+                        {"abbreviation": "ERA", "displayValue": "2.85"},
+                    ],
+                }],
+            },
+            {
+                "homeAway": "home",
+                "probables": [{
+                    "athlete": {"displayName": "John Roe", "headshot": "https://e.com/john.png"},
+                    "statistics": [{"name": "ERA", "displayValue": "3.50"}],
+                }],
+            },
+        ],
+    }
+    out = Coord._normalize_probable_pitchers(display_comp)
+    assert out["away"]["wins"] == "10"
+    assert out["away"]["losses"] == "4"
+    assert out["away"]["record"] == "10-4"
+    assert out["away"]["era"] == "2.85"
+    assert out["away"]["headshot"] == "https://e.com/jane.png"
+    # When wins or losses are missing, record is empty.
+    assert out["home"]["record"] == ""
+    assert out["home"]["era"] == "3.50"
+    assert out["home"]["headshot"] == "https://e.com/john.png"
+
+
+def test_normalize_probable_pitchers_handles_missing_competitor():
+    out = Coord._normalize_probable_pitchers(None)
+    assert out == {"away": {}, "home": {}}
+
+
+# ---------------------------------------------------------------------------
+# _normalize_standings
+# ---------------------------------------------------------------------------
+
+
+def _standings_payload():
+    return {
+        "children": [
+            {
+                "name": "American League East",
+                "standings": {
+                    "entries": [
+                        {
+                            "team": {"id": "1", "displayName": "Baltimore Orioles", "shortDisplayName": "Orioles"},
+                            "stats": [
+                                {"name": "wins", "displayValue": "60"},
+                                {"name": "losses", "displayValue": "40"},
+                                {"name": "gamesBehind", "displayValue": "-"},
+                            ],
+                        },
+                    ],
+                },
+            },
+            {
+                "name": "National League West",
+                "standings": {
+                    "entries": [
+                        {
+                            "team": {"id": "19", "displayName": "Los Angeles Dodgers", "shortDisplayName": "Dodgers"},
+                            "stats": [
+                                {"name": "wins", "displayValue": "65"},
+                                {"name": "losses", "displayValue": "35"},
+                                {"name": "gamesBehind", "displayValue": "-"},
+                            ],
+                        },
+                        {
+                            "team": {"id": "26", "displayName": "San Francisco Giants", "shortDisplayName": "Giants"},
+                            "stats": [
+                                {"abbreviation": "W", "displayValue": "58"},
+                                {"abbreviation": "L", "displayValue": "42"},
+                                {"abbreviation": "GB", "displayValue": "7.0"},
+                            ],
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+
+
+def test_normalize_standings_finds_team_division():
+    out = Coord._normalize_standings(_standings_payload(), team_id=19)
+    assert out["division_name"] == "National League West"
+    assert len(out["entries"]) == 2
+    first = out["entries"][0]
+    assert first["team_id"] == "19"
+    assert first["team_short_name"] == "Dodgers"
+    assert first["wins"] == "65"
+    assert first["losses"] == "35"
+    assert first["games_back"] == "-"
+    second = out["entries"][1]
+    assert second["wins"] == "58"
+    assert second["games_back"] == "7.0"
+
+
+def test_normalize_standings_team_not_found():
+    out = Coord._normalize_standings(_standings_payload(), team_id=999)
+    assert out == {"division_name": "", "entries": []}
+
+
+def test_normalize_standings_handles_empty_payload():
+    assert Coord._normalize_standings(None, 19) == {"division_name": "", "entries": []}
+    assert Coord._normalize_standings({}, 19) == {"division_name": "", "entries": []}
+    assert Coord._normalize_standings({"children": "bad"}, 19) == {"division_name": "", "entries": []}

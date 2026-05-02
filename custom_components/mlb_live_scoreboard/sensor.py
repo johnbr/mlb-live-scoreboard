@@ -78,6 +78,9 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
             "due_up": data.due_up,
             "third_out_play": data.third_out_play,
             "on_deck": data.on_deck,
+            "probable_pitchers": data.probable_pitchers,
+            "leaders": data.leaders,
+            "division_standings": data.division_standings,
         }
 
     @property
