@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.3";
+const CARD_VERSION = "1.8.4";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -636,6 +636,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     if (!target || !this.content.contains(target)) return;
     this._upcomingExpanded = !this._upcomingExpanded;
     // Force a re-render even if the upstream fingerprint is otherwise unchanged.
+    this._lastFingerprint = "";
     this._lastCompactFp = "";
     this.render();
   }
@@ -646,6 +647,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     if (!target || !this.content.contains(target)) return;
     ev.preventDefault();
     this._upcomingExpanded = !this._upcomingExpanded;
+    this._lastFingerprint = "";
     this._lastCompactFp = "";
     this.render();
   }
