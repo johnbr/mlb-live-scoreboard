@@ -26,11 +26,6 @@ ignore = [
     "E501",   # line length (handled by formatter)
     "B008",   # function call as default argument (used by HA / voluptuous patterns)
     "SIM108", # ternary-vs-if-else (subjective)
-    # The following could be addressed in a follow-up code-quality cleanup;
-    # ignored for now to avoid scoping refactors into a tooling-setup change.
-    "B023",   # function-uses-loop-variable (closures over loop vars)
-    "F841",   # unused local variables
-    "SIM114", # combine if branches with `or`
 ]
 
 [tool.ruff.lint.per-file-ignores]

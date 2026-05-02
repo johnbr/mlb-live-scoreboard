@@ -619,14 +619,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             txt_lower = txt.lower()
 
             # Check if this play involves our batter (name appears at start of play text)
-            name_match = False
-            if txt_lower.startswith(last_name):
-                name_match = True
-            elif display_name and txt_lower.startswith(display_name):
-                name_match = True
-            elif short_name and txt_lower.startswith(short_name):
-                name_match = True
-
+            name_match = (
+                txt_lower.startswith(last_name)
+                or (bool(display_name) and txt_lower.startswith(display_name))
+                or (bool(short_name) and txt_lower.startswith(short_name))
+            )
             if not name_match:
                 continue
 
@@ -830,9 +827,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             if not row:
                 continue
             stats = row.get("stats") or []
-            def get_idx(idx: int) -> str:
-                if idx >= 0 and idx < len(stats) and stats[idx] not in (None, ""):
-                    return str(stats[idx])
+            def get_idx(idx: int, _stats: list = stats) -> str:
+                if 0 <= idx < len(_stats) and _stats[idx] not in (None, ""):
+                    return str(_stats[idx])
                 return ""
             return {
                 "hr": get_idx(hr_idx),
@@ -918,18 +915,12 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if not batter_id:
             return {}
 
-        # Determine which team is batting: Top = away, Bottom = home
-        period_prefix = str(inning_context.get("period_prefix") or "").lower()
-        is_top = period_prefix.startswith("top")
-        batting_team_key = "away" if is_top else "home"
-
         # Find current batter's batOrder in the boxscore
         boxscore = summary.get("boxscore") or {}
         current_bat_order = 0
         batting_team_block = None
 
         for team_block in boxscore.get("players") or []:
-            team = team_block.get("team") or {}
             # Match by checking competitors in header or by position
             for stat_block in team_block.get("statistics") or []:
                 if stat_block.get("type") != "batting":
