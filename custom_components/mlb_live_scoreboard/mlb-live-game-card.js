@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.2";
+const CARD_VERSION = "1.8.3";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -451,17 +451,18 @@ function renderUpcomingPitcherSide(card, pitcher, fallbackLogo, alignRight = fal
     </div>`;
 }
 
-function renderUpcomingDetails(card, attrs, awayMeta, homeMeta, awayLogo, homeLogo) {
+function renderUpcomingDetails(card, attrs, awayMeta, homeMeta, awayLogo, homeLogo, options = {}) {
+  const includePitchers = options.includePitchers !== false;
   const probables = attrs?.probable_pitchers || {};
   const standings = attrs?.division_standings || {};
   const teamId = String(attrs?.team_id || "");
   const entries = Array.isArray(standings.entries) ? standings.entries : [];
-  const pitchersHtml = `
+  const pitchersHtml = includePitchers ? `
     <div class="upcoming-pitchers-grid">
       ${renderUpcomingPitcherSide(card, probables.away, awayLogo || awayMeta?.logo || "", false)}
       <div class="upcoming-pitchers-vs">vs</div>
       ${renderUpcomingPitcherSide(card, probables.home, homeLogo || homeMeta?.logo || "", true)}
-    </div>`;
+    </div>` : "";
   let standingsHtml = "";
   if (entries.length) {
     const rows = entries.map((entry) => {
@@ -926,7 +927,9 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
         this._upcomingExpanded = false;
       }
       const isUpcoming = stateInfo.pillClass === "next";
-      const expanded = isUpcoming && this._upcomingExpanded === true;
+      const isFinalCompact = stateInfo.pillClass === "final";
+      const canExpand = isUpcoming || isFinalCompact;
+      const expanded = canExpand && this._upcomingExpanded === true;
       // Compute compact fingerprint to see if we need to update DOM
       const compactFp = [
         stateInfo.pillClass,
@@ -938,7 +941,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
         awayRecord,
         homeRecord,
         expanded ? "exp" : "col",
-        isUpcoming ? this._upcomingDetailsFingerprint(attrs) : "",
+        canExpand ? this._upcomingDetailsFingerprint(attrs) : "",
       ].join("|");
       if (compactFp !== this._lastCompactFp) {
         // Fingerprint changed, need to re-render
@@ -997,6 +1000,8 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
   renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore, attrs = {}, expanded = false) {
     // Compute a compact-specific fingerprint to avoid unnecessary DOM updates
     const isUpcoming = stateInfo.pillClass === "next";
+    const isFinalCompact = stateInfo.pillClass === "final";
+    const canExpand = isUpcoming || isFinalCompact;
     const compactFp = [
       stateInfo.pillClass,
       awayTeam?.abbreviation || awayMeta?.abbreviation,
@@ -1007,7 +1012,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       awayRecord,
       homeRecord,
       expanded ? "exp" : "col",
-      isUpcoming ? this._upcomingDetailsFingerprint(attrs) : "",
+      canExpand ? this._upcomingDetailsFingerprint(attrs) : "",
     ].join("|");
     if (compactFp === this._lastCompactFp) {
       return this._lastCompactHtml; // Return cached HTML, don't recreate DOM
@@ -1032,18 +1037,21 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
           <div class="compact-time">${when.time || ""}</div>
         </div>`;
     const rightHtml = isFinal ? finalMarker : nextRight;
-    const expandable = isUpcoming;
+    const expandable = isUpcoming || isFinalCompact;
     const detailsPanel = (expandable && expanded)
-      ? renderUpcomingDetails(this, attrs, awayMeta, homeMeta, awayLogo, homeLogo)
+      ? renderUpcomingDetails(this, attrs, awayMeta, homeMeta, awayLogo, homeLogo, { includePitchers: isUpcoming })
       : "";
     const chevronHtml = expandable
       ? `<div class="upcoming-chevron" aria-hidden="true">${expanded ? "▴" : "▾"}</div>`
       : "";
+    const expandTitle = isUpcoming
+      ? (expanded ? "Hide details" : "Show pitchers & standings")
+      : (expanded ? "Hide standings" : "Show standings");
     const wrapperClasses = ["wrapper", "compact-mode"];
     if (expandable) wrapperClasses.push("upcoming-expandable");
     if (expanded) wrapperClasses.push("expanded");
     const html = `
-      <div class="${wrapperClasses.join(" ")}"${expandable ? ` role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}" title="${expanded ? "Hide details" : "Show pitchers & standings"}"` : ""}>
+      <div class="${wrapperClasses.join(" ")}"${expandable ? ` role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}" title="${expandTitle}"` : ""}>
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
             <div class="team-row away ${awayWon ? "winner" : ""}">
