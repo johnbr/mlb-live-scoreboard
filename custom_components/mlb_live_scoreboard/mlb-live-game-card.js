@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.7.0";
+const CARD_VERSION = "1.8.0";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -427,6 +427,75 @@ function renderLeaderList(items) {
 }
 
 
+function renderUpcomingPitcherSide(card, pitcher, fallbackLogo, alignRight = false) {
+  const safe = pitcher || {};
+  const name = String(safe.short_name || safe.name || "").trim();
+  const displayName = name ? shortPersonName(name) : "TBD";
+  const headshot = safe.headshot ? requestCachedLogo(card, safe.headshot) : "";
+  const logo = !headshot && fallbackLogo ? requestCachedLogo(card, fallbackLogo) : "";
+  const portrait = headshot
+    ? `<img class="upcoming-pitcher-img" src="${headshot}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+    : (logo
+      ? `<img class="upcoming-pitcher-img logo-fallback" src="${logo}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+      : `<div class="upcoming-pitcher-img placeholder"></div>`);
+  const record = String(safe.record || "").trim();
+  const era = String(safe.era || "").trim();
+  const recordLine = record ? `${record}` : "";
+  const eraLine = era ? `${era} ERA` : "";
+  return `
+    <div class="upcoming-pitcher-side ${alignRight ? "align-right" : ""}">
+      ${portrait}
+      <div class="upcoming-pitcher-name">${displayName}</div>
+      <div class="upcoming-pitcher-stat">${recordLine || "—"}</div>
+      <div class="upcoming-pitcher-stat secondary">${eraLine || ""}</div>
+    </div>`;
+}
+
+function renderUpcomingDetails(card, attrs, awayMeta, homeMeta, awayLogo, homeLogo) {
+  const probables = attrs?.probable_pitchers || {};
+  const standings = attrs?.division_standings || {};
+  const teamId = String(attrs?.team_id || "");
+  const entries = Array.isArray(standings.entries) ? standings.entries : [];
+  const pitchersHtml = `
+    <div class="upcoming-pitchers-grid">
+      ${renderUpcomingPitcherSide(card, probables.away, awayLogo || awayMeta?.logo || "", false)}
+      <div class="upcoming-pitchers-vs">vs</div>
+      ${renderUpcomingPitcherSide(card, probables.home, homeLogo || homeMeta?.logo || "", true)}
+    </div>`;
+  let standingsHtml = "";
+  if (entries.length) {
+    const rows = entries.map((entry) => {
+      const isMyTeam = String(entry.team_id || "") === teamId && teamId !== "";
+      const wl = `${entry.wins || "—"}-${entry.losses || "—"}`;
+      const gb = String(entry.games_back || "").trim() || "—";
+      const name = String(entry.team_short_name || entry.team_name || "").trim() || "—";
+      return `
+        <div class="standings-row ${isMyTeam ? "my-team" : ""}">
+          <span class="standings-name">${name}</span>
+          <span class="standings-wl">${wl}</span>
+          <span class="standings-gb">${gb}</span>
+        </div>`;
+    }).join("");
+    const heading = standings.division_name ? `<div class="standings-heading">${standings.division_name}</div>` : "";
+    standingsHtml = `
+      <div class="upcoming-standings">
+        ${heading}
+        <div class="standings-row standings-header">
+          <span class="standings-name">Team</span>
+          <span class="standings-wl">W-L</span>
+          <span class="standings-gb">GB</span>
+        </div>
+        ${rows}
+      </div>`;
+  }
+  return `
+    <div class="upcoming-details-panel">
+      ${pitchersHtml}
+      ${standingsHtml}
+    </div>`;
+}
+
+
 function renderPlayIndicator(play, previousContext = {}) {
   const playText = String(play?.text || "").toLowerCase();
   const altType = String(play?.alternative_type || play?.alternativeType || "").toLowerCase();
@@ -538,6 +607,48 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     this._thirdOutHold = { gameKey: "", playId: "", until: 0, dueUpSeenForPlayId: "" };
   }
 
+  _upcomingDetailsFingerprint(attrs) {
+    // Compact fingerprint of details that affect the expanded panel, so the
+    // compact card re-renders when probable pitchers or standings change.
+    const probables = attrs?.probable_pitchers || {};
+    const a = probables.away || {};
+    const h = probables.home || {};
+    const standings = attrs?.division_standings || {};
+    const entries = Array.isArray(standings.entries) ? standings.entries : [];
+    const standingsFp = entries
+      .map((e) => `${e.team_id || ""}:${e.wins || ""}-${e.losses || ""}:${e.games_back || ""}`)
+      .join(",");
+    return [
+      a.name || "",
+      a.record || "",
+      a.era || "",
+      h.name || "",
+      h.record || "",
+      h.era || "",
+      standings.division_name || "",
+      standingsFp,
+    ].join("|");
+  }
+
+  _onContentClick(ev) {
+    const target = ev.target instanceof Element ? ev.target.closest(".upcoming-expandable") : null;
+    if (!target || !this.content.contains(target)) return;
+    this._upcomingExpanded = !this._upcomingExpanded;
+    // Force a re-render even if the upstream fingerprint is otherwise unchanged.
+    this._lastCompactFp = "";
+    this.render();
+  }
+
+  _onContentKeydown(ev) {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    const target = ev.target instanceof Element ? ev.target.closest(".upcoming-expandable") : null;
+    if (!target || !this.content.contains(target)) return;
+    ev.preventDefault();
+    this._upcomingExpanded = !this._upcomingExpanded;
+    this._lastCompactFp = "";
+    this.render();
+  }
+
   _setupRefreshTimer() {
     this._clearRefreshTimer();
     const rate = Number(this.config.refresh_rate);
@@ -566,6 +677,8 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       this.content.className = "card-content";
       this.card.appendChild(this.content);
       this.appendChild(this.card);
+      this.content.addEventListener("click", (ev) => this._onContentClick(ev));
+      this.content.addEventListener("keydown", (ev) => this._onContentKeydown(ev));
     }
     this.render();
     // Setup refresh timer on first load
@@ -804,6 +917,16 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       ? `<div class="state-panel final-panel"><span class="mini-state">F</span><span>Final</span><span class="totals-inline">Away H/E ${awayTotals.hits}/${awayTotals.errors} • Home H/E ${homeTotals.hits}/${homeTotals.errors}</span></div>`
       : "";
     if (stateInfo.pillClass === "next" || stateInfo.pillClass === "final") {
+      // Reset expanded state when the displayed game changes (different opponent / date).
+      const gameKeyForExpand = String(
+        competition?.id || `${awayTeam?.abbreviation || awayMeta?.abbreviation || "A"}-${homeTeam?.abbreviation || homeMeta?.abbreviation || "H"}-${competition?.date || ""}`
+      );
+      if (this._upcomingExpandedGameKey !== gameKeyForExpand) {
+        this._upcomingExpandedGameKey = gameKeyForExpand;
+        this._upcomingExpanded = false;
+      }
+      const isUpcoming = stateInfo.pillClass === "next";
+      const expanded = isUpcoming && this._upcomingExpanded === true;
       // Compute compact fingerprint to see if we need to update DOM
       const compactFp = [
         stateInfo.pillClass,
@@ -814,10 +937,12 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
         homeScore.text,
         awayRecord,
         homeRecord,
+        expanded ? "exp" : "col",
+        isUpcoming ? this._upcomingDetailsFingerprint(attrs) : "",
       ].join("|");
       if (compactFp !== this._lastCompactFp) {
         // Fingerprint changed, need to re-render
-        this.content.innerHTML = this.renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore);
+        this.content.innerHTML = this.renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore, attrs, expanded);
       }
       // else: fingerprint unchanged, skip DOM update entirely
       return;
@@ -869,8 +994,9 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     };
   }
 
-  renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore) {
+  renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore, attrs = {}, expanded = false) {
     // Compute a compact-specific fingerprint to avoid unnecessary DOM updates
+    const isUpcoming = stateInfo.pillClass === "next";
     const compactFp = [
       stateInfo.pillClass,
       awayTeam?.abbreviation || awayMeta?.abbreviation,
@@ -880,6 +1006,8 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       homeScore.text,
       awayRecord,
       homeRecord,
+      expanded ? "exp" : "col",
+      isUpcoming ? this._upcomingDetailsFingerprint(attrs) : "",
     ].join("|");
     if (compactFp === this._lastCompactFp) {
       return this._lastCompactHtml; // Return cached HTML, don't recreate DOM
@@ -904,8 +1032,18 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
           <div class="compact-time">${when.time || ""}</div>
         </div>`;
     const rightHtml = isFinal ? finalMarker : nextRight;
+    const expandable = isUpcoming;
+    const detailsPanel = (expandable && expanded)
+      ? renderUpcomingDetails(this, attrs, awayMeta, homeMeta, awayLogo, homeLogo)
+      : "";
+    const chevronHtml = expandable
+      ? `<div class="upcoming-chevron" aria-hidden="true">${expanded ? "▴" : "▾"}</div>`
+      : "";
+    const wrapperClasses = ["wrapper", "compact-mode"];
+    if (expandable) wrapperClasses.push("upcoming-expandable");
+    if (expanded) wrapperClasses.push("expanded");
     const html = `
-      <div class="wrapper compact-mode">
+      <div class="${wrapperClasses.join(" ")}"${expandable ? ` role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}" title="${expanded ? "Hide details" : "Show pitchers & standings"}"` : ""}>
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
             <div class="team-row away ${awayWon ? "winner" : ""}">
@@ -928,9 +1066,10 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
             </div>
           </div>
           <div class="inning-marker-side">
-            <div class="inning-marker-wrap">${rightHtml}</div>
+            <div class="inning-marker-wrap">${rightHtml}${chevronHtml}</div>
           </div>
         </div>
+        ${detailsPanel}
       </div>
       ${this.styles()}`;
     this._lastCompactHtml = html;
@@ -1743,6 +1882,121 @@ white-space: nowrap;
         }
         .compact-mode .team-row.winner .final-score {
           color: var(--primary-color, #03a9f4);
+        }
+
+        /* Upcoming-game expandable details */
+        .upcoming-expandable {
+          cursor: pointer;
+          outline: none;
+        }
+        .upcoming-expandable:focus-visible {
+          box-shadow: 0 0 0 2px var(--primary-color, #03a9f4);
+          border-radius: 8px;
+        }
+        .upcoming-chevron {
+          font-size: 0.85em;
+          opacity: 0.7;
+          margin-top: 2px;
+          text-align: right;
+          line-height: 1;
+        }
+        .upcoming-details-panel {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          padding: 10px 6px 4px;
+          margin-top: 6px;
+          border-top: 1px solid var(--divider-color, rgba(127,127,127,0.25));
+        }
+        .upcoming-pitchers-grid {
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items: center;
+          gap: 8px;
+        }
+        .upcoming-pitcher-side {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          text-align: center;
+        }
+        .upcoming-pitcher-side.align-right { /* symmetry hint, no-op layout */ }
+        .upcoming-pitcher-img {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          object-fit: cover;
+          background: var(--secondary-background-color, rgba(127,127,127,0.15));
+        }
+        .upcoming-pitcher-img.logo-fallback {
+          object-fit: contain;
+          padding: 4px;
+        }
+        .upcoming-pitcher-img.placeholder {
+          background: var(--secondary-background-color, rgba(127,127,127,0.15));
+        }
+        .upcoming-pitcher-name {
+          font-weight: 600;
+          font-size: 0.92em;
+          line-height: 1.1;
+        }
+        .upcoming-pitcher-stat {
+          font-size: 0.85em;
+          opacity: 0.9;
+        }
+        .upcoming-pitcher-stat.secondary {
+          opacity: 0.75;
+        }
+        .upcoming-pitchers-vs {
+          font-size: 0.8em;
+          opacity: 0.6;
+          font-style: italic;
+        }
+        .upcoming-standings {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .standings-heading {
+          font-size: 0.82em;
+          opacity: 0.75;
+          margin-bottom: 2px;
+        }
+        .standings-row {
+          display: grid;
+          grid-template-columns: 1fr 56px 48px;
+          align-items: center;
+          gap: 6px;
+          padding: 2px 4px;
+          font-size: 0.88em;
+          line-height: 1.25;
+          border-radius: 4px;
+        }
+        .standings-row.standings-header {
+          font-size: 0.75em;
+          font-weight: 600;
+          opacity: 0.65;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
+        .standings-row.my-team {
+          background: var(--primary-color, #03a9f4);
+          color: var(--text-primary-color, #fff);
+          font-weight: 600;
+        }
+        .standings-name {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .standings-wl {
+          text-align: right;
+          font-variant-numeric: tabular-nums;
+        }
+        .standings-gb {
+          text-align: right;
+          font-variant-numeric: tabular-nums;
         }
 
       </style>

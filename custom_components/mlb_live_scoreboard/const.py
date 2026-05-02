@@ -40,6 +40,16 @@ BATTER_SEASON_STATS_TTL_SECONDS = 60
 # coordinator raise UpdateFailed so the sensor goes unavailable.
 SCHEDULE_STALE_FALLBACK_SECONDS = 5 * 60
 
+# How long to cache the division-standings payload. Standings change at most
+# a few times per day, so a 10-minute TTL eliminates per-poll calls without
+# making the displayed standings feel stale.
+STANDINGS_TTL_SECONDS = 600
+
+# Maximum age of a cached standings payload that is still acceptable as a
+# fallback when ESPN's standings endpoint fails. Beyond this we drop the
+# cache and the card simply renders empty standings.
+STANDINGS_STALE_FALLBACK_SECONDS = 60 * 60
+
 # Game-event names fired on the Home Assistant event bus. Each is prefixed
 # with the integration domain to keep them namespaced from other integrations.
 EVENT_TEAM_SCORED = f"{DOMAIN}_team_scored"

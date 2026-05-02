@@ -149,11 +149,20 @@ class OnDeck(TypedDict, total=False):
 
 
 class ProbablePitcher(TypedDict, total=False):
-    """Shape of an entry in ``probable_pitchers`` (``away``/``home``)."""
+    """Shape of an entry in ``probable_pitchers`` (``away``/``home``).
+
+    ``record`` is a pre-formatted ``"W-L"`` string when both wins and losses
+    are present; otherwise empty. ``headshot`` is the player headshot URL
+    when ESPN provides one in the probables payload.
+    """
 
     name: str
     short_name: str
     era: str
+    wins: str
+    losses: str
+    record: str
+    headshot: str
 
 
 class ProbablePitchers(TypedDict, total=False):
@@ -161,6 +170,28 @@ class ProbablePitchers(TypedDict, total=False):
 
     away: ProbablePitcher
     home: ProbablePitcher
+
+
+class StandingsEntry(TypedDict, total=False):
+    """Shape of a single team row in ``division_standings.entries``.
+
+    ``games_back`` is the pre-formatted ESPN display value (e.g. ``"-"``,
+    ``"0.5"``, ``"3"``); empty when the source payload omits it.
+    """
+
+    team_id: str
+    team_name: str
+    team_short_name: str
+    wins: str
+    losses: str
+    games_back: str
+
+
+class Standings(TypedDict, total=False):
+    """Shape of ``division_standings`` attribute (single division for the configured team)."""
+
+    division_name: str
+    entries: list[StandingsEntry]
 
 
 class LeaderEntry(TypedDict, total=False):
