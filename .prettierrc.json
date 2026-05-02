@@ -1,0 +1,14 @@
+# Defer to Home Assistant's prevailing style; use 2-space indent for the
+# JS/CSS/JSON/YAML/MD files in this repo since the existing JS card already
+# uses 2-space indentation throughout.
+{
+  "printWidth": 120,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "es5",
+  "bracketSpacing": true,
+  "arrowParens": "always",
+  "endOfLine": "lf"
+}

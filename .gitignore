@@ -1,2 +1,18 @@
 __pycache__/
 *.pyc
+
+# Tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Local virtualenvs
+.venv/
+venv/
+
+# JS dev tooling (added when JS test harness lands)
+node_modules/

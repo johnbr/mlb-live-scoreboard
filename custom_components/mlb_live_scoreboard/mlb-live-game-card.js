@@ -1,6 +1,13 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.5.3";
+const CARD_VERSION = "1.6.0";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
+
+// Number of seconds the card keeps showing the third-out play after it occurs,
+// before yielding to the due-up panel for the next half-inning.
+const THIRD_OUT_HOLD_SECONDS = 30;
+// Wallclock window (seconds) within which a stored play is treated as the
+// just-completed third out, even without an explicit `third_out_play` attribute.
+const THIRD_OUT_RECENT_WINDOW_SECONDS = 8;
 
 window.customCards = window.customCards || [];
 if (!window.customCards.find((c) => c.type === CARD_TAG)) {
@@ -12,15 +19,84 @@ if (!window.customCards.find((c) => c.type === CARD_TAG)) {
 }
 
 
+// Image cache shared across all card instances on the page.
+//
+// Each entry is { src, status }, where:
+//   - src:    the URL to use as <img> src — initially the remote URL,
+//             upgraded to a blob: URL once the image has been fetched once.
+//   - status: "pending" while a fetch is in flight, "ready" once the blob
+//             URL is stored, "failed" if the fetch failed (we keep using
+//             the remote URL in that case so the image still loads).
+//
+// Why blob URLs? When the card re-renders we replace innerHTML, which
+// destroys and re-creates every <img>. Even when the URL string is
+// identical, ESPN's responses often arrive with cache-control headers
+// that force the browser to revalidate (= a fresh network request per
+// render). A blob: URL is a local in-memory reference — the browser
+// never makes another network request for it.
 window.__mlbLiveLogoCache = window.__mlbLiveLogoCache || new Map();
+
+function _scheduleRerender(card) {
+  // Cards that triggered a fetch should re-render once the blob URL is
+  // ready, so the new <img> uses the cached source. We rAF-coalesce so
+  // many concurrent fetch resolutions only fire one render.
+  if (!card || typeof card.render !== "function") return;
+  if (card._cacheRerenderPending) return;
+  card._cacheRerenderPending = true;
+  requestAnimationFrame(() => {
+    card._cacheRerenderPending = false;
+    // Clear the fingerprint so render() doesn't short-circuit.
+    card._lastFingerprint = "";
+    card.render();
+  });
+}
+
+function _prefetchImage(card, normalized) {
+  const cache = window.__mlbLiveLogoCache;
+  const entry = cache.get(normalized);
+  if (entry && entry.status !== "pending") return entry.src;
+  if (entry && entry.status === "pending") return entry.src;
+
+  // Mark as pending immediately so concurrent requests don't double-fetch.
+  cache.set(normalized, { src: normalized, status: "pending" });
+
+  // mode: "no-cors" works for cross-origin image hosts that don't send
+  // CORS headers — the resulting opaque blob still works as an <img> src.
+  // cache: "force-cache" lets the browser reuse its HTTP cache aggressively.
+  fetch(normalized, {
+    mode: "no-cors",
+    cache: "force-cache",
+    referrerPolicy: "no-referrer",
+    credentials: "omit",
+  })
+    .then((resp) => resp.blob())
+    .then((blob) => {
+      if (!blob || !blob.size) {
+        cache.set(normalized, { src: normalized, status: "failed" });
+        return;
+      }
+      const objUrl = URL.createObjectURL(blob);
+      cache.set(normalized, { src: objUrl, status: "ready" });
+      _scheduleRerender(card);
+    })
+    .catch(() => {
+      // Fetch failed (network, CORS opaque-with-error, etc.). Fall back to
+      // the remote URL — the <img> tag still works, we just don't get the
+      // blob-URL benefit for this asset.
+      cache.set(normalized, { src: normalized, status: "failed" });
+    });
+
+  return normalized;
+}
 
 function requestCachedLogo(card, url) {
   const raw = String(url || "").trim();
   if (!raw) return "";
   const normalized = raw.replace(/^http:/i, "https:");
   const cache = window.__mlbLiveLogoCache;
-  if (!cache.has(normalized)) cache.set(normalized, normalized);
-  return cache.get(normalized) || normalized;
+  const entry = cache.get(normalized);
+  if (entry) return entry.src || normalized;
+  return _prefetchImage(card, normalized);
 }
 
 function get(obj, path, fallback = undefined) {
@@ -445,6 +521,23 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     }
   }
 
+  // State machine for the "hold the third-out play on screen" UX:
+  //   gameKey               - which game this state belongs to; reset on game change
+  //   playId                - identifier of the third-out play being held
+  //   until                 - POSIX seconds; persistent hold expires once now > until
+  //   dueUpSeenForPlayId    - playId for which we've already revealed the due-up panel,
+  //                           preventing the hold from re-engaging on later renders
+  _getThirdOutHold() {
+    if (!this._thirdOutHold) {
+      this._thirdOutHold = { gameKey: "", playId: "", until: 0, dueUpSeenForPlayId: "" };
+    }
+    return this._thirdOutHold;
+  }
+
+  _resetThirdOutHold() {
+    this._thirdOutHold = { gameKey: "", playId: "", until: 0, dueUpSeenForPlayId: "" };
+  }
+
   _setupRefreshTimer() {
     this._clearRefreshTimer();
     const rate = Number(this.config.refresh_rate);
@@ -501,9 +594,14 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const headers = Array.from({ length: innings }, (_, i) => `<div class="inning-head">${i + 1}</div>`).join("");
     const awayCells = Array.from({ length: innings }, (_, i) => `<div class="inning-cell">${awayLines[i]?.displayValue ?? awayLines[i]?.value ?? ""}</div>`).join("");
     const homeCells = Array.from({ length: innings }, (_, i) => `<div class="inning-cell">${homeLines[i]?.displayValue ?? homeLines[i]?.value ?? ""}</div>`).join("");
+    // Compute grid-template-columns inline: team-abbr | N inning cells | R total.
+    // Using `repeat(auto-fit, minmax(X, max-content))` is invalid per CSS Grid
+    // spec and causes browsers to collapse to a single column, which stacks
+    // every cell vertically. Setting an explicit track count avoids that.
+    const gridCols = `max-content repeat(${innings}, minmax(18px, 1fr)) max-content`;
     return `
       <div class="linescore">
-        <div class="linescore-grid">
+        <div class="linescore-grid" style="grid-template-columns: ${gridCols};">
           <div></div>${headers}<div class="inning-head">R</div>
           <div class="team-abbr">${away?.team?.abbreviation || "A"}</div>${awayCells}<div class="inning-total">${parseScore(away?.score).text || "—"}</div>
           <div class="team-abbr">${home?.team?.abbreviation || "H"}</div>${homeCells}<div class="inning-total">${parseScore(home?.score).text || "—"}</div>
@@ -513,33 +611,44 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
   }
 
   _computeRenderFingerprint(stateObj) {
+    // Cheap, scalar-only fingerprint: avoid JSON.stringify over arrays of
+    // objects (was costly on long play lists). Each field below is a single
+    // primitive whose change should trigger a re-render. Anything not listed
+    // here is either derived from these fields or visually irrelevant.
     const attrs = stateObj?.attributes || {};
     const comp = attrs.competition || {};
+    const status = comp.status || {};
+    const competitors = Array.isArray(comp.competitors) ? comp.competitors : [];
+    const away = competitors.find(c => c?.homeAway === "away") || {};
+    const home = competitors.find(c => c?.homeAway === "home") || {};
     const sit = attrs.situation || {};
-    const fp = [
+    const bs = attrs.batter_stats || {};
+    const ps = attrs.pitcher_stats || {};
+    const plays = Array.isArray(attrs.recent_plays) ? attrs.recent_plays : [];
+    const lastPlay = plays.length ? plays[plays.length - 1] : null;
+    const hold = this._getThirdOutHold();
+    return [
       stateObj?.state,
       attrs.mode,
       attrs.game_state,
-      JSON.stringify(comp.competitors?.map(c => ({ ha: c.homeAway, score: c.score, rec: c.records })) || []),
-      comp.status?.type?.state,
-      comp.status?.type?.name,
-      comp.status?.period,
-      comp.status?.displayClock,
+      // Visible scoreboard inputs
+      away.score, away.recordSummary,
+      home.score, home.recordSummary,
+      status.type?.state, status.type?.name, status.period, status.displayClock,
+      // Matchup
       attrs.current_batter?.display_name,
       attrs.current_pitcher?.display_name,
-      JSON.stringify(attrs.batter_stats || {}),
-      JSON.stringify(attrs.pitcher_stats || {}),
-      sit.balls,
-      sit.strikes,
-      sit.outs,
-      sit.onFirst,
-      sit.onSecond,
-      sit.onThird,
-      JSON.stringify(attrs.recent_plays?.slice(-3) || []),
+      bs.avg, bs.hits_ab, bs.hr, bs.rbi, bs.game_outcomes_display,
+      ps.era, ps.ip, ps.pitches_strikes, ps.strikeouts,
+      // Count + bases
+      sit.balls, sit.strikes, sit.outs,
+      sit.onFirst, sit.onSecond, sit.onThird,
+      // Recent plays — only the tail-most play affects rendering thresholds
+      plays.length, lastPlay?.id, lastPlay?.outs, lastPlay?.away_score, lastPlay?.home_score,
+      // Inning + third-out hold
       attrs.inning_context?.is_between_halves,
-      this._thirdOutHoldUntil > Date.now() / 1000 ? this._thirdOutHoldPlayId : "",
+      hold.until > Date.now() / 1000 ? hold.playId : "",
     ].join("||");
-    return fp;
   }
 
   render() {
@@ -592,8 +701,6 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const basesSummary = buildBasesText(attrs.situation);
     const probablePitchers = attrs.probable_pitchers || {};
     const leaders = attrs.leaders || {};
-    const pregamePanel = "";
-    const finalLeaderPanel = "";
     const periodLower = String(inningState.lower || "");
     const inningContext = attrs.inning_context || {};
     const recentPlaysPanel = renderRecentPlays(attrs.recent_plays || [], attrs.current_pitches || [], attrs.situation || {}, this.config);
@@ -602,53 +709,54 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const betweenHalves = (periodLower.startsWith("mid") || periodLower.startsWith("end") || inningContext.is_between_halves);
     const nowTs = Date.now() / 1000;
     const gameKey = String(attrs.event_id || competition?.id || `${awayTeam?.abbreviation || "A"}-${homeTeam?.abbreviation || "H"}`);
-    if (this._thirdOutHoldGameKey && this._thirdOutHoldGameKey !== gameKey) {
-      this._thirdOutHoldGameKey = "";
-      this._thirdOutHoldPlayId = "";
-      this._thirdOutHoldUntil = 0;
-      this._thirdOutDueUpSeenForPlayId = "";
+    const hold = this._getThirdOutHold();
+    if (hold.gameKey && hold.gameKey !== gameKey) {
+      this._resetThirdOutHold();
     }
     // Look for 3rd out play - first check recent (8s window), then check if betweenHalves with any 3rd out in recent_plays
-    const recentFallbackThirdOut = (!explicitThirdOutPlay && latestRecentPlay && Number(latestRecentPlay?.outs) === 3 && String(latestRecentPlay?.text || "").trim() && Number.isFinite(Number(latestRecentPlay?.wallclock_ts)) && ((nowTs - Number(latestRecentPlay.wallclock_ts)) < 8))
+    const recentFallbackThirdOut = (!explicitThirdOutPlay && latestRecentPlay && Number(latestRecentPlay?.outs) === 3 && String(latestRecentPlay?.text || "").trim() && Number.isFinite(Number(latestRecentPlay?.wallclock_ts)) && ((nowTs - Number(latestRecentPlay.wallclock_ts)) < THIRD_OUT_RECENT_WINDOW_SECONDS))
       ? latestRecentPlay
       : null;
     // Extended fallback: if betweenHalves and no hold active, look for ANY 3rd out in recent_plays (even older ones)
-    const anyThirdOutPlay = (!explicitThirdOutPlay && !recentFallbackThirdOut && betweenHalves && !this._thirdOutHoldPlayId && latestRecentPlay && Number(latestRecentPlay?.outs) === 3 && String(latestRecentPlay?.text || "").trim())
+    const anyThirdOutPlay = (!explicitThirdOutPlay && !recentFallbackThirdOut && betweenHalves && !this._getThirdOutHold().playId && latestRecentPlay && Number(latestRecentPlay?.outs) === 3 && String(latestRecentPlay?.text || "").trim())
       ? latestRecentPlay
       : null;
     const candidateThirdOutPlay = explicitThirdOutPlay || recentFallbackThirdOut || anyThirdOutPlay || null;
     if (candidateThirdOutPlay) {
       const candidateId = String(candidateThirdOutPlay?.id || `${gameKey}-${Number(candidateThirdOutPlay?.wallclock_ts) || nowTs}`);
-      const currentHoldId = String(this._thirdOutHoldPlayId || "");
+      const currentHoldId = String(this._getThirdOutHold().playId || "");
       if (candidateId && candidateId !== currentHoldId) {
-        this._thirdOutHoldGameKey = gameKey;
-        this._thirdOutHoldPlayId = candidateId;
-        this._thirdOutHoldUntil = nowTs + 30;
-        this._thirdOutDueUpSeenForPlayId = "";
+        this._thirdOutHold = {
+          gameKey: gameKey,
+          playId: candidateId,
+          until: nowTs + THIRD_OUT_HOLD_SECONDS,
+          dueUpSeenForPlayId: "",
+        };
       }
     }
-    const holdPlayAlreadyReleased = !!this._thirdOutHoldPlayId && this._thirdOutDueUpSeenForPlayId === this._thirdOutHoldPlayId;
+    const holdState = this._getThirdOutHold();
+    const holdPlayAlreadyReleased = !!holdState.playId && holdState.dueUpSeenForPlayId === holdState.playId;
     const persistentHoldActive = betweenHalves
       && !holdPlayAlreadyReleased
-      && this._thirdOutHoldGameKey === gameKey
-      && Number.isFinite(Number(this._thirdOutHoldUntil))
-      && Number(this._thirdOutHoldUntil) > nowTs;
+      && holdState.gameKey === gameKey
+      && Number.isFinite(Number(holdState.until))
+      && Number(holdState.until) > nowTs;
     const explicitThirdOutTs = Number(explicitThirdOutPlay?.wallclock_ts);
     const explicitHoldActive = !!explicitThirdOutPlay
       && !holdPlayAlreadyReleased
       && Number.isFinite(explicitThirdOutTs)
       && Number(explicitThirdOutPlay?.outs) === 3
-      && (nowTs - explicitThirdOutTs) < 30;
+      && (nowTs - explicitThirdOutTs) < THIRD_OUT_HOLD_SECONDS;
     const graceHoldActive = !!recentFallbackThirdOut && !holdPlayAlreadyReleased;
     const dueUpDesc = [String(inningContext.period_prefix || "").trim(), String(inningContext.display_period || attrs.competition?.status?.displayPeriod || "").trim()].filter(Boolean).join(" ").trim();
     const dueUpList = Array.isArray(attrs.due_up) ? attrs.due_up.filter(Boolean) : [];
     const dueUpReady = betweenHalves && dueUpList.length > 0;
-    if (dueUpReady && this._thirdOutHoldGameKey === gameKey && this._thirdOutHoldPlayId && Number(this._thirdOutHoldUntil || 0) <= nowTs) {
-      this._thirdOutDueUpSeenForPlayId = this._thirdOutHoldPlayId;
+    if (dueUpReady && holdState.gameKey === gameKey && holdState.playId && Number(holdState.until || 0) <= nowTs) {
+      holdState.dueUpSeenForPlayId = holdState.playId;
     }
     const holdThirdOut = betweenHalves && (persistentHoldActive || explicitHoldActive || (!dueUpReady && graceHoldActive));
-    if (betweenHalves && !holdThirdOut && this._thirdOutHoldGameKey === gameKey && this._thirdOutHoldPlayId && this._thirdOutDueUpSeenForPlayId !== this._thirdOutHoldPlayId) {
-      this._thirdOutDueUpSeenForPlayId = this._thirdOutHoldPlayId;
+    if (betweenHalves && !holdThirdOut && holdState.gameKey === gameKey && holdState.playId && holdState.dueUpSeenForPlayId !== holdState.playId) {
+      holdState.dueUpSeenForPlayId = holdState.playId;
     }
     const dueUpPanel = (betweenHalves && !holdThirdOut)
       ? renderDueUpCards(this, dueUpList, dueUpDesc)
@@ -728,10 +836,8 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
         </div>
 
         ${this.config.show_linescore ? this.renderLinescore(competition) : ""}
-        ${pregamePanel}
         ${delayedExtras}
         ${finalExtras}
-        ${finalLeaderPanel}
         ${liveExtras}
       </div>
       ${this.styles()}
@@ -1493,7 +1599,7 @@ white-space: nowrap;
         }
         .linescore-grid {
           display: grid;
-          grid-template-columns: max-content repeat(auto-fit, minmax(18px, max-content)) max-content;
+          grid-template-columns: max-content repeat(9, minmax(18px, 1fr)) max-content;
           gap: 4px 6px;
           align-items: center;
 }
@@ -1594,12 +1700,16 @@ white-space: nowrap;
           justify-content:center;
           gap:1px;
         }
-        .compact-time {
-white-space: nowrap;
+        .compact-next-wrap .compact-date,
+        .compact-next-wrap .compact-time {
+          white-space: nowrap;
           line-height: 1.05;
-          color: var(--primary-text-color);
-          font-size: 14px;
-          font-weight: 400;
+          font-size: 1em !important;
+          font-weight: 400 !important;
+        }
+        .compact-next-wrap.today-only .compact-time {
+          font-size: 1em !important;
+          font-weight: 500 !important;
         }
         .compact-pill {
 color: var(--secondary-text-color);

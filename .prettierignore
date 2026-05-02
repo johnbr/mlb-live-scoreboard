@@ -1,0 +1,6 @@
+# Files prettier should not reformat (preserves existing layout where
+# readability matters more than convention).
+custom_components/mlb_live_scoreboard/translations/
+*.lock
+.git/
+__pycache__/

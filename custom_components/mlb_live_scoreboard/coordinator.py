@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import timedelta
 import logging
+import time
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -10,9 +11,98 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_NAME, CONF_TEAM, DEFAULT_SCAN_INTERVAL_SECONDS, DOMAIN, MLB_TEAM_MAP
+from .const import (
+    BATTER_SEASON_STATS_TTL_SECONDS,
+    BATTING_ORDER_SIZE,
+    CONF_NAME,
+    CONF_TEAM,
+    DEFAULT_SCAN_INTERVAL_SECONDS,
+    DOMAIN,
+    DUE_UP_LIMIT,
+    LEADER_LIMIT,
+    LIVE_STATES,
+    MAX_LINESCORES,
+    MLB_TEAM_MAP,
+    SCHEDULE_STALE_FALLBACK_SECONDS,
+    SHOW_NEXT_AFTER_PREV_SECONDS,
+    STATUS_NAME_DELAYED,
+    STATUS_NAME_IN_PROGRESS,
+    TEAM_METADATA_TTL_SECONDS,
+)
+from .types import (
+    BatterStats,
+    Competition,
+    CurrentBatter,
+    CurrentPitcher,
+    DueUpEntry,
+    InningContext,
+    Leaders,
+    OnDeck,
+    PitcherStats,
+    ProbablePitchers,
+    RecentPlay,
+    Situation,
+    TeamMetadata,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# Play-text keywords that signal the end of an at-bat. Used by
+# `_normalize_current_pitches` to know when to stop scanning back through plays.
+_AT_BAT_END_KEYWORDS: tuple[str, ...] = (
+    "singled", "doubled", "tripled", "homered", "walked", "struck out", "flied out",
+    "grounded out", "lined out", "popped out", "reached on", "hit by pitch",
+    "fouled out", "sacrifice", "sacrificed", "intentionally walked", "out at",
+    "reached first", "fielder's choice",
+)
+
+# Ordered list of (play-text keyword, abbreviation) used when classifying a
+# completed at-bat for the current batter's game outcomes.
+_BATTER_OUTCOME_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("homered", "HR"),
+    ("home run", "HR"),
+    ("tripled", "3B"),
+    ("doubled", "2B"),
+    ("singled", "1B"),
+    ("walked", "BB"),
+    ("intentionally walked", "IBB"),
+    ("hit by pitch", "HBP"),
+    ("struck out", "K"),
+    ("grounded out", "GO"),
+    ("flied out", "FO"),
+    ("lined out", "LO"),
+    ("popped out", "PO"),
+    ("fouled out", "FO"),
+    ("grounded into", "GIDP"),
+    ("reached on error", "E"),
+    ("reached on fielder's choice", "FC"),
+    ("fielder's choice", "FC"),
+    ("sacrifice fly", "SF"),
+    ("sacrificed", "SAC"),
+    ("sacrifice bunt", "SAC"),
+)
+
+# Outcomes excluded from the compact batter-outcome display string.
+_BATTER_OUTCOME_EXCLUDED: frozenset[str] = frozenset({"GO", "FO", "LO", "PO", "GIDP", "FC", "HBP"})
+
+# Display ordering for the compact batter-outcome string.
+_BATTER_OUTCOME_ORDER: tuple[str, ...] = ("HR", "3B", "2B", "1B", "BB", "IBB", "SF", "SAC", "K", "E")
+
+
+def _parse_iso_ts(date_raw: Any) -> float | None:
+    """Parse an ESPN-style ISO datetime string into a POSIX timestamp.
+
+    Returns None for missing or unparseable values. ESPN consistently uses a
+    trailing ``Z`` for UTC which `datetime.fromisoformat` does not accept on
+    older Python versions, so we normalize it to ``+00:00``.
+    """
+    if not date_raw:
+        return None
+    try:
+        return datetime.fromisoformat(str(date_raw).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass
@@ -24,22 +114,22 @@ class MlbLiveScoreboardData:
     live_event_id: str
     previous_event_id: str
     next_event_id: str
-    selected_competition: dict[str, Any] | None
-    inning_context: dict[str, Any]
-    recent_plays: list[dict[str, Any]]
+    selected_competition: Competition | None
+    inning_context: InningContext
+    recent_plays: list[RecentPlay]
     current_pitches: list[str]
-    away_team: dict[str, Any]
-    home_team: dict[str, Any]
-    current_batter: dict[str, Any]
-    current_pitcher: dict[str, Any]
-    batter_stats: dict[str, Any]
-    pitcher_stats: dict[str, Any]
-    situation: dict[str, Any]
-    probable_pitchers: dict[str, dict[str, Any]]
-    due_up: list[dict[str, Any]]
-    third_out_play: dict[str, Any]
-    on_deck: dict[str, Any]
-    leaders: dict[str, list[dict[str, Any]]]
+    away_team: TeamMetadata
+    home_team: TeamMetadata
+    current_batter: CurrentBatter
+    current_pitcher: CurrentPitcher
+    batter_stats: BatterStats
+    pitcher_stats: PitcherStats
+    situation: Situation
+    probable_pitchers: ProbablePitchers
+    due_up: list[DueUpEntry]
+    third_out_play: RecentPlay
+    on_deck: OnDeck
+    leaders: Leaders
     mode: str
     status_text: str
     is_live: bool
@@ -54,6 +144,16 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         self.team_id = MLB_TEAM_MAP[self.team_abbr]
         self.display_name = str(entry.data.get(CONF_NAME) or entry.title or self.team_abbr)
         self._session = async_get_clientsession(hass)
+        # team_id -> (fetched_at_ts, payload). Refreshed lazily once TTL expires;
+        # entries are also reused as a fallback when a refresh attempt fails.
+        self._team_payload_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # athlete_id -> (fetched_at_ts, payload). Avoids repeat fetches for the
+        # same batter during a single at-bat.
+        self._batter_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # (fetched_at_ts, payload) for the team schedule endpoint. Used as a
+        # short-lived fallback when ESPN's schedule endpoint has a transient
+        # failure, so a one-poll hiccup doesn't blank the card.
+        self._schedule_cache: tuple[float, dict[str, Any]] | None = None
 
         super().__init__(
             hass,
@@ -74,29 +174,20 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             return await resp.json()
 
     def _select_event(self, events: list[dict[str, Any]]) -> tuple[str, str, str, str, dict[str, Any] | None]:
-        import time
-
         now_ts = time.time()
         prev: dict[str, Any] | None = None
         next_ev: dict[str, Any] | None = None
         live: dict[str, Any] | None = None
 
         for ev in events:
-            date_raw = ev.get("date")
-            ts = None
-            if date_raw:
-                try:
-                    from datetime import datetime
-                    ts = datetime.fromisoformat(date_raw.replace("Z", "+00:00")).timestamp()
-                except Exception:
-                    ts = None
+            ts = _parse_iso_ts(ev.get("date"))
 
             comp = ((ev.get("competitions") or [{}])[0]) if ev.get("competitions") else {}
             status = ((comp.get("status") or {}).get("type") or (ev.get("status") or {}).get("type") or {})
             state = str(status.get("state", "")).lower()
             name = str(status.get("name", "")).upper()
 
-            if not live and (state in {"in", "live"} or name == "STATUS_IN_PROGRESS"):
+            if not live and (state in LIVE_STATES or name == STATUS_NAME_IN_PROGRESS):
                 live = ev
 
             if ts is not None:
@@ -119,17 +210,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             prev_state = str(prev_status.get("state", "")).lower()
             prev_complete = prev_state == "post" or prev_status.get("completed") is True
 
-            prev_start = prev.get("date")
-            show_next = False
-            if prev_start:
-                try:
-                    from datetime import datetime
-                    prev_ts = datetime.fromisoformat(prev_start.replace("Z", "+00:00")).timestamp()
-                    show_next_after = prev_ts + (16 * 60 * 60)
-                    show_next = prev_complete and now_ts >= show_next_after
-                except Exception:
-                    show_next = False
-            if show_next:
+            prev_ts = _parse_iso_ts(prev.get("date"))
+            if prev_ts is not None and prev_complete and now_ts >= prev_ts + SHOW_NEXT_AFTER_PREV_SECONDS:
                 display_event = next_ev
 
         return (
@@ -152,7 +234,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             team = competitor.get("team") or {}
             logos = team.get("logos") or []
             compact_lines = []
-            for line in (competitor.get("linescores") or [])[:12]:
+            for line in (competitor.get("linescores") or [])[:MAX_LINESCORES]:
                 compact_lines.append({
                     "value": line.get("value"),
                     "displayValue": line.get("displayValue"),
@@ -201,6 +283,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @staticmethod
     def _normalize_inning_context(summary: dict[str, Any], display_comp: dict[str, Any] | None) -> dict[str, Any]:
+        """Derive inning number, half (top/bot/mid/end) and display strings from the
+        competition status block. Used to filter recent plays/pitches by inning."""
         status = (display_comp or {}).get("status") or {}
         prefix = str(status.get("periodPrefix") or ((status.get("type") or {}).get("detail") or ""))
         period = int(status.get("period") or ((status.get("type") or {}).get("period") or 0) or 0)
@@ -216,6 +300,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @staticmethod
     def _normalize_current_pitches(summary: dict[str, Any], inning_context: dict[str, Any]) -> list[str]:
+        """Return the pitch-text list for the at-bat in progress, in chronological order.
+
+        Walks plays backwards from newest, collecting ``Pitch N: ...`` entries until
+        an at-bat boundary (start/end batter, terminating play result) is reached.
+        """
         plays = summary.get("plays") or []
         if not isinstance(plays, list) or not plays:
             return []
@@ -237,18 +326,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if not relevant:
             return []
 
-        end_keywords = (
-            "singled", "doubled", "tripled", "homered", "walked", "struck out", "flied out",
-            "grounded out", "lined out", "popped out", "reached on", "hit by pitch",
-            "fouled out", "sacrifice", "sacrificed", "intentionally walked", "out at",
-            "reached first", "fielder's choice"
-        )
-
         current: list[str] = []
         saw_pitch = False
 
         for play in reversed(relevant):
-            play_type = str(((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "")).lower()
+            play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
             txt = str(play.get("text") or "").strip()
             low = txt.lower()
 
@@ -257,7 +339,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     break
                 return []
 
-            if play_type in {"play result", "play-result"} and any(key in low for key in end_keywords):
+            if play_type in {"play result", "play-result"} and any(key in low for key in _AT_BAT_END_KEYWORDS):
                 if saw_pitch:
                     break
                 return []
@@ -276,6 +358,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @staticmethod
     def _normalize_recent_plays(summary: dict[str, Any], inning_context: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return play-result entries for the current half-inning in chronological order."""
         plays = summary.get("plays") or []
         if not isinstance(plays, list) or not plays:
             return []
@@ -293,7 +376,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             period = play.get("period") or {}
             play_half = str(period.get("type") or "").lower()
             play_inning = int(period.get("number") or 0)
-            play_type = str(((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "")).lower()
+            play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
             txt = str(play.get("text") or "").strip()
             if not txt:
                 continue
@@ -306,12 +389,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             outs = play.get("outs") or ((play.get("result") or {}).get("outs"))
             away_score = play.get("awayScore")
             home_score = play.get("homeScore")
-            wallclock_raw = str(play.get("wallclock") or "").strip()
-            try:
-                from datetime import datetime
-                wallclock_ts = datetime.fromisoformat(wallclock_raw.replace("Z", "+00:00")).timestamp() if wallclock_raw else None
-            except Exception:
-                wallclock_ts = None
+            wallclock_ts = _parse_iso_ts(play.get("wallclock"))
             results.append({
                 "id": str(play.get("id") or ""),
                 "text": txt,
@@ -322,12 +400,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 "scoring_play": play.get("scoringPlay") is True,
                 "score_value": int(play.get("scoreValue") or 0),
                 "play_type": play_type,
-                "alternative_type": str(((play.get("alternativeType") or {}).get("type") or (play.get("alternativeType") or {}).get("text") or "")).lower(),
+                "alternative_type": str((play.get("alternativeType") or {}).get("type") or (play.get("alternativeType") or {}).get("text") or "").lower(),
             })
         return results
 
     @staticmethod
     def _normalize_third_out_play(summary: dict[str, Any], inning_context: dict[str, Any]) -> dict[str, Any]:
+        """Return the most recent play that produced the third out, or ``{}``."""
         plays = MlbLiveScoreboardCoordinator._normalize_recent_plays(summary, inning_context)
         for play in reversed(plays):
             outs = play.get("outs")
@@ -337,6 +416,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @staticmethod
     def _normalize_probable_pitchers(display_comp: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+        """Extract probable starting pitcher (name + ERA) for both sides, used pre-game."""
         probables: dict[str, dict[str, Any]] = {"away": {}, "home": {}}
         for competitor in (display_comp or {}).get("competitors") or []:
             side = str(competitor.get("homeAway") or "")
@@ -361,6 +441,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @staticmethod
     def _normalize_leaders(summary: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+        """Extract the top statistical leader per category for each team."""
         result: dict[str, list[dict[str, Any]]] = {"away": [], "home": []}
         for team_block in summary.get("leaders") or []:
             side = str(team_block.get("homeAway") or "")
@@ -378,13 +459,14 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     "value": str(leader.get("displayValue") or leader.get("value") or ""),
                     "name": athlete.get("shortName") or athlete.get("displayName") or "",
                 })
-                if len(compact) >= 3:
+                if len(compact) >= LEADER_LIMIT:
                     break
             result[side] = compact
         return result
 
     @staticmethod
     def _normalize_team_payload(team_payload: dict[str, Any]) -> dict[str, Any]:
+        """Flatten the ESPN team-metadata response into the fields the card consumes."""
         team = team_payload.get("team") or {}
         record_items = ((team.get("record") or {}).get("items") or []) if isinstance(team, dict) else []
         overall = {}
@@ -506,122 +588,90 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         """Extract at-bat outcomes for the current batter from game plays."""
         if not batter_id:
             return []
-        
+
         plays = summary.get("plays") or []
         if not isinstance(plays, list) or not plays:
             return []
-        
+
         # Find the batter's name for matching in play text
         athlete = cls._find_any_athlete(summary, batter_id)
         last_name = str(athlete.get("lastName") or "").strip().lower()
         display_name = str(athlete.get("displayName") or athlete.get("shortName") or "").strip().lower()
         short_name = str(athlete.get("shortName") or "").strip().lower()
-        
+
         if not last_name and display_name:
             parts = display_name.split()
             last_name = parts[-1] if parts else ""
-        
+
         if not last_name:
             return []
-        
+
         outcomes: list[str] = []
-        
-        # Keywords that indicate at-bat end results
-        outcome_patterns = [
-            ("homered", "HR"),
-            ("home run", "HR"),
-            ("tripled", "3B"),
-            ("doubled", "2B"),
-            ("singled", "1B"),
-            ("walked", "BB"),
-            ("intentionally walked", "IBB"),
-            ("hit by pitch", "HBP"),
-            ("struck out", "K"),
-            ("grounded out", "GO"),
-            ("flied out", "FO"),
-            ("lined out", "LO"),
-            ("popped out", "PO"),
-            ("fouled out", "FO"),
-            ("grounded into", "GIDP"),
-            ("reached on error", "E"),
-            ("reached on fielder's choice", "FC"),
-            ("fielder's choice", "FC"),
-            ("sacrifice fly", "SF"),
-            ("sacrificed", "SAC"),
-            ("sacrifice bunt", "SAC"),
-        ]
-        
+
         for play in plays:
-            play_type = str(((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "")).lower()
-            
+            play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
+
             # Only look at play results / end batter events
             if play_type not in {"play result", "play-result", "end batter/pitcher", "end batter pitcher"}:
                 continue
-            
+
             txt = str(play.get("text") or "").strip()
             txt_lower = txt.lower()
-            
+
             # Check if this play involves our batter (name appears at start of play text)
-            name_match = False
-            if txt_lower.startswith(last_name):
-                name_match = True
-            elif display_name and txt_lower.startswith(display_name):
-                name_match = True
-            elif short_name and txt_lower.startswith(short_name):
-                name_match = True
-            
+            name_match = (
+                txt_lower.startswith(last_name)
+                or (bool(display_name) and txt_lower.startswith(display_name))
+                or (bool(short_name) and txt_lower.startswith(short_name))
+            )
             if not name_match:
                 continue
-            
+
             # Determine the outcome
-            for pattern, abbrev in outcome_patterns:
+            for pattern, abbrev in _BATTER_OUTCOME_PATTERNS:
                 if pattern in txt_lower:
                     outcomes.append(abbrev)
                     break
-        
+
         return outcomes
 
     @classmethod
     def _format_batter_outcomes(cls, outcomes: list[str]) -> str:
         """Format outcomes list into compact display string like '2HR, 2B, BB, K'.
-        
+
         Excludes routine outs: GO, FO, LO, PO, GIDP, FC, HBP.
         """
         if not outcomes:
             return ""
-        
+
         # Filter out routine outs that we don't want to display
-        excluded = {"GO", "FO", "LO", "PO", "GIDP", "FC", "HBP"}
-        filtered_outcomes = [o for o in outcomes if o.upper() not in excluded]
-        
+        filtered_outcomes = [o for o in outcomes if o.upper() not in _BATTER_OUTCOME_EXCLUDED]
+
         if not filtered_outcomes:
             return ""
-        
+
         # Count occurrences
         counts: dict[str, int] = {}
         for outcome in filtered_outcomes:
             counts[outcome] = counts.get(outcome, 0) + 1
-        
-        # Order of display priority (excluding filtered items)
-        order = ["HR", "3B", "2B", "1B", "BB", "IBB", "SF", "SAC", "K", "E"]
-        
+
         parts: list[str] = []
-        for key in order:
+        for key in _BATTER_OUTCOME_ORDER:
             if key in counts:
                 count = counts[key]
                 if count > 1:
                     parts.append(f"{count}{key}")
                 else:
                     parts.append(key)
-        
+
         # Add any we missed
         for key, count in counts.items():
-            if key not in order:
+            if key not in _BATTER_OUTCOME_ORDER:
                 if count > 1:
                     parts.append(f"{count}{key}")
                 else:
                     parts.append(key)
-        
+
         return ", ".join(parts)
 
     @classmethod
@@ -682,6 +732,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @classmethod
     def _normalize_pitcher_stats(cls, summary: dict[str, Any], pitcher_id: str) -> dict[str, Any]:
+        """Extract IP / ERA / SO / pitch count for the pitcher of record."""
         entry, keys = cls._find_boxscore_athlete(summary, pitcher_id, preferred_keys=["era", "pitches"])
         pitches = cls._stat_from_entry(entry, keys, "pitches")
         strikes = cls._stat_from_entry(entry, keys, "strikes")
@@ -714,10 +765,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @classmethod
     def _normalize_due_up(cls, summary: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return the next ``DUE_UP_LIMIT`` batters scheduled to bat next half-inning."""
         situation = summary.get("situation") or {}
         due_up = situation.get("dueUp") or []
         result: list[dict[str, Any]] = []
-        for item in due_up[:3]:
+        for item in due_up[:DUE_UP_LIMIT]:
             player_id = str(item.get("playerId") or item.get("id") or "")
             entry, keys = cls._find_boxscore_athlete(summary, player_id)
             athlete = entry.get("athlete") or cls._find_roster_athlete(summary, player_id) or {}
@@ -735,18 +787,31 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return result
 
     async def _get_public_batter_stats(self, athlete_id: str) -> dict[str, Any]:
+        """Fetch an athlete's season stats payload, served from a TTL cache.
+
+        Stats only change when the player completes an at-bat, so a short TTL
+        eliminates the repeat ESPN calls that occur every 5 s while the same
+        batter is at the plate. Falls back to a stale cache entry on fetch
+        failure rather than blanking the season HR/RBI display.
+        """
         if not athlete_id:
             return {}
+        cached = self._batter_stats_cache.get(athlete_id)
+        now_ts = time.time()
+        if cached is not None and (now_ts - cached[0]) < BATTER_SEASON_STATS_TTL_SECONDS:
+            return cached[1]
         url = f"https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{athlete_id}/stats?region=us&lang=en&contentorigin=espn"
         try:
-            return await self._get_json(url)
-        except Exception:
-            return {}
+            payload = await self._get_json(url)
+        except Exception as err:
+            _LOGGER.debug("Unable to fetch batter season stats for %s: %s", athlete_id, err)
+            return cached[1] if cached is not None else {}
+        self._batter_stats_cache[athlete_id] = (now_ts, payload)
+        return payload
 
     @staticmethod
     def _extract_current_season_batter_stats(stats_payload: dict[str, Any]) -> dict[str, Any]:
         categories = stats_payload.get("categories") or []
-        from datetime import datetime
         current_year = datetime.now().year
         for category in categories:
             names = [str(n or "") for n in (category.get("names") or [])]
@@ -762,9 +827,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             if not row:
                 continue
             stats = row.get("stats") or []
-            def get_idx(idx: int) -> str:
-                if idx >= 0 and idx < len(stats) and stats[idx] not in (None, ""):
-                    return str(stats[idx])
+            def get_idx(idx: int, _stats: list = stats) -> str:
+                if 0 <= idx < len(_stats) and _stats[idx] not in (None, ""):
+                    return str(_stats[idx])
                 return ""
             return {
                 "hr": get_idx(hr_idx),
@@ -775,6 +840,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @classmethod
     def _normalize_situation(cls, summary: dict[str, Any]) -> dict[str, Any]:
+        """Return balls/strikes/outs and base-runner occupancy + last names."""
         situation = summary.get("situation") or {}
 
         def _runner_ref(*candidates: Any) -> Any:
@@ -848,19 +914,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         """Calculate the on-deck batter from the batting order."""
         if not batter_id:
             return {}
-        
-        # Determine which team is batting: Top = away, Bottom = home
-        period_prefix = str(inning_context.get("period_prefix") or "").lower()
-        is_top = period_prefix.startswith("top")
-        batting_team_key = "away" if is_top else "home"
-        
+
         # Find current batter's batOrder in the boxscore
         boxscore = summary.get("boxscore") or {}
         current_bat_order = 0
         batting_team_block = None
-        
+
         for team_block in boxscore.get("players") or []:
-            team = team_block.get("team") or {}
             # Match by checking competitors in header or by position
             for stat_block in team_block.get("statistics") or []:
                 if stat_block.get("type") != "batting":
@@ -875,13 +935,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     break
             if batting_team_block:
                 break
-        
+
         if not current_bat_order or not batting_team_block:
             return {}
-        
+
         # Calculate next batter in order (wrap 9 -> 1)
-        next_bat_order = (current_bat_order % 9) + 1
-        
+        next_bat_order = (current_bat_order % BATTING_ORDER_SIZE) + 1
+
         # Find the next batter
         for stat_block in batting_team_block.get("statistics") or []:
             if stat_block.get("type") != "batting":
@@ -905,13 +965,129 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     }
         return {}
 
-    async def _async_update_data(self) -> MlbLiveScoreboardData:
+    @staticmethod
+    def _resolve_display_comp(
+        summary: dict[str, Any], display_id: str, display_event: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        """Pick the competition dict to render from, preferring the live summary payload.
+
+        ESPN's summary endpoint returns a richer competition object than the schedule
+        feed; only fall back to the schedule's copy when the summary id doesn't match
+        the event we're displaying (e.g. summary fetch failed or returned a different
+        game).
+        """
+        summary_header = summary.get("header") or {}
+        summary_competitions = summary_header.get("competitions") or []
+        summary_comp = summary_competitions[0] if summary_competitions else None
+        summary_id = str(summary.get("id") or summary_header.get("id") or "")
+        if summary_comp is not None and summary_id == display_id:
+            return summary_comp
+        if display_event and display_event.get("competitions"):
+            return (display_event["competitions"] or [{}])[0]
+        return None
+
+    @staticmethod
+    def _resolve_competitor_ids(display_comp: dict[str, Any] | None) -> tuple[str, str]:
+        """Return (away_team_id, home_team_id) from a competition dict."""
+        away_id = ""
+        home_id = ""
+        for competitor in (display_comp or {}).get("competitors") or []:
+            side = competitor.get("homeAway")
+            team_id = str((competitor.get("team") or {}).get("id", ""))
+            if side == "away":
+                away_id = team_id
+            elif side == "home":
+                home_id = team_id
+        return away_id, home_id
+
+    async def _fetch_team_payload(self, team_id: str, side: str) -> dict[str, Any]:
+        """Fetch team metadata, served from a TTL cache to avoid repeat ESPN calls.
+
+        Logs failures at debug level. On failure, falls back to the last-known
+        cached payload (even if expired) before returning ``{}``.
+        """
+        if not team_id:
+            return {}
+        cached = self._team_payload_cache.get(team_id)
+        now_ts = time.time()
+        if cached is not None and (now_ts - cached[0]) < TEAM_METADATA_TTL_SECONDS:
+            return cached[1]
         try:
-            schedule = await self._get_json(
-                f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{self.team_abbr.lower()}/schedule"
+            payload = await self._get_json(
+                f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}"
             )
         except Exception as err:
-            raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
+            _LOGGER.debug("Unable to fetch %s team metadata: %s", side, err)
+            # Re-use stale cache rather than blanking the UI.
+            return cached[1] if cached is not None else {}
+        self._team_payload_cache[team_id] = (now_ts, payload)
+        return payload
+
+    @staticmethod
+    def _resolve_batter_pitcher_ids(summary: dict[str, Any]) -> tuple[str, str]:
+        """Return (batter_id, pitcher_id), falling back to the most recent
+        ``start batter/pitcher`` play when the situation block is empty.
+        """
+        situation = summary.get("situation") or {}
+        batter = situation.get("batter") or {}
+        pitcher = situation.get("pitcher") or {}
+        batter_id = str(batter.get("playerId") or batter.get("id") or (batter.get("athlete") or {}).get("id") or "")
+        pitcher_id = str(pitcher.get("playerId") or pitcher.get("id") or (pitcher.get("athlete") or {}).get("id") or "")
+
+        if batter_id and pitcher_id:
+            return batter_id, pitcher_id
+
+        plays = summary.get("plays") or []
+        for play in reversed(plays):
+            play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
+            if play_type not in {"start batter/pitcher", "start batter pitcher", "start-batterpitcher"}:
+                continue
+            for participant in play.get("participants") or []:
+                part_type = str(participant.get("type", "")).lower()
+                if not batter_id and part_type == "batter":
+                    batter_id = str((participant.get("athlete") or {}).get("id", ""))
+                elif not pitcher_id and part_type == "pitcher":
+                    pitcher_id = str((participant.get("athlete") or {}).get("id", ""))
+            if batter_id and pitcher_id:
+                break
+        return batter_id, pitcher_id
+
+    @staticmethod
+    def _resolve_status_info(display_comp: dict[str, Any] | None) -> tuple[str, bool, bool]:
+        """Return (status_detail_text, is_live, is_delayed) for a competition."""
+        status_type = ((display_comp or {}).get("status") or {}).get("type") or {}
+        state = str(status_type.get("state", "")).lower()
+        status_name = str(status_type.get("name", "")).upper()
+        status_detail = str(
+            status_type.get("detail")
+            or status_type.get("shortDetail")
+            or status_type.get("statusPrimary")
+            or status_type.get("description")
+            or ""
+        ).strip()
+        is_delayed = status_name == STATUS_NAME_DELAYED or "delayed" in status_detail.lower()
+        is_live = state in LIVE_STATES or status_name == STATUS_NAME_IN_PROGRESS or is_delayed
+        return status_detail, is_live, is_delayed
+
+    async def _async_update_data(self) -> MlbLiveScoreboardData:
+        schedule_url = (
+            f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{self.team_abbr.lower()}/schedule"
+        )
+        try:
+            schedule = await self._get_json(schedule_url)
+            self._schedule_cache = (time.time(), schedule)
+        except Exception as err:
+            cached = self._schedule_cache
+            now_ts = time.time()
+            if cached is not None and (now_ts - cached[0]) < SCHEDULE_STALE_FALLBACK_SECONDS:
+                _LOGGER.warning(
+                    "Schedule fetch failed (%s); reusing cache from %.0fs ago",
+                    err,
+                    now_ts - cached[0],
+                )
+                schedule = cached[1]
+            else:
+                raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
 
         events = schedule.get("events") or []
         prev_id, next_id, live_id, display_id, display_event = self._select_event(events)
@@ -925,82 +1101,26 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             except Exception as err:
                 _LOGGER.warning("Unable to fetch summary for %s: %s", display_id, err)
 
-        summary_header = summary.get("header") or {}
-        summary_comp = ((summary_header.get("competitions") or [{}])[0]) if summary_header.get("competitions") else None
-        display_comp = summary_comp if str(summary.get("id") or summary_header.get("id") or "") == display_id else None
-        if display_comp is None:
-            display_comp = ((display_event.get("competitions") or [{}])[0]) if display_event and display_event.get("competitions") else None
+        display_comp = self._resolve_display_comp(summary, display_id, display_event)
+        away_id, home_id = self._resolve_competitor_ids(display_comp)
+        away_team_payload = await self._fetch_team_payload(away_id, "away")
+        home_team_payload = await self._fetch_team_payload(home_id, "home")
 
-        away_id = ""
-        home_id = ""
-        for competitor in (display_comp or {}).get("competitors") or []:
-            side = competitor.get("homeAway")
-            if side == "away":
-                away_id = str((competitor.get("team") or {}).get("id", ""))
-            elif side == "home":
-                home_id = str((competitor.get("team") or {}).get("id", ""))
-
-        away_team_payload: dict[str, Any] = {}
-        home_team_payload: dict[str, Any] = {}
-        if away_id:
-            try:
-                away_team_payload = await self._get_json(
-                    f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{away_id}"
-                )
-            except Exception as err:
-                _LOGGER.debug("Unable to fetch away team metadata: %s", err)
-        if home_id:
-            try:
-                home_team_payload = await self._get_json(
-                    f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{home_id}"
-                )
-            except Exception as err:
-                _LOGGER.debug("Unable to fetch home team metadata: %s", err)
-
-        batter_id = ""
-        pitcher_id = ""
-        situation = summary.get("situation") or {}
-        batter = situation.get("batter") or {}
-        pitcher = situation.get("pitcher") or {}
-        batter_id = str(batter.get("playerId") or batter.get("id") or (batter.get("athlete") or {}).get("id") or "")
-        pitcher_id = str(pitcher.get("playerId") or pitcher.get("id") or (pitcher.get("athlete") or {}).get("id") or "")
-
-        if not batter_id or not pitcher_id:
-            plays = summary.get("plays") or []
-            for play in reversed(plays):
-                play_type = str(((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "")).lower()
-                if play_type in {"start batter/pitcher", "start batter pitcher", "start-batterpitcher"}:
-                    for participant in play.get("participants") or []:
-                        part_type = str(participant.get("type", "")).lower()
-                        if not batter_id and part_type == "batter":
-                            batter_id = str((participant.get("athlete") or {}).get("id", ""))
-                        elif not pitcher_id and part_type == "pitcher":
-                            pitcher_id = str((participant.get("athlete") or {}).get("id", ""))
-                    if batter_id and pitcher_id:
-                        break
-
-        status = ((display_comp or {}).get("status") or {})
-        status_type = status.get("type") or {}
-        state = str(status_type.get("state", "")).lower()
-        status_name = str(status_type.get("name", "")).upper()
-        status_detail = str(
-            status_type.get("detail")
-            or status_type.get("shortDetail")
-            or status_type.get("statusPrimary")
-            or status_type.get("description")
-            or ""
-        ).strip()
-        is_delayed = status_name == "STATUS_DELAYED" or "delayed" in status_detail.lower()
-        is_live = state in {"in", "live"} or status_name == "STATUS_IN_PROGRESS" or is_delayed
+        batter_id, pitcher_id = self._resolve_batter_pitcher_ids(summary)
+        status_detail, is_live, is_delayed = self._resolve_status_info(display_comp)
 
         mode = "live" if live_id and display_id == live_id else ("previous" if display_id == prev_id else "next")
 
-        batter_season_stats = await self._get_public_batter_stats(batter_id) if batter_id else {}
-        batter_season_stats = self._extract_current_season_batter_stats(batter_season_stats) if batter_season_stats else {}
+        batter_season_payload = await self._get_public_batter_stats(batter_id) if batter_id else {}
+        batter_season_stats = self._extract_current_season_batter_stats(batter_season_payload) if batter_season_payload else {}
 
         team_name = self.team_abbr
         if schedule.get("team") and isinstance(schedule["team"], dict):
             team_name = str(schedule["team"].get("displayName") or schedule["team"].get("name") or self.team_abbr)
+
+        # Compute once and reuse — `_normalize_inning_context` is a pure function of
+        # (summary, display_comp), so previously calling it 5x per refresh was wasteful.
+        inning_context = self._normalize_inning_context(summary, display_comp)
 
         return MlbLiveScoreboardData(
             team_abbr=self.team_abbr,
@@ -1011,9 +1131,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             previous_event_id=prev_id,
             next_event_id=next_id,
             selected_competition=self._compact_competition(display_comp),
-            inning_context=self._normalize_inning_context(summary, display_comp),
-            recent_plays=self._normalize_recent_plays(summary, self._normalize_inning_context(summary, display_comp)),
-            current_pitches=self._normalize_current_pitches(summary, self._normalize_inning_context(summary, display_comp)),
+            inning_context=inning_context,
+            recent_plays=self._normalize_recent_plays(summary, inning_context),
+            current_pitches=self._normalize_current_pitches(summary, inning_context),
             away_team=self._normalize_team_payload(away_team_payload),
             home_team=self._normalize_team_payload(home_team_payload),
             current_batter=self._normalize_current_batter(summary, batter_id),
@@ -1023,8 +1143,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             situation=self._normalize_situation(summary),
             probable_pitchers=self._normalize_probable_pitchers(display_comp),
             due_up=self._normalize_due_up(summary),
-            third_out_play=self._normalize_third_out_play(summary, self._normalize_inning_context(summary, display_comp)),
-            on_deck=self._normalize_on_deck(summary, self._normalize_inning_context(summary, display_comp), batter_id),
+            third_out_play=self._normalize_third_out_play(summary, inning_context),
+            on_deck=self._normalize_on_deck(summary, inning_context, batter_id),
             leaders=self._normalize_leaders(summary),
             mode=mode,
             status_text=status_detail,

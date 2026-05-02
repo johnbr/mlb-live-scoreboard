@@ -1,14 +1,13 @@
 {
   "domain": "mlb_live_scoreboard",
   "name": "MLB Live Scoreboard",
-  "version": "1.5.3",
-  "documentation": "https://github.com/johnbr/mlb-live-scoreboard",
-  "issue_tracker": "https://github.com/johnbr/mlb-live-scoreboard/issues",
+  "codeowners": ["@johnbr"],
   "config_flow": true,
+  "dependencies": ["http", "lovelace"],
+  "documentation": "https://github.com/johnbr/mlb-live-scoreboard",
+  "integration_type": "service",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/johnbr/mlb-live-scoreboard/issues",
   "requirements": [],
-  "codeowners": [
-    "@johnbr"
-  ],
-  "integration_type": "service"
+  "version": "1.6.0"
 }

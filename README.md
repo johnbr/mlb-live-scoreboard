@@ -135,6 +135,9 @@ show_count: true
 
 This integration uses ESPN's public API for MLB game data. Data is refreshed every 5 seconds during live games.
 
+For details on data flow, sensor attributes, ESPN endpoints, and the card's
+internal architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## License
 
 MIT License - see LICENSE file for details.

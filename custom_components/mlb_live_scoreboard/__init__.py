@@ -8,11 +8,14 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import MlbLiveScoreboardCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type RuntimeData = MlbLiveScoreboardCoordinator
 
@@ -43,12 +46,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     # Try to register card now, and also schedule for after HA fully starts
     await _async_register_card(hass)
-    
+
     async def _register_on_start(event):
         await _async_register_card(hass)
-    
+
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register_on_start)
-    
+
     return True
 
 
@@ -56,13 +59,13 @@ async def _async_register_card(hass: HomeAssistant) -> None:
     """Register the custom card as a Lovelace resource."""
     try:
         from homeassistant.components.lovelace.const import DOMAIN as LOVELACE_DOMAIN
-        
+
         # Get the lovelace data object
         lovelace_data = hass.data.get(LOVELACE_DOMAIN)
         if lovelace_data is None:
             _LOGGER.debug("Lovelace not ready yet")
             return
-        
+
         # Access resources attribute (it's an object, not a dict)
         resources = getattr(lovelace_data, "resources", None)
         if resources is None:
@@ -72,7 +75,7 @@ async def _async_register_card(hass: HomeAssistant) -> None:
         if hasattr(resources, "loaded") and not resources.loaded:
             await resources.async_load()
             resources.loaded = True
-            
+
         # Check if already registered (match base URL without version)
         existing = [r for r in resources.async_items() if CARD_URL_BASE in r.get("url", "")]
         if existing:
@@ -84,7 +87,7 @@ async def _async_register_card(hass: HomeAssistant) -> None:
                 else:
                     _LOGGER.debug("MLB Live Game Card already registered with current version")
             return
-            
+
         # Register the resource
         await resources.async_create_item({
             "url": CARD_URL,
