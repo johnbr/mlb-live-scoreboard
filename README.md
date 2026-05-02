@@ -95,6 +95,117 @@ show_diamond: true
 show_count: true
 ```
 
+## Game Event Actions
+
+The integration fires Home Assistant events on the bus whenever notable
+in-game things happen for the team you've configured. You can react to
+these in two ways:
+
+1. **Built-in options flow** — quick & visual: Settings → Devices & Services →
+   *MLB Live Scoreboard* → **Configure**. Each event has a field that accepts
+   any sequence of Home Assistant actions (call services, run scripts, fire
+   notifications, activate scenes, etc.).
+2. **Automations against the event bus** — more flexible: write your own
+   automations triggered on the events listed below. Use this when you need
+   conditions, multi-step logic, or want different behavior in different
+   automations.
+
+Both mechanisms work simultaneously. Configured options run in addition to,
+not instead of, any automations you have listening for the same events.
+
+### Events fired
+
+| Event type | When it fires |
+|---|---|
+| `mlb_live_scoreboard_team_scored` | Your team's score increased since the last poll |
+| `mlb_live_scoreboard_opponent_scored` | The opposing team's score increased |
+| `mlb_live_scoreboard_game_started` | The game transitioned from scheduled to live |
+| `mlb_live_scoreboard_game_ended` | The game transitioned to final (any result) |
+| `mlb_live_scoreboard_game_won` | Game ended and your team won |
+| `mlb_live_scoreboard_game_lost` | Game ended and your team lost |
+
+A tie/suspension fires `game_ended` but neither `game_won` nor `game_lost`.
+
+### Event payload
+
+Every event includes the same base payload, with two extra fields on
+score-change events:
+
+| Field | Type | Description |
+|---|---|---|
+| `team_abbr` | string | Your configured team's abbreviation, e.g. `"LAD"` |
+| `team_name` | string | Your configured team's display name |
+| `team_score` | int | Your team's score *after* this event |
+| `opponent_abbr` | string | Opposing team's abbreviation |
+| `opponent_name` | string | Opposing team's display name |
+| `opponent_score` | int | Opponent's score *after* this event |
+| `is_home` | bool | True if your team is the home side |
+| `inning` | int | Current inning number (0 if not started) |
+| `inning_half` | string | `"top"`, `"bottom"`, or `""` |
+| `event_id` | string | ESPN event ID for the game |
+| `status_detail` | string | Human-readable status text, e.g. `"Bot 7th"` |
+| `score_delta` | int | (`*_scored` only) How many runs scored on this play |
+| `scoring_play_text` | string | (`*_scored` only) ESPN play description, when available |
+
+### Detection rules
+
+- The first refresh after Home Assistant starts only **establishes a
+  baseline** — it does not fire any events. Score and state changes are
+  detected on subsequent refreshes.
+- When a new game appears (different `event_id`), no events are fired for
+  that polling cycle to avoid spurious score events across game boundaries.
+  The next refresh becomes the new baseline.
+- `team_scored` / `opponent_scored` only fire on positive score deltas, and
+  are suppressed while the game is delayed (since ESPN occasionally
+  corrects scores during a delay).
+- `game_ended` / `game_won` / `game_lost` only fire on the *transition*
+  into the final state — they will not re-fire on subsequent refreshes
+  while the game remains final.
+
+### Example: automation triggered by a bus event
+
+```yaml
+automation:
+  - alias: "Flash lights and notify when Dodgers score"
+    trigger:
+      platform: event
+      event_type: mlb_live_scoreboard_team_scored
+      event_data:
+        team_abbr: LAD
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.living_room
+        data:
+          flash: short
+          color_name: blue
+      - service: notify.mobile_app_phone
+        data:
+          title: >-
+            Dodgers scored! ({{ trigger.event.data.team_score }}-{{
+            trigger.event.data.opponent_score }})
+          message: "{{ trigger.event.data.scoring_play_text }}"
+```
+
+### Example: configured action via the options flow
+
+In the options flow's **When my team wins** field:
+
+```yaml
+- service: notify.persistent_notification
+  data:
+    title: "{{ team_name }} won!"
+    message: "Final: {{ team_score }}-{{ opponent_score }} vs {{ opponent_name }}"
+- service: scene.turn_on
+  target:
+    entity_id: scene.victory_celebration
+```
+
+Inside an option-flow action sequence, payload fields are available as
+top-level template variables (e.g. `{{ team_score }}`), whereas in
+automations they're nested under `trigger.event.data` (e.g.
+`{{ trigger.event.data.team_score }}`).
+
 ## Supported Teams
 
 | Abbreviation | Team |

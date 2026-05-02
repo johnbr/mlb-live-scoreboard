@@ -7,8 +7,9 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.script import Script
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -19,6 +20,13 @@ from .const import (
     DEFAULT_SCAN_INTERVAL_SECONDS,
     DOMAIN,
     DUE_UP_LIMIT,
+    EVENT_GAME_ENDED,
+    EVENT_GAME_LOST,
+    EVENT_GAME_STARTED,
+    EVENT_GAME_WON,
+    EVENT_OPPONENT_SCORED,
+    EVENT_OPTION_KEYS,
+    EVENT_TEAM_SCORED,
     LEADER_LIMIT,
     LIVE_STATES,
     MAX_LINESCORES,
@@ -103,6 +111,86 @@ def _parse_iso_ts(date_raw: Any) -> float | None:
         return datetime.fromisoformat(str(date_raw).replace("Z", "+00:00")).timestamp()
     except (TypeError, ValueError):
         return None
+
+
+def _safe_int(value: Any) -> int:
+    """Coerce ESPN score values (often strings like ``"3"``) to int. Returns 0
+    for missing or unparseable inputs so score-delta comparisons are stable.
+    """
+    if value is None or value == "":
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return 0
+
+
+def _competitor_for_side(comp: dict[str, Any], side: str) -> dict[str, Any]:
+    """Return the competitor block (``home`` or ``away``) from a compact
+    competition dict, or ``{}`` if not found.
+    """
+    for competitor in comp.get("competitors") or []:
+        if competitor.get("homeAway") == side:
+            return competitor
+    return {}
+
+
+def _resolve_my_side(
+    comp: dict[str, Any], team_id: int
+) -> tuple[str | None, str | None]:
+    """Identify which side (``home``/``away``) the configured team is on by
+    matching team_id. Returns ``(my_side, opponent_side)`` or ``(None, None)``
+    when the configured team is not in this competition.
+    """
+    target = str(team_id)
+    for competitor in comp.get("competitors") or []:
+        if str((competitor.get("team") or {}).get("id", "")) == target:
+            my_side = competitor.get("homeAway")
+            if my_side == "home":
+                return "home", "away"
+            if my_side == "away":
+                return "away", "home"
+    return None, None
+
+
+def _scores_for_sides(
+    comp: dict[str, Any], my_side: str, opp_side: str
+) -> tuple[int, int]:
+    """Return ``(my_score, opp_score)`` for the named sides, parsed as ints."""
+    return (
+        _safe_int(_competitor_for_side(comp, my_side).get("score")),
+        _safe_int(_competitor_for_side(comp, opp_side).get("score")),
+    )
+
+
+def _is_final(comp: dict[str, Any] | None) -> bool:
+    """Return True if the competition is in the post-game final state."""
+    status_type = ((comp or {}).get("status") or {}).get("type") or {}
+    state = str(status_type.get("state", "")).lower()
+    return state == "post" or status_type.get("completed") is True
+
+
+def _inning_half(inning_context: dict[str, Any]) -> str:
+    """Map the inning prefix to a stable half label (``top``/``bottom``/``""``)."""
+    prefix = str(inning_context.get("period_prefix") or "").lower()
+    if prefix.startswith("top"):
+        return "top"
+    if prefix.startswith(("bottom", "bot")):
+        return "bottom"
+    return ""
+
+
+def _latest_scoring_play_text(curr: MlbLiveScoreboardData) -> str:
+    """Return the text of the most recent scoring play in ``recent_plays``,
+    or ``""`` when none is available. Useful for templating in automations.
+    """
+    for play in reversed(curr.recent_plays or []):
+        if play.get("scoring_play"):
+            return str(play.get("text") or "")
+    return ""
 
 
 @dataclass
@@ -1069,6 +1157,142 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         is_live = state in LIVE_STATES or status_name == STATUS_NAME_IN_PROGRESS or is_delayed
         return status_detail, is_live, is_delayed
 
+    @staticmethod
+    def _detect_game_events(
+        prev: MlbLiveScoreboardData | None,
+        curr: MlbLiveScoreboardData,
+        team_id: int,
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """Compare the previous and current coordinator data and return a list of
+        ``(event_name, payload)`` pairs that should be fired on the HA bus.
+
+        Pure function (no I/O, no ``self``) so it is straightforward to unit-test
+        offline. Returns ``[]`` when there is no previous data (first refresh)
+        or when the displayed event has changed (different game), to avoid
+        firing spurious events at startup or across game boundaries.
+        """
+        if prev is None:
+            return []
+
+        # Across a game boundary, scores from the previous game don't compare
+        # meaningfully to the new game. Skip dispatch entirely; the next poll
+        # will establish the new baseline.
+        if (
+            prev.display_event_id
+            and curr.display_event_id
+            and prev.display_event_id != curr.display_event_id
+        ):
+            return []
+
+        comp = curr.selected_competition or {}
+        my_side, opp_side = _resolve_my_side(comp, team_id)
+        if my_side is None or opp_side is None:
+            return []
+
+        my_score_curr, opp_score_curr = _scores_for_sides(comp, my_side, opp_side)
+        prev_comp = prev.selected_competition or {}
+        my_score_prev, opp_score_prev = _scores_for_sides(prev_comp, my_side, opp_side)
+
+        opp_team_block = _competitor_for_side(comp, opp_side)
+        opp_team = (opp_team_block.get("team") or {}) if opp_team_block else {}
+
+        base_payload: dict[str, Any] = {
+            "team_abbr": curr.team_abbr,
+            "team_name": curr.team_name,
+            "team_score": my_score_curr,
+            "opponent_abbr": opp_team.get("abbreviation") or "",
+            "opponent_name": opp_team.get("displayName") or opp_team.get("name") or "",
+            "opponent_score": opp_score_curr,
+            "is_home": my_side == "home",
+            "inning": curr.inning_context.get("period") or 0,
+            "inning_half": _inning_half(curr.inning_context),
+            "event_id": curr.display_event_id,
+            "status_detail": curr.status_text,
+        }
+
+        events: list[tuple[str, dict[str, Any]]] = []
+
+        # Score deltas: only fire when scores increase. Skip while delayed
+        # because ESPN occasionally flips scores during delay corrections.
+        if not curr.is_delayed:
+            if my_score_curr > my_score_prev:
+                payload = {
+                    **base_payload,
+                    "score_delta": my_score_curr - my_score_prev,
+                    "scoring_play_text": _latest_scoring_play_text(curr),
+                }
+                events.append((EVENT_TEAM_SCORED, payload))
+            if opp_score_curr > opp_score_prev:
+                payload = {
+                    **base_payload,
+                    "score_delta": opp_score_curr - opp_score_prev,
+                    "scoring_play_text": _latest_scoring_play_text(curr),
+                }
+                events.append((EVENT_OPPONENT_SCORED, payload))
+
+        # State transitions
+        if not prev.is_live and curr.is_live:
+            events.append((EVENT_GAME_STARTED, dict(base_payload)))
+
+        prev_final = _is_final(prev.selected_competition)
+        curr_final = _is_final(curr.selected_competition)
+        if not prev_final and curr_final:
+            events.append((EVENT_GAME_ENDED, dict(base_payload)))
+            if my_score_curr > opp_score_curr:
+                events.append((EVENT_GAME_WON, dict(base_payload)))
+            elif opp_score_curr > my_score_curr:
+                events.append((EVENT_GAME_LOST, dict(base_payload)))
+
+        return events
+
+    def _dispatch_game_events(
+        self, events: list[tuple[str, dict[str, Any]]]
+    ) -> None:
+        """Fire detector-produced events on the Home Assistant bus and run any
+        user-configured action sequences attached to them.
+        """
+        options = self.entry.options or {}
+        for name, payload in events:
+            _LOGGER.info(
+                "Firing %s for %s vs %s (%s-%s)",
+                name,
+                payload.get("team_abbr"),
+                payload.get("opponent_abbr"),
+                payload.get("team_score"),
+                payload.get("opponent_score"),
+            )
+            self.hass.bus.async_fire(name, payload)
+
+            # Run inline action sequence if the user configured one for this
+            # event in the options flow. Each invocation is fire-and-forget
+            # so a slow/failing user action cannot block the next refresh.
+            opt_key = EVENT_OPTION_KEYS.get(name)
+            sequence = options.get(opt_key) if opt_key else None
+            if sequence:
+                self.hass.async_create_task(
+                    self._run_event_action(name, sequence, payload)
+                )
+
+    async def _run_event_action(
+        self,
+        event_name: str,
+        sequence: Any,
+        payload: dict[str, Any],
+    ) -> None:
+        """Execute a configured action sequence with event payload as variables."""
+        try:
+            script = Script(
+                self.hass,
+                sequence,
+                f"{DOMAIN} {event_name}",
+                DOMAIN,
+            )
+            await script.async_run(payload, Context())
+        except Exception as err:
+            _LOGGER.warning(
+                "Configured action for %s failed: %s", event_name, err
+            )
+
     async def _async_update_data(self) -> MlbLiveScoreboardData:
         schedule_url = (
             f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{self.team_abbr.lower()}/schedule"
@@ -1122,7 +1346,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # (summary, display_comp), so previously calling it 5x per refresh was wasteful.
         inning_context = self._normalize_inning_context(summary, display_comp)
 
-        return MlbLiveScoreboardData(
+        new_data = MlbLiveScoreboardData(
             team_abbr=self.team_abbr,
             team_id=self.team_id,
             team_name=team_name,
@@ -1151,3 +1375,17 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             is_live=is_live,
             is_delayed=is_delayed,
         )
+
+        # Detect and fire game events by comparing against the previously
+        # cached coordinator data. ``self.data`` is the last successful
+        # snapshot — None on first refresh, in which case the detector
+        # returns [] and we just establish the baseline.
+        try:
+            game_events = self._detect_game_events(self.data, new_data, self.team_id)
+            if game_events:
+                self._dispatch_game_events(game_events)
+        except Exception as err:
+            # Never let event dispatch break a refresh.
+            _LOGGER.warning("Game-event dispatch failed: %s", err)
+
+        return new_data
