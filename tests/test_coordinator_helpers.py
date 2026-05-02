@@ -662,47 +662,133 @@ def test_normalize_probable_pitchers_handles_missing_competitor():
     assert out == {"away": {}, "home": {}}
 
 
+def test_normalize_probable_pitchers_handles_summary_header_shape():
+    """Summary header wraps stats as ``statistics.splits.categories[]``."""
+    display_comp = {
+        "competitors": [
+            {
+                "homeAway": "home",
+                "probables": [{
+                    "athlete": {
+                        "displayName": "Michael McGreevy",
+                        "shortName": "M. McGreevy",
+                        "headshot": {
+                            "href": "https://a.espncdn.com/i/headshots/mlb/players/full/4424141.png"
+                        },
+                    },
+                    "statistics": {
+                        "splits": {
+                            "categories": [
+                                {"name": "wins", "abbreviation": "W", "displayValue": "1"},
+                                {"name": "losses", "abbreviation": "L", "displayValue": "2"},
+                                {"name": "ERA", "abbreviation": "ERA", "displayValue": "2.97"},
+                            ],
+                        },
+                    },
+                }],
+            },
+        ],
+    }
+    out = Coord._normalize_probable_pitchers(display_comp)
+    home = out["home"]
+    assert home["wins"] == "1"
+    assert home["losses"] == "2"
+    assert home["record"] == "1-2"
+    assert home["era"] == "2.97"
+    assert home["headshot"].endswith("4424141.png")
+
+
 # ---------------------------------------------------------------------------
 # _normalize_standings
 # ---------------------------------------------------------------------------
 
 
 def _standings_payload():
+    """Mirrors the real ESPN ``/standings`` shape: leagues under children[],
+    each with a flat entries[] of every team in the league."""
     return {
         "children": [
             {
-                "name": "American League East",
+                "name": "American League",
+                "abbreviation": "AL",
                 "standings": {
                     "entries": [
                         {
-                            "team": {"id": "1", "displayName": "Baltimore Orioles", "shortDisplayName": "Orioles"},
+                            "team": {
+                                "id": "10",
+                                "abbreviation": "NYY",
+                                "displayName": "New York Yankees",
+                                "shortDisplayName": "Yankees",
+                            },
                             "stats": [
-                                {"name": "wins", "displayValue": "60"},
-                                {"name": "losses", "displayValue": "40"},
-                                {"name": "gamesBehind", "displayValue": "-"},
+                                {"name": "wins", "abbreviation": "W", "displayValue": "62"},
+                                {"name": "losses", "abbreviation": "L", "displayValue": "38"},
+                                {"name": "divisionGamesBehind", "abbreviation": "DGB", "displayValue": "-"},
+                                {"name": "gamesBehind", "abbreviation": "GB", "displayValue": "-"},
                             ],
                         },
                     ],
                 },
             },
             {
-                "name": "National League West",
+                "name": "National League",
+                "abbreviation": "NL",
                 "standings": {
                     "entries": [
+                        # Out-of-division NL team — should be filtered out.
                         {
-                            "team": {"id": "19", "displayName": "Los Angeles Dodgers", "shortDisplayName": "Dodgers"},
+                            "team": {
+                                "id": "21",
+                                "abbreviation": "NYM",
+                                "displayName": "New York Mets",
+                                "shortDisplayName": "Mets",
+                            },
                             "stats": [
-                                {"name": "wins", "displayValue": "65"},
-                                {"name": "losses", "displayValue": "35"},
-                                {"name": "gamesBehind", "displayValue": "-"},
+                                {"name": "wins", "abbreviation": "W", "displayValue": "55"},
+                                {"name": "losses", "abbreviation": "L", "displayValue": "45"},
+                                {"name": "divisionGamesBehind", "abbreviation": "DGB", "displayValue": "3"},
+                            ],
+                        },
+                        # NL West teams
+                        {
+                            "team": {
+                                "id": "19",
+                                "abbreviation": "LAD",
+                                "displayName": "Los Angeles Dodgers",
+                                "shortDisplayName": "Dodgers",
+                            },
+                            "stats": [
+                                {"name": "wins", "abbreviation": "W", "displayValue": "65"},
+                                {"name": "losses", "abbreviation": "L", "displayValue": "35"},
+                                {"name": "divisionGamesBehind", "abbreviation": "DGB", "displayValue": "-"},
+                                {"name": "gamesBehind", "abbreviation": "GB", "displayValue": "-"},
                             ],
                         },
                         {
-                            "team": {"id": "26", "displayName": "San Francisco Giants", "shortDisplayName": "Giants"},
+                            "team": {
+                                "id": "26",
+                                "abbreviation": "SF",
+                                "displayName": "San Francisco Giants",
+                                "shortDisplayName": "Giants",
+                            },
                             "stats": [
-                                {"abbreviation": "W", "displayValue": "58"},
-                                {"abbreviation": "L", "displayValue": "42"},
-                                {"abbreviation": "GB", "displayValue": "7.0"},
+                                {"name": "wins", "abbreviation": "W", "displayValue": "58"},
+                                {"name": "losses", "abbreviation": "L", "displayValue": "42"},
+                                {"name": "divisionGamesBehind", "abbreviation": "DGB", "displayValue": "7.0"},
+                                {"name": "gamesBehind", "abbreviation": "GB", "displayValue": "7.0"},
+                            ],
+                        },
+                        {
+                            "team": {
+                                "id": "25",
+                                "abbreviation": "SD",
+                                "displayName": "San Diego Padres",
+                                "shortDisplayName": "Padres",
+                            },
+                            "stats": [
+                                {"name": "wins", "abbreviation": "W", "displayValue": "60"},
+                                {"name": "losses", "abbreviation": "L", "displayValue": "40"},
+                                {"name": "divisionGamesBehind", "abbreviation": "DGB", "displayValue": "5.0"},
                             ],
                         },
                     ],
@@ -712,27 +798,125 @@ def _standings_payload():
     }
 
 
-def test_normalize_standings_finds_team_division():
-    out = Coord._normalize_standings(_standings_payload(), team_id=19)
-    assert out["division_name"] == "National League West"
-    assert len(out["entries"]) == 2
+def test_normalize_standings_filters_to_team_division_and_sorts():
+    division_index = {
+        "19": "NL West",  # LAD
+        "26": "NL West",  # SF
+        "25": "NL West",  # SD
+        "21": "NL East",  # NYM
+        "10": "AL East",  # NYY
+    }
+    out = Coord._normalize_standings(_standings_payload(), division_index, team_id=19)
+    assert out["division_name"] == "NL West"
+    # Mets (NL East) should be filtered out; only NL West teams remain.
+    abbrs_in_order = [e["team_short_name"] for e in out["entries"]]
+    assert abbrs_in_order == ["Dodgers", "Padres", "Giants"]  # sorted by wins desc
     first = out["entries"][0]
     assert first["team_id"] == "19"
-    assert first["team_short_name"] == "Dodgers"
     assert first["wins"] == "65"
     assert first["losses"] == "35"
-    assert first["games_back"] == "-"
-    second = out["entries"][1]
-    assert second["wins"] == "58"
-    assert second["games_back"] == "7.0"
+    assert first["games_back"] == "-"  # DGB preferred
+    third = out["entries"][2]
+    assert third["wins"] == "58"
+    assert third["games_back"] == "7.0"
 
 
-def test_normalize_standings_team_not_found():
-    out = Coord._normalize_standings(_standings_payload(), team_id=999)
+def test_normalize_standings_team_not_in_payload():
+    # Team known to division index but not present in the league entries.
+    payload = {"children": [{"name": "AL", "standings": {"entries": []}}]}
+    assert Coord._normalize_standings(payload, {"19": "NL West"}, 19) == {"division_name": "", "entries": []}
+
+
+def test_normalize_standings_team_not_in_division_index():
+    # Empty index means we can't determine the team's division — return empty.
+    out = Coord._normalize_standings(_standings_payload(), {}, team_id=19)
     assert out == {"division_name": "", "entries": []}
 
 
 def test_normalize_standings_handles_empty_payload():
-    assert Coord._normalize_standings(None, 19) == {"division_name": "", "entries": []}
-    assert Coord._normalize_standings({}, 19) == {"division_name": "", "entries": []}
-    assert Coord._normalize_standings({"children": "bad"}, 19) == {"division_name": "", "entries": []}
+    idx = {"19": "NL West"}
+    assert Coord._normalize_standings(None, idx, 19) == {"division_name": "", "entries": []}
+    assert Coord._normalize_standings({}, idx, 19) == {"division_name": "", "entries": []}
+    assert Coord._normalize_standings({"children": "bad"}, idx, 19) == {"division_name": "", "entries": []}
+
+
+# ---------------------------------------------------------------------------
+# _team_id_division_index
+# ---------------------------------------------------------------------------
+
+
+def test_team_id_division_index_builds_from_groups():
+    payload = {
+        "groups": [
+            {
+                "name": "American League",
+                "children": [
+                    {
+                        "name": "American League East",
+                        "teams": [
+                            {"id": "10", "abbreviation": "NYY"},
+                            {"id": "1", "abbreviation": "BAL"},
+                        ],
+                    },
+                ],
+            },
+            {
+                "name": "National League",
+                "children": [
+                    {
+                        "name": "National League West",
+                        "teams": [
+                            {"id": "19", "abbreviation": "LAD"},
+                            {"id": "26", "abbreviation": "SF"},
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+    idx = Coord._team_id_division_index(payload)
+    assert idx["10"] == "American League East"
+    assert idx["19"] == "National League West"
+    assert idx["26"] == "National League West"
+
+
+def test_team_id_division_index_handles_empty():
+    assert Coord._team_id_division_index(None) == {}
+    assert Coord._team_id_division_index({}) == {}
+    assert Coord._team_id_division_index({"groups": "bad"}) == {}
+
+
+def test_team_id_division_index_against_real_fixture():
+    import json
+    import pathlib
+    fixture = pathlib.Path(__file__).resolve().parents[1] / "espn-api" / "groups.json"
+    if not fixture.exists():
+        return
+    payload = json.loads(fixture.read_text())
+    idx = Coord._team_id_division_index(payload)
+    assert idx["19"] == "National League West"  # Dodgers
+    assert idx["10"] == "American League East"  # Yankees
+    assert len(idx) == 30
+
+
+def test_normalize_standings_against_real_fixture():
+    """Smoke-test with real captured ESPN payloads to lock down both schemas."""
+    import json
+    import pathlib
+    base = pathlib.Path(__file__).resolve().parents[1] / "espn-api"
+    standings_file = base / "standings.json"
+    groups_file = base / "groups.json"
+    if not standings_file.exists() or not groups_file.exists():
+        return  # fixtures optional in CI checkouts
+    standings_payload = json.loads(standings_file.read_text())
+    groups_payload = json.loads(groups_file.read_text())
+    division_index = Coord._team_id_division_index(groups_payload)
+    out = Coord._normalize_standings(standings_payload, division_index, team_id=19)
+    assert out["division_name"] == "National League West"
+    abbrs = [e["team_short_name"] for e in out["entries"]]
+    assert abbrs[0] == "Dodgers"
+    assert out["entries"][0]["games_back"] == "-"
+    assert out["entries"][0]["wins"] == "20"
+    assert out["entries"][0]["losses"] == "12"
+    assert len(out["entries"]) == 5
+    assert set(abbrs) == {"Dodgers", "Padres", "Diamondbacks", "Rockies", "Giants"}

@@ -27,6 +27,8 @@ from .const import (
     EVENT_OPPONENT_SCORED,
     EVENT_OPTION_KEYS,
     EVENT_TEAM_SCORED,
+    GROUPS_STALE_FALLBACK_SECONDS,
+    GROUPS_TTL_SECONDS,
     LEADER_LIMIT,
     LIVE_STATES,
     MAX_LINESCORES,
@@ -251,6 +253,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # once TTL expires and reuse the prior payload as a stale fallback if
         # ESPN's standings endpoint fails.
         self._standings_cache: tuple[float, dict[str, Any]] | None = None
+        # (fetched_at_ts, payload) for the league/divisions ``groups``
+        # endpoint. Divisions don't change mid-season, so this is cached
+        # for a long time and rarely re-fetched.
+        self._groups_cache: tuple[float, dict[str, Any]] | None = None
 
         super().__init__(
             hass,
@@ -513,7 +519,18 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @staticmethod
     def _normalize_probable_pitchers(display_comp: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
-        """Extract probable starting pitcher (name, ERA, W-L, headshot) for both sides, used pre-game."""
+        """Extract probable starting pitcher (name, ERA, W-L, headshot) for both sides, used pre-game.
+
+        ESPN exposes probable-pitcher statistics in two shapes depending on
+        which endpoint produced ``display_comp``:
+
+        * **Schedule shape**: ``probables[0].statistics`` is a flat list of
+          ``{name, abbreviation, displayValue}`` dicts.
+        * **Summary header shape**: ``probables[0].statistics`` is an object
+          ``{splits: {categories: [{name, abbreviation, displayValue}, ...]}}``.
+
+        Both shapes are flattened to a single list before extraction.
+        """
         probables: dict[str, dict[str, Any]] = {"away": {}, "home": {}}
         for competitor in (display_comp or {}).get("competitors") or []:
             side = str(competitor.get("homeAway") or "")
@@ -521,20 +538,32 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 continue
             prob = ((competitor.get("probables") or [{}])[0]) if competitor.get("probables") else {}
             athlete = prob.get("athlete") or {}
-            stats = prob.get("statistics") or []
+            stats_raw = prob.get("statistics") or []
+            if isinstance(stats_raw, dict):
+                # Summary-header shape: {"splits": {"categories": [...]}}
+                splits = stats_raw.get("splits") or {}
+                stats_list = splits.get("categories") if isinstance(splits, dict) else []
+                if not isinstance(stats_list, list):
+                    stats_list = []
+            elif isinstance(stats_raw, list):
+                stats_list = stats_raw
+            else:
+                stats_list = []
             era = ""
             wins = ""
             losses = ""
-            if isinstance(stats, list):
-                for item in stats:
-                    name = str(item.get("name") or item.get("abbreviation") or "").lower()
-                    value = str(item.get("displayValue") or item.get("value") or "")
-                    if name in {"era", "earned run average"} and not era:
-                        era = value
-                    elif name in {"wins", "w"} and not wins:
-                        wins = value
-                    elif name in {"losses", "l"} and not losses:
-                        losses = value
+            for item in stats_list:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or "").lower()
+                abbr = str(item.get("abbreviation") or "").lower()
+                value = str(item.get("displayValue") or item.get("value") or "")
+                if not era and (name in {"era", "earned run average"} or abbr == "era"):
+                    era = value
+                elif not wins and (name == "wins" or abbr == "w"):
+                    wins = value
+                elif not losses and (name == "losses" or abbr == "l"):
+                    losses = value
             record = f"{wins}-{losses}" if wins and losses else ""
             headshot = ""
             head = athlete.get("headshot")
@@ -554,82 +583,148 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return probables
 
     @staticmethod
-    def _normalize_standings(
-        payload: dict[str, Any] | None, team_id: int
-    ) -> dict[str, Any]:
-        """Find the division containing ``team_id`` and return its standings rows.
+    def _team_id_division_index(
+        groups_payload: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        """Build a ``{team_id: division_name}`` mapping from the ``groups`` payload.
 
-        The ESPN ``/standings?group=division`` payload nests divisions under
-        ``children[]`` (one per division), each with a ``standings.entries[]``
-        list. Each entry has a ``team`` and a ``stats[]`` list with W, L, and
-        ``gamesBehind``/``GB`` values. Returns an empty mapping when the team's
-        division can't be located.
+        ESPN's ``/groups`` endpoint nests teams under
+        ``groups[].children[].teams[]``, where each ``children[]`` entry is a
+        division (e.g. ``"American League East"``).
         """
-        if not payload:
-            return {"division_name": "", "entries": []}
-        team_id_str = str(team_id)
-        children = payload.get("children")
-        if not isinstance(children, list):
-            return {"division_name": "", "entries": []}
-        for division in children:
-            if not isinstance(division, dict):
+        index: dict[str, str] = {}
+        if not isinstance(groups_payload, dict):
+            return index
+        leagues = groups_payload.get("groups")
+        if not isinstance(leagues, list):
+            return index
+        for league in leagues:
+            if not isinstance(league, dict):
                 continue
-            standings = division.get("standings") or {}
+            divisions = league.get("children")
+            if not isinstance(divisions, list):
+                continue
+            for division in divisions:
+                if not isinstance(division, dict):
+                    continue
+                division_name = str(
+                    division.get("name") or division.get("abbreviation") or ""
+                )
+                if not division_name:
+                    continue
+                teams = division.get("teams")
+                if not isinstance(teams, list):
+                    continue
+                for team in teams:
+                    if not isinstance(team, dict):
+                        continue
+                    tid = str(team.get("id") or "")
+                    if tid:
+                        index[tid] = division_name
+        return index
+
+    @staticmethod
+    def _normalize_standings(
+        standings_payload: dict[str, Any] | None,
+        division_index: dict[str, str],
+        team_id: int,
+    ) -> dict[str, Any]:
+        """Filter the league standings to the configured team's division.
+
+        ESPN's ``/standings`` endpoint groups entries under ``children[]`` per
+        league (AL, NL), each with a flat ``standings.entries[]`` of every
+        team in the league. There's no per-division grouping in the payload,
+        so we use the ``team_id -> division_name`` index built from the
+        ``/groups`` endpoint to filter each league's entries down to the
+        configured team's division. Sorting is by wins desc, then losses asc.
+        """
+        empty: dict[str, Any] = {"division_name": "", "entries": []}
+        if not standings_payload or not division_index:
+            return empty
+        team_id_str = str(team_id)
+        my_division = division_index.get(team_id_str, "")
+        if not my_division:
+            return empty
+        children = standings_payload.get("children")
+        if not isinstance(children, list):
+            return empty
+
+        # Collect this team's league entries.
+        league_entries: list[dict[str, Any]] = []
+        for league in children:
+            if not isinstance(league, dict):
+                continue
+            standings = league.get("standings") or {}
             entries = standings.get("entries") if isinstance(standings, dict) else None
             if not isinstance(entries, list):
                 continue
-            # Determine if this division contains the configured team.
-            contains_team = False
-            for entry in entries:
-                team = entry.get("team") if isinstance(entry, dict) else None
-                if isinstance(team, dict) and str(team.get("id") or "") == team_id_str:
-                    contains_team = True
-                    break
-            if not contains_team:
-                continue
-            normalized: list[dict[str, Any]] = []
-            for entry in entries:
-                if not isinstance(entry, dict):
+            in_league = any(
+                isinstance(e, dict)
+                and isinstance(e.get("team"), dict)
+                and str(e["team"].get("id") or "") == team_id_str
+                for e in entries
+            )
+            if in_league:
+                league_entries = [e for e in entries if isinstance(e, dict)]
+                break
+        if not league_entries:
+            return empty
+
+        # Filter to division peers using the index.
+        division_entries = [
+            e for e in league_entries
+            if division_index.get(str((e.get("team") or {}).get("id") or "")) == my_division
+        ]
+
+        def _stat_value(entry: dict[str, Any], names: set[str], abbrs: set[str]) -> str:
+            stats = entry.get("stats") if isinstance(entry.get("stats"), list) else []
+            for stat in stats:
+                if not isinstance(stat, dict):
                     continue
-                team = entry.get("team") or {}
-                stats = entry.get("stats") if isinstance(entry.get("stats"), list) else []
-                wins = ""
-                losses = ""
-                games_back = ""
-                for stat in stats:
-                    if not isinstance(stat, dict):
-                        continue
-                    name = str(stat.get("name") or stat.get("type") or "").lower()
-                    abbr = str(stat.get("abbreviation") or "").lower()
-                    display = str(stat.get("displayValue") or stat.get("value") or "")
-                    if not wins and (name == "wins" or abbr == "w"):
-                        wins = display
-                    elif not losses and (name == "losses" or abbr == "l"):
-                        losses = display
-                    elif not games_back and (
-                        name in {"gamesbehind", "games behind", "gb"} or abbr == "gb"
-                    ):
-                        games_back = display
-                normalized.append({
-                    "team_id": str(team.get("id") or ""),
-                    "team_name": str(team.get("displayName") or team.get("name") or ""),
-                    "team_short_name": str(
-                        team.get("shortDisplayName")
-                        or team.get("name")
-                        or team.get("abbreviation")
-                        or ""
-                    ),
-                    "wins": wins,
-                    "losses": losses,
-                    "games_back": games_back,
-                })
-            return {
-                "division_name": str(
-                    division.get("name") or division.get("abbreviation") or ""
+                name = str(stat.get("name") or "").lower()
+                abbr = str(stat.get("abbreviation") or "").lower()
+                if name in names or abbr in abbrs:
+                    return str(stat.get("displayValue") or stat.get("value") or "")
+            return ""
+
+        def _wins_int(entry: dict[str, Any]) -> int:
+            try:
+                return int(_stat_value(entry, {"wins"}, {"w"}) or 0)
+            except (ValueError, TypeError):
+                return 0
+
+        def _losses_int(entry: dict[str, Any]) -> int:
+            try:
+                return int(_stat_value(entry, {"losses"}, {"l"}) or 0)
+            except (ValueError, TypeError):
+                return 0
+
+        division_entries.sort(key=lambda e: (-_wins_int(e), _losses_int(e)))
+
+        normalized: list[dict[str, Any]] = []
+        for entry in division_entries:
+            team = entry.get("team") or {}
+            wins = _stat_value(entry, {"wins"}, {"w"})
+            losses = _stat_value(entry, {"losses"}, {"l"})
+            # Prefer divisionGamesBehind (DGB) since we're filtered to a
+            # single division; fall back to gamesBehind only if DGB is absent.
+            games_back = _stat_value(
+                entry, {"divisiongamesbehind"}, {"dgb"}
+            ) or _stat_value(entry, {"gamesbehind"}, {"gb"})
+            normalized.append({
+                "team_id": str(team.get("id") or ""),
+                "team_name": str(team.get("displayName") or team.get("name") or ""),
+                "team_short_name": str(
+                    team.get("shortDisplayName")
+                    or team.get("name")
+                    or team.get("abbreviation")
+                    or ""
                 ),
-                "entries": normalized,
-            }
-        return {"division_name": "", "entries": []}
+                "wins": wins,
+                "losses": losses,
+                "games_back": games_back,
+            })
+        return {"division_name": my_division, "entries": normalized}
 
     @staticmethod
     def _normalize_leaders(summary: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -1228,7 +1323,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             return cached[1]
         try:
             payload = await self._get_json(
-                "https://site.api.espn.com/apis/v2/sports/baseball/mlb/standings?group=division"
+                "https://site.api.espn.com/apis/v2/sports/baseball/mlb/standings"
             )
         except Exception as err:
             _LOGGER.debug("Unable to fetch standings: %s", err)
@@ -1236,6 +1331,29 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 return cached[1]
             return {}
         self._standings_cache = (now_ts, payload)
+        return payload
+
+    async def _get_groups(self) -> dict[str, Any]:
+        """Fetch the league/divisions ``groups`` payload, served from a long TTL cache.
+
+        Divisions are stable across the regular season, so this is fetched
+        infrequently and reused. The stale-fallback window is intentionally
+        long so a temporary ESPN outage doesn't blank the standings panel.
+        """
+        cached = self._groups_cache
+        now_ts = time.time()
+        if cached is not None and (now_ts - cached[0]) < GROUPS_TTL_SECONDS:
+            return cached[1]
+        try:
+            payload = await self._get_json(
+                "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/groups"
+            )
+        except Exception as err:
+            _LOGGER.debug("Unable to fetch groups: %s", err)
+            if cached is not None and (now_ts - cached[0]) < GROUPS_STALE_FALLBACK_SECONDS:
+                return cached[1]
+            return {}
+        self._groups_cache = (now_ts, payload)
         return payload
 
     @staticmethod
@@ -1474,7 +1592,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         inning_context = self._normalize_inning_context(summary, display_comp)
 
         standings_payload = await self._get_standings()
-        division_standings = self._normalize_standings(standings_payload, self.team_id)
+        groups_payload = await self._get_groups()
+        division_index = self._team_id_division_index(groups_payload)
+        division_standings = self._normalize_standings(
+            standings_payload, division_index, self.team_id
+        )
 
         new_data = MlbLiveScoreboardData(
             team_abbr=self.team_abbr,

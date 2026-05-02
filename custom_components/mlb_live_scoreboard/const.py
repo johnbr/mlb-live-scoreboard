@@ -50,6 +50,12 @@ STANDINGS_TTL_SECONDS = 600
 # cache and the card simply renders empty standings.
 STANDINGS_STALE_FALLBACK_SECONDS = 60 * 60
 
+# How long to cache the league/divisions structure (the ``groups`` endpoint).
+# Divisions don't change mid-season, so a 24-hour TTL is appropriate; the
+# stale fallback keeps things working through extended ESPN outages.
+GROUPS_TTL_SECONDS = 24 * 60 * 60
+GROUPS_STALE_FALLBACK_SECONDS = 7 * 24 * 60 * 60
+
 # Game-event names fired on the Home Assistant event bus. Each is prefixed
 # with the integration domain to keep them namespaced from other integrations.
 EVENT_TEAM_SCORED = f"{DOMAIN}_team_scored"
