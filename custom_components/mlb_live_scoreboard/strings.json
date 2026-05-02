@@ -16,5 +16,21 @@
     "abort": {
       "already_configured": "This team is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Game Event Actions",
+        "description": "Run any Home Assistant actions when game events occur. Each event also fires on the event bus (e.g. mlb_live_scoreboard_team_scored) with a payload you can use in templates as trigger.event.data.team_score, trigger.event.data.opponent_name, trigger.event.data.scoring_play_text, etc.",
+        "data": {
+          "on_team_scored": "When my team scores",
+          "on_opponent_scored": "When the opponent scores",
+          "on_game_started": "When the game starts",
+          "on_game_ended": "When the game ends (any result)",
+          "on_game_won": "When my team wins",
+          "on_game_lost": "When my team loses"
+        }
+      }
+    }
   }
 }

@@ -9,6 +9,7 @@ htmlcov/
 .coverage
 .coverage.*
 coverage.xml
+CLAUDE.md
 
 # Local virtualenvs
 .venv/

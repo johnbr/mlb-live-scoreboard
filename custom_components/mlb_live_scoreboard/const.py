@@ -40,6 +40,35 @@ BATTER_SEASON_STATS_TTL_SECONDS = 60
 # coordinator raise UpdateFailed so the sensor goes unavailable.
 SCHEDULE_STALE_FALLBACK_SECONDS = 5 * 60
 
+# Game-event names fired on the Home Assistant event bus. Each is prefixed
+# with the integration domain to keep them namespaced from other integrations.
+EVENT_TEAM_SCORED = f"{DOMAIN}_team_scored"
+EVENT_OPPONENT_SCORED = f"{DOMAIN}_opponent_scored"
+EVENT_GAME_STARTED = f"{DOMAIN}_game_started"
+EVENT_GAME_ENDED = f"{DOMAIN}_game_ended"
+EVENT_GAME_WON = f"{DOMAIN}_game_won"
+EVENT_GAME_LOST = f"{DOMAIN}_game_lost"
+
+# Options keys for the per-event action sequences a user can configure
+# through the integration's Options flow. Stored under entry.options.
+OPT_ON_TEAM_SCORED = "on_team_scored"
+OPT_ON_OPPONENT_SCORED = "on_opponent_scored"
+OPT_ON_GAME_STARTED = "on_game_started"
+OPT_ON_GAME_ENDED = "on_game_ended"
+OPT_ON_GAME_WON = "on_game_won"
+OPT_ON_GAME_LOST = "on_game_lost"
+
+# Mapping from event name -> option key. Used by the coordinator to look up
+# and run the configured action sequence when an event fires.
+EVENT_OPTION_KEYS: dict[str, str] = {
+    EVENT_TEAM_SCORED: OPT_ON_TEAM_SCORED,
+    EVENT_OPPONENT_SCORED: OPT_ON_OPPONENT_SCORED,
+    EVENT_GAME_STARTED: OPT_ON_GAME_STARTED,
+    EVENT_GAME_ENDED: OPT_ON_GAME_ENDED,
+    EVENT_GAME_WON: OPT_ON_GAME_WON,
+    EVENT_GAME_LOST: OPT_ON_GAME_LOST,
+}
+
 MLB_TEAM_MAP = {
   "ARI": 29,
   "ATH": 11,

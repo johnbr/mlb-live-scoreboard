@@ -41,11 +41,14 @@ def _install_homeassistant_stubs() -> None:
     ha_config_entries = _make("homeassistant.config_entries")
     ha_const = _make("homeassistant.const")
     ha_core = _make("homeassistant.core")
+    ha_data_entry_flow = _make("homeassistant.data_entry_flow")
     ha_helpers = _make("homeassistant.helpers")
     ha_helpers_aiohttp = _make("homeassistant.helpers.aiohttp_client")
     ha_helpers_cv = _make("homeassistant.helpers.config_validation")
     ha_helpers_device = _make("homeassistant.helpers.device_registry")
     ha_helpers_platform = _make("homeassistant.helpers.entity_platform")
+    ha_helpers_script = _make("homeassistant.helpers.script")
+    ha_helpers_selector = _make("homeassistant.helpers.selector")
     ha_helpers_update = _make("homeassistant.helpers.update_coordinator")
     ha_components_sensor = _make("homeassistant.components.sensor")
 
@@ -62,6 +65,8 @@ def _install_homeassistant_stubs() -> None:
     ha_helpers.config_validation = ha_helpers_cv
     ha_helpers.device_registry = ha_helpers_device
     ha_helpers.entity_platform = ha_helpers_platform
+    ha_helpers.script = ha_helpers_script
+    ha_helpers.selector = ha_helpers_selector
     ha_helpers.update_coordinator = ha_helpers_update
 
     # Symbols the integration imports by name. Real implementations are not
@@ -78,12 +83,19 @@ def _install_homeassistant_stubs() -> None:
 
     ha_components_http.StaticPathConfig = _Stub
     ha_config_entries.ConfigEntry = _Stub
+    ha_config_entries.ConfigFlow = _Stub
+    ha_config_entries.OptionsFlow = _Stub
     ha_const.EVENT_HOMEASSISTANT_STARTED = "homeassistant_started"
     ha_core.HomeAssistant = _Stub
+    ha_core.Context = _Stub
+    ha_core.callback = lambda fn: fn
+    ha_data_entry_flow.FlowResult = dict
     ha_helpers_aiohttp.async_get_clientsession = lambda hass: None
     ha_helpers_cv.config_entry_only_config_schema = lambda domain: None
     ha_helpers_device.DeviceEntryType = _types.SimpleNamespace(SERVICE="service")
     ha_helpers_platform.AddEntitiesCallback = _Stub
+    ha_helpers_script.Script = _Stub
+    ha_helpers_selector.ActionSelector = _Stub
     ha_helpers_update.DataUpdateCoordinator = _Stub
     ha_helpers_update.UpdateFailed = type("UpdateFailed", (Exception,), {})
     ha_components_sensor.SensorEntity = _Stub

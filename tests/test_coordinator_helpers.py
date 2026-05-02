@@ -8,11 +8,26 @@ helpers actually read, not full ESPN responses.
 from __future__ import annotations
 
 from datetime import UTC
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
+from custom_components.mlb_live_scoreboard.const import (
+    EVENT_GAME_ENDED,
+    EVENT_GAME_LOST,
+    EVENT_GAME_STARTED,
+    EVENT_GAME_WON,
+    EVENT_OPPONENT_SCORED,
+    EVENT_TEAM_SCORED,
+    OPT_ON_GAME_WON,
+    OPT_ON_TEAM_SCORED,
+)
 from custom_components.mlb_live_scoreboard.coordinator import (
     MlbLiveScoreboardCoordinator as Coord,
 )
-from custom_components.mlb_live_scoreboard.coordinator import _parse_iso_ts
+from custom_components.mlb_live_scoreboard.coordinator import (
+    MlbLiveScoreboardData,
+    _parse_iso_ts,
+)
 
 # ---------------------------------------------------------------------------
 # _parse_iso_ts
@@ -327,3 +342,271 @@ def test_select_event_handles_empty_list():
     prev_id, next_id, live_id, display_id, display = Coord._select_event(None, [])
     assert (prev_id, next_id, live_id, display_id) == ("", "", "", "")
     assert display is None
+
+
+# ---------------------------------------------------------------------------
+# _detect_game_events
+# ---------------------------------------------------------------------------
+
+
+def _make_data(
+    *,
+    my_score: int,
+    opp_score: int,
+    is_live: bool = True,
+    is_delayed: bool = False,
+    state: str = "in",
+    completed: bool = False,
+    event_id: str = "G1",
+    my_side: str = "home",
+    my_team_id: str = "19",
+    opp_team_id: str = "26",
+    opp_abbr: str = "SF",
+    opp_name: str = "San Francisco Giants",
+    recent_plays: list | None = None,
+) -> MlbLiveScoreboardData:
+    """Build a minimal MlbLiveScoreboardData for detector tests."""
+    opp_side = "away" if my_side == "home" else "home"
+    competitors = [
+        {
+            "homeAway": my_side,
+            "score": my_score,
+            "team": {"id": my_team_id, "abbreviation": "LAD", "displayName": "Los Angeles Dodgers"},
+        },
+        {
+            "homeAway": opp_side,
+            "score": opp_score,
+            "team": {"id": opp_team_id, "abbreviation": opp_abbr, "displayName": opp_name},
+        },
+    ]
+    comp = {
+        "id": event_id,
+        "status": {"type": {"state": state, "completed": completed}},
+        "competitors": competitors,
+    }
+    return MlbLiveScoreboardData(
+        team_abbr="LAD",
+        team_id=int(my_team_id),
+        team_name="Los Angeles Dodgers",
+        display_event_id=event_id,
+        live_event_id=event_id if is_live else "",
+        previous_event_id="",
+        next_event_id="",
+        selected_competition=comp,
+        inning_context={"period": 5, "period_prefix": "Top 5th"},
+        recent_plays=recent_plays or [],
+        current_pitches=[],
+        away_team={},
+        home_team={},
+        current_batter={},
+        current_pitcher={},
+        batter_stats={},
+        pitcher_stats={},
+        situation={},
+        probable_pitchers={"away": {}, "home": {}},
+        due_up=[],
+        third_out_play={},
+        on_deck={},
+        leaders={},
+        mode="live" if is_live else "previous",
+        status_text="Top 5th",
+        is_live=is_live,
+        is_delayed=is_delayed,
+    )
+
+
+def test_detect_returns_empty_on_first_refresh():
+    curr = _make_data(my_score=0, opp_score=0)
+    assert Coord._detect_game_events(None, curr, 19) == []
+
+
+def test_detect_team_scored():
+    prev = _make_data(my_score=0, opp_score=0)
+    curr = _make_data(my_score=2, opp_score=0)
+    out = Coord._detect_game_events(prev, curr, 19)
+    names = [n for n, _ in out]
+    assert names == [EVENT_TEAM_SCORED]
+    payload = out[0][1]
+    assert payload["team_abbr"] == "LAD"
+    assert payload["team_score"] == 2
+    assert payload["score_delta"] == 2
+    assert payload["is_home"] is True
+    assert payload["opponent_abbr"] == "SF"
+
+
+def test_detect_opponent_scored():
+    prev = _make_data(my_score=1, opp_score=0)
+    curr = _make_data(my_score=1, opp_score=1)
+    out = Coord._detect_game_events(prev, curr, 19)
+    names = [n for n, _ in out]
+    assert names == [EVENT_OPPONENT_SCORED]
+    assert out[0][1]["score_delta"] == 1
+
+
+def test_detect_both_sides_scored_simultaneously():
+    # Rare but possible if two polls were missed
+    prev = _make_data(my_score=0, opp_score=0)
+    curr = _make_data(my_score=1, opp_score=1)
+    names = [n for n, _ in Coord._detect_game_events(prev, curr, 19)]
+    assert EVENT_TEAM_SCORED in names
+    assert EVENT_OPPONENT_SCORED in names
+
+
+def test_detect_no_events_when_scores_unchanged():
+    prev = _make_data(my_score=3, opp_score=2)
+    curr = _make_data(my_score=3, opp_score=2)
+    assert Coord._detect_game_events(prev, curr, 19) == []
+
+
+def test_detect_no_score_events_while_delayed():
+    prev = _make_data(my_score=0, opp_score=0, is_delayed=True)
+    curr = _make_data(my_score=2, opp_score=0, is_delayed=True)
+    assert Coord._detect_game_events(prev, curr, 19) == []
+
+
+def test_detect_skips_across_event_id_boundary():
+    # New game — don't compare scores from yesterday's game
+    prev = _make_data(my_score=7, opp_score=2, event_id="G1")
+    curr = _make_data(my_score=0, opp_score=1, event_id="G2")
+    assert Coord._detect_game_events(prev, curr, 19) == []
+
+
+def test_detect_game_started():
+    prev = _make_data(my_score=0, opp_score=0, is_live=False, state="pre")
+    curr = _make_data(my_score=0, opp_score=0, is_live=True, state="in")
+    names = [n for n, _ in Coord._detect_game_events(prev, curr, 19)]
+    assert EVENT_GAME_STARTED in names
+
+
+def test_detect_game_won():
+    prev = _make_data(my_score=4, opp_score=2, state="in", completed=False)
+    curr = _make_data(
+        my_score=4, opp_score=2, is_live=False, state="post", completed=True
+    )
+    names = [n for n, _ in Coord._detect_game_events(prev, curr, 19)]
+    assert EVENT_GAME_ENDED in names
+    assert EVENT_GAME_WON in names
+    assert EVENT_GAME_LOST not in names
+
+
+def test_detect_game_lost():
+    prev = _make_data(my_score=2, opp_score=4, state="in", completed=False)
+    curr = _make_data(
+        my_score=2, opp_score=4, is_live=False, state="post", completed=True
+    )
+    names = [n for n, _ in Coord._detect_game_events(prev, curr, 19)]
+    assert EVENT_GAME_ENDED in names
+    assert EVENT_GAME_LOST in names
+    assert EVENT_GAME_WON not in names
+
+
+def test_detect_tie_fires_only_game_ended():
+    prev = _make_data(my_score=3, opp_score=3, state="in", completed=False)
+    curr = _make_data(
+        my_score=3, opp_score=3, is_live=False, state="post", completed=True
+    )
+    names = [n for n, _ in Coord._detect_game_events(prev, curr, 19)]
+    assert names == [EVENT_GAME_ENDED]
+
+
+def test_detect_no_repeat_after_already_final():
+    final = _make_data(
+        my_score=4, opp_score=2, is_live=False, state="post", completed=True
+    )
+    # Same final state again — nothing should fire
+    assert Coord._detect_game_events(final, final, 19) == []
+
+
+def test_detect_returns_empty_when_team_not_in_competition():
+    prev = _make_data(my_score=0, opp_score=0, my_team_id="99")
+    curr = _make_data(my_score=2, opp_score=0, my_team_id="99")
+    # Looking for team_id 19, neither competitor matches
+    assert Coord._detect_game_events(prev, curr, 19) == []
+
+
+def test_detect_includes_scoring_play_text():
+    prev = _make_data(my_score=0, opp_score=0)
+    curr = _make_data(
+        my_score=1,
+        opp_score=0,
+        recent_plays=[
+            {"text": "Routine groundout.", "scoring_play": False},
+            {"text": "Betts homered to left.", "scoring_play": True},
+        ],
+    )
+    out = Coord._detect_game_events(prev, curr, 19)
+    assert out[0][1]["scoring_play_text"] == "Betts homered to left."
+
+
+def test_detect_score_delta_handles_string_scores():
+    # ESPN sometimes returns scores as strings
+    prev = _make_data(my_score=0, opp_score=0)
+    # Manually substitute string scores
+    curr = _make_data(my_score=0, opp_score=0)
+    curr.selected_competition["competitors"][0]["score"] = "3"
+    out = Coord._detect_game_events(prev, curr, 19)
+    assert out and out[0][1]["score_delta"] == 3
+
+
+# ---------------------------------------------------------------------------
+# _dispatch_game_events — verifies bus.async_fire and configured-action wiring
+# ---------------------------------------------------------------------------
+
+
+def _make_coord_for_dispatch(options: dict | None = None):
+    """Build a minimally-wired coordinator-like object for dispatch tests
+    without exercising __init__ (which calls into HA APIs).
+    """
+    fake_bus = SimpleNamespace(async_fire=MagicMock())
+    created_tasks: list = []
+    fake_hass = SimpleNamespace(
+        bus=fake_bus,
+        async_create_task=lambda coro: created_tasks.append(coro) or coro.close(),
+    )
+    fake_entry = SimpleNamespace(options=options or {})
+    coord = Coord.__new__(Coord)
+    coord.hass = fake_hass
+    coord.entry = fake_entry
+    return coord, fake_bus, created_tasks
+
+
+def test_dispatch_fires_event_on_bus_without_options():
+    coord, bus, tasks = _make_coord_for_dispatch()
+    payload = {"team_abbr": "LAD", "opponent_abbr": "SF", "team_score": 1, "opponent_score": 0}
+    coord._dispatch_game_events([(EVENT_TEAM_SCORED, payload)])
+
+    bus.async_fire.assert_called_once_with(EVENT_TEAM_SCORED, payload)
+    # No configured action, so no task should have been scheduled
+    assert tasks == []
+
+
+def test_dispatch_runs_configured_action_when_present():
+    options = {OPT_ON_TEAM_SCORED: [{"service": "light.turn_on"}]}
+    coord, bus, tasks = _make_coord_for_dispatch(options)
+    payload = {"team_abbr": "LAD", "team_score": 1}
+    coord._dispatch_game_events([(EVENT_TEAM_SCORED, payload)])
+
+    bus.async_fire.assert_called_once()
+    # Action sequence configured — coordinator should schedule an action task
+    assert len(tasks) == 1
+
+
+def test_dispatch_skips_action_for_unmatched_event():
+    options = {OPT_ON_GAME_WON: [{"service": "light.turn_on"}]}
+    coord, bus, tasks = _make_coord_for_dispatch(options)
+    coord._dispatch_game_events([(EVENT_TEAM_SCORED, {"team_abbr": "LAD"})])
+
+    bus.async_fire.assert_called_once()
+    # Configured for game_won, not team_scored → no task scheduled
+    assert tasks == []
+
+
+def test_dispatch_handles_multiple_events():
+    coord, bus, _tasks = _make_coord_for_dispatch()
+    coord._dispatch_game_events([
+        (EVENT_TEAM_SCORED, {"team_abbr": "LAD"}),
+        (EVENT_GAME_WON, {"team_abbr": "LAD"}),
+    ])
+    assert bus.async_fire.call_count == 2
+
+
