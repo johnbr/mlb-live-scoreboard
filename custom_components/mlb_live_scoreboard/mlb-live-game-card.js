@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.0";
+const CARD_VERSION = "1.8.2";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -1959,9 +1959,11 @@ white-space: nowrap;
           gap: 2px;
         }
         .standings-heading {
-          font-size: 0.82em;
-          opacity: 0.75;
-          margin-bottom: 2px;
+          font-size: 0.95em;
+          font-weight: 600;
+          text-align: center;
+          opacity: 0.85;
+          margin-bottom: 4px;
         }
         .standings-row {
           display: grid;
