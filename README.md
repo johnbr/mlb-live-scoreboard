@@ -3,7 +3,7 @@
 A Home Assistant custom integration and Lovelace card for displaying live MLB game data from ESPN.
 
 ![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.8.7-blue.svg)
 
 ## Features
 
@@ -12,6 +12,8 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Play-by-play** - Recent plays and pitch-by-pitch updates
 - **Pre-game info** - Scheduled game times and probable pitchers
 - **Post-game results** - Final scores and game leaders
+- **Division standings popup** - Click an upcoming or completed game card to expand probable starters (upcoming only) and current division standings
+- **Configurable game-event actions** - Fire Home Assistant events (or invoke services directly from the integration options) on team scored, opponent scored, game won, game lost, and game started, so you can drive lights, TTS, notifications, or any other automation. See [Game Event Actions](#game-event-actions) below.
 - **Configurable display** - Toggle various UI elements on/off
 - **Auto-registered card** - The Lovelace card is automatically registered on install
 
