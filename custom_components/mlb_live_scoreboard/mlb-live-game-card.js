@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.6";
+const CARD_VERSION = "1.8.7";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -874,7 +874,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     if (betweenHalves && !holdThirdOut && holdState.gameKey === gameKey && holdState.playId && holdState.dueUpSeenForPlayId !== holdState.playId) {
       holdState.dueUpSeenForPlayId = holdState.playId;
     }
-    const dueUpPanel = (betweenHalves && !holdThirdOut)
+    const dueUpPanel = (betweenHalves && !holdThirdOut && !inningState.pseudoFinal)
       ? renderDueUpCards(this, dueUpList, dueUpDesc)
       : "";
     const countDotsPanel = (this.config.show_count !== false && stateInfo.pillClass === "live" && !betweenHalves && !holdThirdOut) ? renderCountDotsRow(attrs.situation || {}, attrs.current_pitches || []) : "";
