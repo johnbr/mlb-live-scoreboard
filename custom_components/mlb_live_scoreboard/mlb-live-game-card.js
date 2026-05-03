@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.4";
+const CARD_VERSION = "1.8.5";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -957,8 +957,8 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       <div class="wrapper">
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
-            ${this.teamRow(awayTeam, awayMeta, awayRecord, awayScore, awayWon, false, away, awayTotals)}
-            ${this.teamRow(homeTeam, homeMeta, homeRecord, homeScore, homeWon, true, home, homeTotals)}
+            ${this.teamRow(awayTeam, awayMeta, "", awayScore, awayWon, false, away, awayTotals)}
+            ${this.teamRow(homeTeam, homeMeta, "", homeScore, homeWon, true, home, homeTotals)}
           </div>
           <div class="inning-marker-side">
             <div class="inning-marker-wrap"><div class="inning-marker ${stateInfo.pillClass}">${marker}</div></div>
