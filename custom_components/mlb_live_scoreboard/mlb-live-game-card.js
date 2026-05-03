@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.5";
+const CARD_VERSION = "1.8.6";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -1641,6 +1641,8 @@ line-height: 1.2;
         }
         .pitch-row {
           grid-template-columns: minmax(0,1fr);
+          margin-top: -2px;
+          margin-bottom: -2px;
         }
         .pitch-row .play-text {
           text-align: right;
@@ -1650,7 +1652,7 @@ line-height: 1.2;
           width: 100%;
           margin-left: 0;
           padding-left: 0;
-line-height: 1.18;
+line-height: 1.05;
         }
         .pitch-row .play-indicator { display: none; }
         .play-indicator {
@@ -1666,6 +1668,7 @@ line-height: 1.18;
         .dueup-title {
           text-align: center;
 color: var(--secondary-text-color);
+          font-weight: 600;
           margin-bottom: 6px;
 }
         .dueup-grid {
