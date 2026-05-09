@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.8";
+const CARD_VERSION = "1.8.9";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,

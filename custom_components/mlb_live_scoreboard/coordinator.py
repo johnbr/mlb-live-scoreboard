@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -1136,6 +1137,17 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     return candidate
             return None
 
+        # Generational suffixes that should stay attached to the last name
+        # (e.g. "Guerrero Jr.", "Ripken III") so the on-base indicators don't
+        # display just the surname.
+        suffix_re = re.compile(r"^(?:[JS]r\.?|I{1,3}|IV|VI{0,3})$", re.IGNORECASE)
+
+        def _suffix_from_display_name(display_name: str) -> str:
+            parts = str(display_name or "").strip().split()
+            if len(parts) >= 3 and suffix_re.match(parts[-1]):
+                return parts[-1]
+            return ""
+
         def _runner_last_name(ref: Any) -> str:
             if not ref:
                 return ""
@@ -1148,9 +1160,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     or ""
                 )
             athlete = cls._find_any_athlete(summary, athlete_id) if athlete_id else {}
-            last_name = str(athlete.get("lastName") or "").strip()
-            if last_name:
-                return last_name
             display_name = str(
                 athlete.get("displayName")
                 or athlete.get("shortName")
@@ -1158,8 +1167,14 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 or (ref.get("shortName") if isinstance(ref, dict) else "")
                 or ""
             ).strip()
+            suffix = str(athlete.get("suffix") or "").strip() or _suffix_from_display_name(display_name)
+            last_name = str(athlete.get("lastName") or "").strip()
+            if last_name:
+                return f"{last_name} {suffix}".strip() if suffix else last_name
             if display_name:
                 parts = display_name.split()
+                if suffix and len(parts) >= 2:
+                    return f"{parts[-2]} {suffix}"
                 return parts[-1]
             return ""
 
