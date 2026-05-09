@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.7";
+const CARD_VERSION = "1.8.8";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -380,7 +380,15 @@ function shortPersonName(name) {
   if (!value) return "";
   const parts = value.split(/\s+/).filter(Boolean);
   if (parts.length < 2) return value;
-  return `${parts[0].charAt(0)}. ${parts[parts.length - 1]}`;
+  // Detect a generational suffix at the end (Jr., Sr., II, III, IV, V, etc.)
+  // and keep it attached to the last name so we don't lose it when abbreviating
+  // the first name (e.g. "Vladimir Guerrero Jr." -> "V. Guerrero Jr.").
+  const SUFFIX_RE = /^(?:[JS]r\.?|I{1,3}|IV|VI{0,3})$/i;
+  let suffix = "";
+  if (parts.length >= 3 && SUFFIX_RE.test(parts[parts.length - 1])) {
+    suffix = ` ${parts.pop()}`;
+  }
+  return `${parts[0].charAt(0)}. ${parts[parts.length - 1]}${suffix}`;
 }
 
 function renderPlayerHeadshot(card, url, alt = "") {
