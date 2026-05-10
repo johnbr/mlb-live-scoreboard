@@ -406,6 +406,7 @@ def _make_data(
         probable_pitchers={"away": {}, "home": {}},
         due_up=[],
         third_out_play={},
+        third_out_hold_until=None,
         on_deck={},
         leaders={},
         division_standings={"division_name": "", "entries": []},

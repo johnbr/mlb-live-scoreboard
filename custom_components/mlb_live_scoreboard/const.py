@@ -20,6 +20,12 @@ BATTING_ORDER_SIZE = 9
 DUE_UP_LIMIT = 3
 LEADER_LIMIT = 3
 
+# How long (in seconds, anchored to the play's wallclock timestamp) the third-out
+# play result should remain on screen before yielding to the Due Up panel.
+# Computed server-side so every card transitions in lockstep regardless of when
+# the dashboard was first rendered.
+THIRD_OUT_HOLD_SECONDS = 30
+
 # Threshold for switching the displayed event from a completed prior game to
 # the next scheduled game (in seconds).
 SHOW_NEXT_AFTER_PREV_SECONDS = 16 * 60 * 60

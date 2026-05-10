@@ -41,6 +41,7 @@ from .const import (
     STATUS_NAME_DELAYED,
     STATUS_NAME_IN_PROGRESS,
     TEAM_METADATA_TTL_SECONDS,
+    THIRD_OUT_HOLD_SECONDS,
 )
 from .types import (
     BatterStats,
@@ -222,6 +223,7 @@ class MlbLiveScoreboardData:
     probable_pitchers: ProbablePitchers
     due_up: list[DueUpEntry]
     third_out_play: RecentPlay
+    third_out_hold_until: float | None
     on_deck: OnDeck
     leaders: Leaders
     division_standings: Standings
@@ -517,6 +519,25 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             if outs == 3:
                 return play
         return {}
+
+    @staticmethod
+    def _compute_third_out_hold_until(
+        summary: dict[str, Any], inning_context: dict[str, Any]
+    ) -> float | None:
+        """Return the wallclock-anchored deadline for the third-out hold UI.
+
+        Anchoring the deadline to the play's wallclock (rather than first
+        observation by each browser) ensures every card transitions from the
+        third-out result to the Due Up panel at the same moment, regardless of
+        when the dashboard was rendered.
+        """
+        play = MlbLiveScoreboardCoordinator._normalize_third_out_play(summary, inning_context)
+        if not play:
+            return None
+        wallclock_ts = play.get("wallclock_ts")
+        if not isinstance(wallclock_ts, (int, float)):
+            return None
+        return float(wallclock_ts) + float(THIRD_OUT_HOLD_SECONDS)
 
     @staticmethod
     def _normalize_probable_pitchers(display_comp: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -1635,6 +1656,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             probable_pitchers=self._normalize_probable_pitchers(display_comp),
             due_up=self._normalize_due_up(summary),
             third_out_play=self._normalize_third_out_play(summary, inning_context),
+            third_out_hold_until=self._compute_third_out_hold_until(summary, inning_context),
             on_deck=self._normalize_on_deck(summary, inning_context, batter_id),
             leaders=self._normalize_leaders(summary),
             division_standings=division_standings,
