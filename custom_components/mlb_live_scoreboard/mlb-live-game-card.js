@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.14";
+const CARD_VERSION = "1.8.15";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -1356,7 +1356,7 @@ color: var(--secondary-text-color);
         .matchup-block {
           border-top: 0;
           margin-top: 6px;
-          padding: 6px 10% 0;
+          padding: 6px 0 0;
         }
         .matchup-grid {
           display:grid;
@@ -1367,7 +1367,7 @@ color: var(--secondary-text-color);
 
         .matchup-grid.enhanced {
           grid-template-columns: minmax(0,1fr) 56px minmax(0,1fr);
-          column-gap: 18px;
+          column-gap: 0;
           row-gap: 0;
           align-items:start;
         }
