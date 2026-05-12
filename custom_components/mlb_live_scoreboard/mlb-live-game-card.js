@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.11";
+const CARD_VERSION = "1.8.13";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -1213,11 +1213,11 @@ line-height: 1.25;
           background: rgba(255,255,255,0.08);
         }
         .player-shot {
-          width: 46px;
-          height: 46px;
+          width: 56px;
+          height: 56px;
           object-fit: cover;
           border-radius: 50%;
-          flex: 0 0 42px;
+          flex: 0 0 52px;
           background: rgba(255,255,255,0.06);
         }
         .player-shot.placeholder {
@@ -1937,8 +1937,8 @@ white-space: nowrap;
         }
         .upcoming-pitcher-side.align-right { /* symmetry hint, no-op layout */ }
         .upcoming-pitcher-img {
-          width: 48px;
-          height: 48px;
+          width: 58px;
+          height: 58px;
           border-radius: 50%;
           object-fit: cover;
           background: var(--secondary-background-color, rgba(127,127,127,0.15));

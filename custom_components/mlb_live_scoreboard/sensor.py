@@ -51,6 +51,13 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
                 "away_score": play.get("away_score"),
                 "home_score": play.get("home_score"),
                 "wallclock_ts": play.get("wallclock_ts"),
+                # Needed by the card to flag scoring plays in the play-result
+                # indicator column even when the score didn't change relative
+                # to the immediately-prior play in the (newest-first) list.
+                "scoring_play": play.get("scoring_play"),
+                "score_value": play.get("score_value"),
+                "play_type": play.get("play_type"),
+                "alternative_type": play.get("alternative_type"),
             })
         return {
             "team_abbr": data.team_abbr,
