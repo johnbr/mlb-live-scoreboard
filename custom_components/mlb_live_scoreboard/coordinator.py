@@ -261,6 +261,15 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # endpoint. Divisions don't change mid-season, so this is cached
         # for a long time and rarely re-fetched.
         self._groups_cache: tuple[float, dict[str, Any]] | None = None
+        # Wall-clock timestamp at which ``is_between_halves`` most recently
+        # flipped from False to True. Used as a fallback anchor for the
+        # third-out hold deadline when ESPN reports the inning transition
+        # before the third-out play appears in ``plays[]``.
+        self._between_halves_entered_at: float | None = None
+        # Batter id captured at the moment the half ended. Lets us detect
+        # the brief window after the next half begins but ESPN's
+        # ``situation.batter`` still points at the just-ended at-bat.
+        self._third_out_batter_id: str | None = None
 
         super().__init__(
             hass,
@@ -1642,6 +1651,63 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # (summary, display_comp), so previously calling it 5x per refresh was wasteful.
         inning_context = self._normalize_inning_context(summary, display_comp)
 
+        # Bridge the inning rollover so the card never flashes between Due Up
+        # and the matchup view while ESPN's status / situation fields update
+        # out of order. See the two bug modes documented around
+        # ``_between_halves_entered_at`` in ``__init__``.
+        now_ts = time.time()
+        raw_between = bool(inning_context.get("is_between_halves"))
+        prev_inning_context = getattr(self.data, "inning_context", None) or {}
+        prev_between = bool(prev_inning_context.get("is_between_halves"))
+
+        if raw_between:
+            if not prev_between:
+                self._between_halves_entered_at = now_ts
+            if batter_id and not self._third_out_batter_id:
+                # ``situation.batter`` at this moment is still the at-bat that
+                # produced the third out — capture so we can detect a stale
+                # situation block right after the next half starts.
+                self._third_out_batter_id = batter_id
+
+        # Treat the very brief window where ESPN has advanced ``periodPrefix``
+        # to the next half but ``situation.batter`` still points at the
+        # just-ended at-bat as a continuation of between-halves, so the Due Up
+        # panel stays on screen instead of rendering the previous matchup.
+        stale_situation = (
+            not raw_between
+            and prev_between
+            and bool(self._third_out_batter_id)
+            and bool(batter_id)
+            and batter_id == self._third_out_batter_id
+        )
+
+        effective_between = raw_between or stale_situation
+        if effective_between:
+            inning_context["is_between_halves"] = True
+        else:
+            self._between_halves_entered_at = None
+            self._third_out_batter_id = None
+
+        third_out_hold_until = self._compute_third_out_hold_until(summary, inning_context)
+        if effective_between and self._between_halves_entered_at is not None:
+            # Anchor the hold to whichever is later: the third-out play's
+            # wallclock (preferred, when it has arrived) or the moment we
+            # observed the inning end. The fallback covers the case where
+            # ESPN flips the inning prefix before the third-out play lands.
+            fallback_until = self._between_halves_entered_at + float(THIRD_OUT_HOLD_SECONDS)
+            third_out_hold_until = (
+                max(third_out_hold_until, fallback_until)
+                if third_out_hold_until is not None
+                else fallback_until
+            )
+
+        due_up = self._normalize_due_up(summary)
+        if stale_situation and not due_up and self.data and self.data.due_up:
+            # ESPN occasionally clears ``situation.dueUp`` before
+            # ``situation.batter`` updates — reuse the prior snapshot so the
+            # Due Up panel keeps rendering through the stale window.
+            due_up = list(self.data.due_up)
+
         standings_payload = await self._get_standings()
         groups_payload = await self._get_groups()
         division_index = self._team_id_division_index(groups_payload)
@@ -1669,9 +1735,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             pitcher_stats=self._normalize_pitcher_stats(summary, pitcher_id),
             situation=self._normalize_situation(summary),
             probable_pitchers=self._normalize_probable_pitchers(display_comp),
-            due_up=self._normalize_due_up(summary),
+            due_up=due_up,
             third_out_play=self._normalize_third_out_play(summary, inning_context),
-            third_out_hold_until=self._compute_third_out_hold_until(summary, inning_context),
+            third_out_hold_until=third_out_hold_until,
             on_deck=self._normalize_on_deck(summary, inning_context, batter_id),
             leaders=self._normalize_leaders(summary),
             division_standings=division_standings,
