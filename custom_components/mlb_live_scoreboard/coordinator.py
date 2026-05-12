@@ -35,6 +35,7 @@ from .const import (
     MAX_LINESCORES,
     MLB_TEAM_MAP,
     SCHEDULE_STALE_FALLBACK_SECONDS,
+    SCHEDULE_TTL_SECONDS,
     SHOW_NEXT_AFTER_PREV_SECONDS,
     STANDINGS_STALE_FALLBACK_SECONDS,
     STANDINGS_TTL_SECONDS,
@@ -1578,21 +1579,35 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         schedule_url = (
             f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{self.team_abbr.lower()}/schedule"
         )
-        try:
-            schedule = await self._get_json(schedule_url)
-            self._schedule_cache = (time.time(), schedule)
-        except Exception as err:
-            cached = self._schedule_cache
-            now_ts = time.time()
-            if cached is not None and (now_ts - cached[0]) < SCHEDULE_STALE_FALLBACK_SECONDS:
-                _LOGGER.warning(
-                    "Schedule fetch failed (%s); reusing cache from %.0fs ago",
-                    err,
-                    now_ts - cached[0],
-                )
-                schedule = cached[1]
-            else:
-                raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
+        now_ts = time.time()
+        cached_schedule = self._schedule_cache
+        # Fresh-cache fast path: avoid the per-tick schedule fetch (the
+        # endpoint is ~55 KB gzip and dominates per-game bandwidth). The
+        # schedule is only used to enumerate this team's events and pull the
+        # team display name — none of the live in-game state comes from it,
+        # so a 30 min TTL has no user-visible impact.
+        if (
+            cached_schedule is not None
+            and (now_ts - cached_schedule[0]) < SCHEDULE_TTL_SECONDS
+        ):
+            schedule = cached_schedule[1]
+        else:
+            try:
+                schedule = await self._get_json(schedule_url)
+                self._schedule_cache = (now_ts, schedule)
+            except Exception as err:
+                if (
+                    cached_schedule is not None
+                    and (now_ts - cached_schedule[0]) < SCHEDULE_STALE_FALLBACK_SECONDS
+                ):
+                    _LOGGER.warning(
+                        "Schedule fetch failed (%s); reusing cache from %.0fs ago",
+                        err,
+                        now_ts - cached_schedule[0],
+                    )
+                    schedule = cached_schedule[1]
+                else:
+                    raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
 
         events = schedule.get("events") or []
         prev_id, next_id, live_id, display_id, display_event = self._select_event(events)

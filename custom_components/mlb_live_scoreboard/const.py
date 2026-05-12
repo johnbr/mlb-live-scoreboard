@@ -41,6 +41,14 @@ TEAM_METADATA_TTL_SECONDS = 3600
 # stat updates feel stale.
 BATTER_SEASON_STATS_TTL_SECONDS = 60
 
+# How long to cache the team's schedule payload. The schedule is only used to
+# enumerate this team's events (previous / live / next) and to read the team's
+# display name; none of the in-game state (score, count, plays) comes from it.
+# Refreshing every 30 minutes is more than sufficient to pick up start-time
+# changes, postponements, or newly added games while eliminating the per-poll
+# hit (which dominates per-game bandwidth at the 5 s coordinator interval).
+SCHEDULE_TTL_SECONDS = 30 * 60
+
 # Maximum age of a cached schedule payload that is still acceptable as a
 # fallback when ESPN's schedule endpoint fails. Beyond this we let the
 # coordinator raise UpdateFailed so the sensor goes unavailable.
