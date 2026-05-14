@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.16";
+const CARD_VERSION = "1.8.17";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -1453,6 +1453,7 @@ line-height:1.15;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          color: var(--warning-color);
         }
         
         .stat-line {
@@ -1541,7 +1542,7 @@ color: var(--secondary-text-color);
           color: var(--secondary-text-color);
         }
         .on-deck-name {
-          color: var(--primary-text-color);
+          color: var(--warning-color);
           font-weight: 500;
         }
         .on-deck-stats {
@@ -1691,6 +1692,7 @@ line-height: 1.03;
           overflow: hidden;
           text-overflow: ellipsis;
           max-width: 100%;
+          color: var(--warning-color);
         }
         .dueup-stat {
 color: var(--primary-text-color);
@@ -1741,6 +1743,7 @@ line-height: 1.25;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          color: var(--warning-color);
         }
         .leader-val {
 white-space: nowrap;
@@ -1954,6 +1957,7 @@ white-space: nowrap;
           font-weight: 600;
           font-size: 0.92em;
           line-height: 1.1;
+          color: var(--warning-color);
         }
         .upcoming-pitcher-stat {
           font-size: 0.85em;
