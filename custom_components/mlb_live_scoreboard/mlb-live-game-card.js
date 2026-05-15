@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.9.0";
+const CARD_VERSION = "1.9.1";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -284,29 +284,29 @@ function renderCountDotsRow(situation, currentPitches = []) {
     </div>`;
 }
 
-function renderWinProbabilityRow(winProb, awayLabel, homeLabel) {
+function renderWinProbabilityRow(winProb, ownerSide, ownerLabel, opponentLabel) {
   if (!winProb || typeof winProb !== "object") return "";
-  const awayRaw = Number(winProb.away);
-  const homeRaw = Number(winProb.home);
-  if (!Number.isFinite(awayRaw) || !Number.isFinite(homeRaw)) return "";
-  if (awayRaw <= 0 && homeRaw <= 0) return "";
+  const ownerKey = ownerSide === "home" ? "home" : "away";
+  const opponentKey = ownerKey === "home" ? "away" : "home";
+  const ownerRaw = Number(winProb[ownerKey]);
+  const opponentRaw = Number(winProb[opponentKey]);
+  if (!Number.isFinite(ownerRaw) || !Number.isFinite(opponentRaw)) return "";
+  if (ownerRaw <= 0 && opponentRaw <= 0) return "";
   // Normalize the two sides so the bar always spans the full width even when
   // ESPN includes a small tiePercentage (which we drop).
-  const total = awayRaw + homeRaw;
-  const away = total > 0 ? (awayRaw / total) * 100 : 50;
-  const home = total > 0 ? (homeRaw / total) * 100 : 50;
-  const awayPctText = `${Math.round(awayRaw)}%`;
-  const homePctText = `${Math.round(homeRaw)}%`;
-  const awayTag = awayLabel ? `${awayLabel} ` : "";
-  const homeTag = homeLabel ? ` ${homeLabel}` : "";
+  const total = ownerRaw + opponentRaw;
+  const ownerPct = total > 0 ? (ownerRaw / total) * 100 : 50;
+  const opponentPct = total > 0 ? (opponentRaw / total) * 100 : 50;
+  const ownerTag = ownerLabel ? `${ownerLabel} ` : "";
+  const opponentTag = opponentLabel ? ` ${opponentLabel}` : "";
   return `
     <div class="win-prob-row" title="Win probability">
       <div class="win-prob-bar">
-        <div class="win-prob-fill away" style="width:${away.toFixed(1)}%">
-          <span class="win-prob-pct">${awayTag}${awayPctText}</span>
+        <div class="win-prob-fill owner" style="width:${ownerPct.toFixed(1)}%">
+          <span class="win-prob-pct">${ownerTag}${Math.round(ownerRaw)}%</span>
         </div>
-        <div class="win-prob-fill home" style="width:${home.toFixed(1)}%">
-          <span class="win-prob-pct">${homePctText}${homeTag}</span>
+        <div class="win-prob-fill opponent" style="width:${opponentPct.toFixed(1)}%">
+          <span class="win-prob-pct">${Math.round(opponentRaw)}%${opponentTag}</span>
         </div>
       </div>
     </div>`;
@@ -876,11 +876,28 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const leaders = attrs.leaders || {};
     const periodLower = String(inningState.lower || "");
     const inningContext = attrs.inning_context || {};
+    const ownerAbbr = String(attrs.team_abbr || "").toUpperCase();
+    const awayAbbr = String(awayMeta?.abbreviation || awayTeam?.abbreviation || "").toUpperCase();
+    const homeAbbr = String(homeMeta?.abbreviation || homeTeam?.abbreviation || "").toUpperCase();
+    const ownerTeamId = String(attrs.team_id ?? "");
+    const awayTeamId = String(awayTeam?.id ?? "");
+    const homeTeamId = String(homeTeam?.id ?? "");
+    // Prefer team-id match (stable), fall back to abbreviation. Defaults to
+    // "away" only when we genuinely can't identify the owner — that puts the
+    // configured team on the left in the common case and degrades gracefully.
+    let ownerSide = "away";
+    if (ownerTeamId && (ownerTeamId === homeTeamId)) ownerSide = "home";
+    else if (ownerTeamId && (ownerTeamId === awayTeamId)) ownerSide = "away";
+    else if (ownerAbbr && ownerAbbr === homeAbbr) ownerSide = "home";
+    else if (ownerAbbr && ownerAbbr === awayAbbr) ownerSide = "away";
+    const ownerLabel = ownerSide === "home" ? homeAbbr : awayAbbr;
+    const opponentLabel = ownerSide === "home" ? awayAbbr : homeAbbr;
     const winProbabilityPanel = (this.config.show_win_probability !== false && stateInfo.pillClass === "live")
       ? renderWinProbabilityRow(
           attrs.win_probability || {},
-          awayMeta?.abbreviation || awayTeam?.abbreviation || "",
-          homeMeta?.abbreviation || homeTeam?.abbreviation || "",
+          ownerSide,
+          ownerLabel,
+          opponentLabel,
         )
       : "";
     const recentPlaysPanel = renderRecentPlays(attrs.recent_plays || [], attrs.current_pitches || [], attrs.situation || {}, this.config);
@@ -1524,7 +1541,9 @@ line-height: 1.2;
           border-top: 1px solid rgba(255,255,255,0.08);
         }
         .win-prob-row {
-          margin-top: 6px;
+          margin-top: 8px;
+          padding-top: 6px;
+          border-top: 1px solid rgba(255,255,255,0.08);
         }
         .win-prob-bar {
           display: flex;
@@ -1541,21 +1560,22 @@ line-height: 1.2;
           display: flex;
           align-items: center;
           min-width: 0;
-          color: rgba(255,255,255,0.92);
+          color: rgba(255,255,255,0.95);
           white-space: nowrap;
           overflow: hidden;
         }
-        .win-prob-fill.away {
+        .win-prob-fill.owner {
           background: linear-gradient(90deg, rgba(99,162,255,0.85), rgba(99,162,255,0.55));
           justify-content: flex-start;
           padding-left: 8px;
         }
-        .win-prob-fill.home {
+        .win-prob-fill.opponent {
           background: linear-gradient(90deg, rgba(239,83,80,0.55), rgba(239,83,80,0.85));
           justify-content: flex-end;
           padding-right: 8px;
         }
         .win-prob-pct {
+          font-weight: 700;
           text-shadow: 0 1px 1px rgba(0,0,0,0.4);
         }
         .live-strip {
