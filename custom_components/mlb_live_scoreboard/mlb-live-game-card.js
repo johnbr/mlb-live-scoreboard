@@ -1548,35 +1548,39 @@ line-height: 1.2;
         .win-prob-bar {
           display: flex;
           width: 100%;
-          height: 16px;
-          border-radius: 8px;
+          height: 20px;
+          border-radius: 10px;
           overflow: hidden;
           background: rgba(255,255,255,0.08);
-          font-size: 0.78em;
-          line-height: 16px;
+          font-size: 0.86em;
+          line-height: 20px;
           font-variant-numeric: tabular-nums;
         }
         .win-prob-fill {
           display: flex;
           align-items: center;
           min-width: 0;
-          color: rgba(255,255,255,0.95);
+          color: #ffffff;
           white-space: nowrap;
           overflow: hidden;
         }
         .win-prob-fill.owner {
-          background: linear-gradient(90deg, rgba(99,162,255,0.85), rgba(99,162,255,0.55));
+          background: #1d6bd6;
           justify-content: flex-start;
-          padding-left: 8px;
+          padding-left: 10px;
         }
         .win-prob-fill.opponent {
-          background: linear-gradient(90deg, rgba(239,83,80,0.55), rgba(239,83,80,0.85));
+          background: #c0392b;
           justify-content: flex-end;
-          padding-right: 8px;
+          padding-right: 10px;
         }
         .win-prob-pct {
-          font-weight: 700;
-          text-shadow: 0 1px 1px rgba(0,0,0,0.4);
+          font-weight: 800;
+          letter-spacing: 0.02em;
+          text-shadow:
+            0 0 2px rgba(0,0,0,0.85),
+            0 1px 2px rgba(0,0,0,0.7),
+            0 0 1px rgba(0,0,0,0.9);
         }
         .live-strip {
           display: grid;
