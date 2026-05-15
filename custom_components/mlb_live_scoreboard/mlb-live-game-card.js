@@ -296,18 +296,17 @@ function renderWinProbabilityRow(winProb, ownerSide, ownerLabel, opponentLabel) 
   // ESPN includes a small tiePercentage (which we drop).
   const total = ownerRaw + opponentRaw;
   const ownerPct = total > 0 ? (ownerRaw / total) * 100 : 50;
-  const opponentPct = total > 0 ? (opponentRaw / total) * 100 : 50;
   const ownerTag = ownerLabel ? `${ownerLabel} ` : "";
   const opponentTag = opponentLabel ? ` ${opponentLabel}` : "";
+  // Labels are absolutely positioned at the bar's two edges so they remain
+  // fully readable regardless of how lopsided the probabilities are. The
+  // colored fill underneath still visualizes the actual ratio.
   return `
     <div class="win-prob-row" title="Win probability">
       <div class="win-prob-bar">
-        <div class="win-prob-fill owner" style="width:${ownerPct.toFixed(1)}%">
-          <span class="win-prob-pct">${ownerTag}${Math.round(ownerRaw)}%</span>
-        </div>
-        <div class="win-prob-fill opponent" style="width:${opponentPct.toFixed(1)}%">
-          <span class="win-prob-pct">${Math.round(opponentRaw)}%${opponentTag}</span>
-        </div>
+        <div class="win-prob-fill" style="width:${ownerPct.toFixed(1)}%"></div>
+        <span class="win-prob-label win-prob-label-owner">${ownerTag}${Math.round(ownerRaw)}%</span>
+        <span class="win-prob-label win-prob-label-opponent">${Math.round(opponentRaw)}%${opponentTag}</span>
       </div>
     </div>`;
 }
@@ -1546,42 +1545,41 @@ line-height: 1.2;
           border-top: 1px solid rgba(255,255,255,0.08);
         }
         .win-prob-bar {
-          display: flex;
+          position: relative;
           width: 100%;
           height: 20px;
           border-radius: 10px;
           overflow: hidden;
-          background: rgba(255,255,255,0.08);
+          background: #c0392b;
           font-size: 0.86em;
           line-height: 20px;
           font-variant-numeric: tabular-nums;
         }
         .win-prob-fill {
-          display: flex;
-          align-items: center;
-          min-width: 0;
-          color: #ffffff;
-          white-space: nowrap;
-          overflow: hidden;
-        }
-        .win-prob-fill.owner {
+          position: absolute;
+          top: 0;
+          left: 0;
+          bottom: 0;
           background: #1d6bd6;
-          justify-content: flex-start;
-          padding-left: 10px;
         }
-        .win-prob-fill.opponent {
-          background: #c0392b;
-          justify-content: flex-end;
-          padding-right: 10px;
-        }
-        .win-prob-pct {
+        .win-prob-label {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          display: inline-flex;
+          align-items: center;
+          color: #ffffff;
           font-weight: 800;
           letter-spacing: 0.02em;
+          white-space: nowrap;
+          pointer-events: none;
           text-shadow:
             0 0 2px rgba(0,0,0,0.85),
             0 1px 2px rgba(0,0,0,0.7),
             0 0 1px rgba(0,0,0,0.9);
         }
+        .win-prob-label-owner { left: 10px; }
+        .win-prob-label-opponent { right: 10px; }
         .live-strip {
           display: grid;
           grid-template-columns: max-content 1fr max-content;
