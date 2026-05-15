@@ -404,6 +404,7 @@ def _make_data(
         pitcher_stats={},
         situation={},
         probable_pitchers={"away": {}, "home": {}},
+        win_probability={},
         due_up=[],
         third_out_play={},
         third_out_hold_until=None,

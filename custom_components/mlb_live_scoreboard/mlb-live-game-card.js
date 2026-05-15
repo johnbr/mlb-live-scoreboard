@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.8.17";
+const CARD_VERSION = "1.9.0";
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // Number of seconds the card keeps showing the third-out play after it occurs,
@@ -281,6 +281,34 @@ function renderCountDotsRow(situation, currentPitches = []) {
       <span class="count-pack"><span class="dots-label verbose">Balls:</span><span class="dots">${renderDots(balls, 3, "ball")}</span></span>
       <span class="count-pack"><span class="dots-label verbose">Strikes:</span><span class="dots">${renderDots(strikes, 2, "strike")}</span></span>
       <span class="count-pack"><span class="dots-label verbose">Outs:</span><span class="dots">${renderDots(outs, 3, "out")}</span></span>
+    </div>`;
+}
+
+function renderWinProbabilityRow(winProb, awayLabel, homeLabel) {
+  if (!winProb || typeof winProb !== "object") return "";
+  const awayRaw = Number(winProb.away);
+  const homeRaw = Number(winProb.home);
+  if (!Number.isFinite(awayRaw) || !Number.isFinite(homeRaw)) return "";
+  if (awayRaw <= 0 && homeRaw <= 0) return "";
+  // Normalize the two sides so the bar always spans the full width even when
+  // ESPN includes a small tiePercentage (which we drop).
+  const total = awayRaw + homeRaw;
+  const away = total > 0 ? (awayRaw / total) * 100 : 50;
+  const home = total > 0 ? (homeRaw / total) * 100 : 50;
+  const awayPctText = `${Math.round(awayRaw)}%`;
+  const homePctText = `${Math.round(homeRaw)}%`;
+  const awayTag = awayLabel ? `${awayLabel} ` : "";
+  const homeTag = homeLabel ? ` ${homeLabel}` : "";
+  return `
+    <div class="win-prob-row" title="Win probability">
+      <div class="win-prob-bar">
+        <div class="win-prob-fill away" style="width:${away.toFixed(1)}%">
+          <span class="win-prob-pct">${awayTag}${awayPctText}</span>
+        </div>
+        <div class="win-prob-fill home" style="width:${home.toFixed(1)}%">
+          <span class="win-prob-pct">${homePctText}${homeTag}</span>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -585,6 +613,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       show_base_occupancy: true,
       show_diamond: true,
       show_count: true,
+      show_win_probability: true,
       refresh_rate: 0, // seconds, 0 = disabled (rely on hass state updates)
       ...config,
     };
@@ -789,6 +818,9 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       // Inning + third-out hold (server-anchored)
       attrs.inning_context?.is_between_halves,
       holdActiveFp,
+      // Win probability — re-render the bar when either side shifts.
+      attrs.win_probability?.away,
+      attrs.win_probability?.home,
     ].join("||");
   }
 
@@ -844,6 +876,13 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const leaders = attrs.leaders || {};
     const periodLower = String(inningState.lower || "");
     const inningContext = attrs.inning_context || {};
+    const winProbabilityPanel = (this.config.show_win_probability !== false && stateInfo.pillClass === "live")
+      ? renderWinProbabilityRow(
+          attrs.win_probability || {},
+          awayMeta?.abbreviation || awayTeam?.abbreviation || "",
+          homeMeta?.abbreviation || homeTeam?.abbreviation || "",
+        )
+      : "";
     const recentPlaysPanel = renderRecentPlays(attrs.recent_plays || [], attrs.current_pitches || [], attrs.situation || {}, this.config);
     const latestRecentPlay = Array.isArray(attrs.recent_plays) && attrs.recent_plays.length ? attrs.recent_plays[attrs.recent_plays.length - 1] : null;
     const explicitThirdOutPlay = attrs.third_out_play || null;
@@ -965,7 +1004,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
             <div class="inning-marker-wrap"><div class="inning-marker ${stateInfo.pillClass}">${marker}</div></div>
           </div>
         </div>
-
+        ${winProbabilityPanel}
         ${this.config.show_linescore ? this.renderLinescore(competition) : ""}
         ${delayedExtras}
         ${finalExtras}
@@ -1483,6 +1522,41 @@ line-height: 1.2;
           margin-top: 8px;
           padding-top: 6px;
           border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .win-prob-row {
+          margin-top: 6px;
+        }
+        .win-prob-bar {
+          display: flex;
+          width: 100%;
+          height: 16px;
+          border-radius: 8px;
+          overflow: hidden;
+          background: rgba(255,255,255,0.08);
+          font-size: 0.78em;
+          line-height: 16px;
+          font-variant-numeric: tabular-nums;
+        }
+        .win-prob-fill {
+          display: flex;
+          align-items: center;
+          min-width: 0;
+          color: rgba(255,255,255,0.92);
+          white-space: nowrap;
+          overflow: hidden;
+        }
+        .win-prob-fill.away {
+          background: linear-gradient(90deg, rgba(99,162,255,0.85), rgba(99,162,255,0.55));
+          justify-content: flex-start;
+          padding-left: 8px;
+        }
+        .win-prob-fill.home {
+          background: linear-gradient(90deg, rgba(239,83,80,0.55), rgba(239,83,80,0.85));
+          justify-content: flex-end;
+          padding-right: 8px;
+        }
+        .win-prob-pct {
+          text-shadow: 0 1px 1px rgba(0,0,0,0.4);
         }
         .live-strip {
           display: grid;

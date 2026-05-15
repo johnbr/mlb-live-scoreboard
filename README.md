@@ -78,6 +78,7 @@ title: Dodgers
 | `show_base_occupancy` | boolean | `true` | Show base runner names |
 | `show_diamond` | boolean | `true` | Show base diamond graphic |
 | `show_count` | boolean | `true` | Show balls/strikes/outs dots |
+| `show_win_probability` | boolean | `true` | Show live win-probability bar between the score rows and the balls/strikes/outs row (hidden pre-game when ESPN doesn't yet publish a probability series) |
 
 ### Example with all options
 
@@ -95,6 +96,7 @@ show_on_deck: true
 show_base_occupancy: true
 show_diamond: true
 show_count: true
+show_win_probability: true
 ```
 
 ## Game Event Actions

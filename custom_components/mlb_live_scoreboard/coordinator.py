@@ -59,6 +59,7 @@ from .types import (
     Situation,
     Standings,
     TeamMetadata,
+    WinProbability,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -222,6 +223,7 @@ class MlbLiveScoreboardData:
     pitcher_stats: PitcherStats
     situation: Situation
     probable_pitchers: ProbablePitchers
+    win_probability: WinProbability
     due_up: list[DueUpEntry]
     third_out_play: RecentPlay
     third_out_hold_until: float | None
@@ -613,6 +615,42 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 "headshot": headshot,
             }
         return probables
+
+    @staticmethod
+    def _normalize_win_probability(summary: dict[str, Any] | None) -> dict[str, float]:
+        """Return the most recent win-probability snapshot as ``{"home", "away"}``
+        percentages (0..100, one decimal).
+
+        ESPN publishes the per-play series under ``summary.winprobability`` as
+        ``[{playId, homeWinPercentage, tiePercentage}, ...]`` in chronological
+        order; the final entry reflects the current game state. Pre-game the
+        series is typically absent or empty — in that case we return ``{}`` so
+        the card can hide the bar.
+        """
+        if not isinstance(summary, dict):
+            return {}
+        series = summary.get("winprobability")
+        if not isinstance(series, list) or not series:
+            return {}
+        latest: dict[str, Any] | None = None
+        for entry in series:
+            if isinstance(entry, dict) and entry.get("homeWinPercentage") is not None:
+                latest = entry
+        if not latest:
+            return {}
+        try:
+            home_frac = float(latest.get("homeWinPercentage") or 0)
+        except (TypeError, ValueError):
+            return {}
+        try:
+            tie_frac = float(latest.get("tiePercentage") or 0)
+        except (TypeError, ValueError):
+            tie_frac = 0.0
+        away_frac = max(0.0, 1.0 - home_frac - tie_frac)
+        return {
+            "home": round(home_frac * 100.0, 1),
+            "away": round(away_frac * 100.0, 1),
+        }
 
     @staticmethod
     def _team_id_division_index(
@@ -1735,6 +1773,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             pitcher_stats=self._normalize_pitcher_stats(summary, pitcher_id),
             situation=self._normalize_situation(summary),
             probable_pitchers=self._normalize_probable_pitchers(display_comp),
+            win_probability=self._normalize_win_probability(summary),
             due_up=due_up,
             third_out_play=self._normalize_third_out_play(summary, inning_context),
             third_out_hold_until=third_out_hold_until,

@@ -172,6 +172,17 @@ class ProbablePitchers(TypedDict, total=False):
     home: ProbablePitcher
 
 
+class WinProbability(TypedDict, total=False):
+    """Shape of ``win_probability`` attribute.
+
+    Values are percentages in the range 0..100 (one decimal place).
+    Missing entirely when ESPN omits the series (typically pre-game).
+    """
+
+    home: float
+    away: float
+
+
 class StandingsEntry(TypedDict, total=False):
     """Shape of a single team row in ``division_standings.entries``.
 
