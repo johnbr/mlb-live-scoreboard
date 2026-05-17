@@ -436,6 +436,95 @@ function renderPlayerHeadshot(card, url, alt = "") {
     : `<div class="player-shot placeholder"></div>`;
 }
 
+function escapeHtml(value) {
+  return String(value == null ? "" : value).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+  );
+}
+
+// Build the player career popup body — bio header + season-by-season career
+// table — from a normalized PlayerCard (see coordinator._parse_player_card /
+// types.PlayerCard). Pure string builder (no DOM/`this`) so it can be
+// unit-checked offline against the Chunk 0 fixtures; the caller pre-resolves
+// `headshotSrc` via requestCachedLogo. Tolerates a bio-only or stats-only
+// card: a missing career table degrades to a short note, the bio header to
+// whatever fields are present.
+function playerCardBodyHtml(card, headshotSrc) {
+  const safe = card && typeof card === "object" ? card : {};
+  const bio = safe.bio || {};
+  const career = safe.career || {};
+  const glossary = safe.glossary || {};
+
+  const shot = headshotSrc
+    ? `<img class="mlb-pc-shot" src="${escapeHtml(headshotSrc)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+    : `<div class="mlb-pc-shot mlb-pc-shot--ph" aria-hidden="true"></div>`;
+
+  const chips = [
+    bio.team,
+    bio.position,
+    bio.bats_throws ? `B/T ${bio.bats_throws}` : "",
+    bio.height,
+    bio.weight,
+    bio.age ? `Age ${bio.age}` : "",
+    bio.jersey ? `#${bio.jersey}` : "",
+  ].filter((x) => x && String(x).trim());
+  const sub = [
+    bio.draft ? `Draft: ${bio.draft}` : "",
+    bio.debut_year ? `MLB debut ${bio.debut_year}` : "",
+  ].filter((x) => x && String(x).trim());
+
+  const header =
+    `<div class="mlb-pc-bio">${shot}<div class="mlb-pc-bio-meta">` +
+    (chips.length
+      ? `<div class="mlb-pc-bio-line">${chips.map((c) => escapeHtml(c)).join(" · ")}</div>`
+      : "") +
+    (sub.length
+      ? `<div class="mlb-pc-bio-sub">${sub.map((c) => escapeHtml(c)).join(" · ")}</div>`
+      : "") +
+    `</div></div>`;
+
+  const columns = Array.isArray(career.columns) ? career.columns : [];
+  const seasons = Array.isArray(career.seasons) ? career.seasons : [];
+  const totals = Array.isArray(career.totals) ? career.totals : [];
+
+  let table;
+  if (columns.length && seasons.length) {
+    const headCells = columns
+      .map((label) => {
+        const tip = glossary[label];
+        return `<th scope="col"${tip ? ` title="${escapeHtml(tip)}"` : ""}>${escapeHtml(label)}</th>`;
+      })
+      .join("");
+    const bodyRows = seasons
+      .map((s) => {
+        const cells = columns
+          .map((_, i) => `<td>${escapeHtml((s.stats || [])[i] ?? "")}</td>`)
+          .join("");
+        return (
+          `<tr><th scope="row">${escapeHtml(s.year || "")}</th>` +
+          `<td class="mlb-pc-team">${escapeHtml(s.team || "")}</td>${cells}</tr>`
+        );
+      })
+      .join("");
+    const totalRow = totals.length
+      ? `<tr class="mlb-pc-total"><th scope="row">Career</th><td class="mlb-pc-team"></td>` +
+        columns.map((_, i) => `<td>${escapeHtml(totals[i] ?? "")}</td>`).join("") +
+        `</tr>`
+      : "";
+    const kind = career.kind === "pitching" ? "Pitching" : "Batting";
+    table =
+      `<div class="mlb-pc-table-wrap"><table class="mlb-pc-table">` +
+      `<caption class="mlb-pc-caption">${kind} — career by season</caption>` +
+      `<thead><tr><th scope="col">Year</th><th scope="col">Team</th>${headCells}</tr></thead>` +
+      `<tbody>${bodyRows}${totalRow}</tbody></table></div>`;
+  } else {
+    table = `<div class="mlb-pc-msg mlb-pc-nostats">No career stats available for this player.</div>`;
+  }
+
+  return header + table;
+}
+
 function renderDueUpCards(card, dueUp, inningDescription = "") {
   const list = Array.isArray(dueUp) ? dueUp.filter(Boolean).slice(0, 3) : [];
   if (!list.length) return "";
@@ -732,8 +821,9 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     return req;
   }
 
-  // --- Player career popup (Chunk 3: skeleton + loading/error/empty/ready
-  // states; Chunk 4 fills the "ready" branch with bio + the career table). ---
+  // --- Player career popup. Chunk 3 built the modal shell + loading/error/
+  // empty states; Chunk 4 fills the "ready" branch (bio header + career
+  // table) via the module-level playerCardBodyHtml builder. ---
 
   _ensurePlayerCardPopup() {
     if (this._pcOverlay) return;
@@ -808,6 +898,53 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
           text-decoration: none; font-size: 0.92em;
         }
         .mlb-pc-espn:hover { text-decoration: underline; }
+        .mlb-pc-body--ready {
+          display: block; text-align: left; align-items: stretch;
+        }
+        .mlb-pc-bio {
+          display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+        }
+        .mlb-pc-shot {
+          flex: none; width: 64px; height: 64px; border-radius: 50%;
+          object-fit: cover;
+          background: var(--divider-color, rgba(255,255,255,0.12));
+        }
+        .mlb-pc-shot--ph { display: block; }
+        .mlb-pc-bio-meta { min-width: 0; }
+        .mlb-pc-bio-line {
+          font-size: 0.9em; color: var(--primary-text-color, #e1e1e1);
+        }
+        .mlb-pc-bio-sub {
+          font-size: 0.82em; color: var(--secondary-text-color, #9b9b9b);
+          margin-top: 4px;
+        }
+        .mlb-pc-table-wrap {
+          overflow-x: auto; -webkit-overflow-scrolling: touch;
+        }
+        .mlb-pc-table {
+          border-collapse: collapse; width: 100%;
+          font-size: 0.82em; white-space: nowrap;
+        }
+        .mlb-pc-caption {
+          caption-side: top; text-align: left; padding: 0 0 6px;
+          font-size: 0.92em; color: var(--secondary-text-color, #9b9b9b);
+        }
+        .mlb-pc-table th, .mlb-pc-table td {
+          padding: 5px 8px; text-align: right;
+          border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.08));
+        }
+        .mlb-pc-table thead th {
+          color: var(--secondary-text-color, #9b9b9b);
+          font-weight: 600; cursor: help;
+        }
+        .mlb-pc-table th[scope="row"] { text-align: left; }
+        .mlb-pc-table td.mlb-pc-team { text-align: left; }
+        .mlb-pc-total th, .mlb-pc-total td {
+          font-weight: 700;
+          color: var(--primary-text-color, #e1e1e1);
+          border-top: 2px solid var(--divider-color, rgba(255,255,255,0.2));
+          border-bottom: 0;
+        }
       `;
       document.head.appendChild(style);
     }
@@ -876,8 +1013,12 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     }
   }
 
-  _setPlayerCardState(state) {
+  _setPlayerCardState(state, card) {
     if (!this._pcBody) return;
+    // The "ready" body is a left-aligned scrolling layout; the message
+    // states stay centered (default .mlb-pc-body flexbox).
+    this._pcBody.className =
+      state === "ready" ? "mlb-pc-body mlb-pc-body--ready" : "mlb-pc-body";
     if (state === "loading") {
       this._pcBody.innerHTML =
         `<div><div class="mlb-pc-spinner"></div><div class="mlb-pc-msg">Loading player…</div></div>`;
@@ -888,9 +1029,12 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     } else if (state === "empty") {
       this._pcBody.innerHTML = `<div class="mlb-pc-msg">No stats available for this player.</div>`;
     } else {
-      // "ready": Chunk 4 replaces this with the bio header + career table
-      // (and sets the dialog title/headshot from card.bio).
-      this._pcBody.innerHTML = `<div class="mlb-pc-msg">Career stats coming soon.</div>`;
+      // "ready": bio header + career table. requestCachedLogo reuses the
+      // shared image cache (returns the remote URL synchronously on a miss,
+      // so the <img> always loads even before the blob resolves).
+      const safe = card || {};
+      const shot = requestCachedLogo(this, (safe.bio && safe.bio.headshot) || "");
+      this._pcBody.innerHTML = playerCardBodyHtml(safe, shot);
     }
   }
 
@@ -921,7 +1065,8 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       } else if (!card.bio?.name && !(card.career?.seasons || []).length) {
         this._setPlayerCardState("empty");
       } else {
-        this._setPlayerCardState("ready");
+        if (card.bio?.name) this._pcTitle.textContent = card.bio.name;
+        this._setPlayerCardState("ready", card);
       }
     });
   }

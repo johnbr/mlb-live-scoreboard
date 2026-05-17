@@ -1,7 +1,7 @@
 # Option B Handoff — In-card Player Career Stats popup
 
-> **Status:** Chunks 0–3 DONE (Chunk 2 round-trip + Chunk 3 a11y pending
-> manual verify in real HA/browser — recipes in §6). Branch
+> **Status:** Chunks 0–4 DONE (Chunk 2 round-trip + Chunk 3/4 a11y/visual
+> pending manual verify in real HA/browser — recipes in §6). Branch
 > `feat/player-career-card`, based on `main` @ v1.10.0.
 > **Audience:** A fresh Claude instance or developer resuming this work on any machine.
 > This file is the single source of truth for resuming. Keep the **Progress Log**
@@ -336,9 +336,12 @@ Not verifiable here (no DOM). In a running HA dashboard with the card:
       would never fire for the case that motivates it. Still open for Chunk
       4 only if a reliable dual-side source is found (extra endpoint
       spelunking, out of current scope).
-- [ ] Chunk 1: Exact column sets to show for hitter vs pitcher — use ESPN's
-      own `labels[]` from the primary category (`career-batting` /
-      `pitching`); advanced/splits/postseason categories out of scope.
+- [x] **Chunk 4 (was Chunk 1):** Column sets for hitter vs pitcher —
+      **resolved as proposed:** render ESPN's own `labels[]` from the primary
+      category verbatim (prefixed with derived `Year`/`Team` columns);
+      advanced/splits/postseason categories stay out of scope. Column header
+      `title=` tooltips come from the `glossary` (keyed by the short label,
+      confirmed a 1:1 hit for every batting/pitching label in the fixtures).
 - [ ] Chunk 5: Default for `player_link_target` — proposed `popup`.
 
 ## 9. Progress Log
@@ -352,6 +355,6 @@ Update the matching row as the **last step before committing** each chunk.
 | 1 — Backend fetch/parse | DONE | 2026-05-17 | _this commit_ | `const.py`: `PLAYER_CARD_TTL_SECONDS` (6 h) + stale fallback (24 h). `types.py`: `PlayerCard`/`PlayerCardBio`/`PlayerCareerTable`/`PlayerCareerSeason`. `coordinator.py`: `_get_player_card` (concurrent bio+stats `asyncio.gather`, TTL cache, stale fallback), pure `_parse_player_card` + `_team_abbr_map`. 7 fixture-driven tests (hitter/pitcher/two-way/empty/partial), 65 pass, `ruff check .` clean. **Dropped** speculative `two_way_note` (can't detect Ohtani-type from payload — limitation stays documented only). **Fixture fidelity fixed:** Chunk 0 over-trimmed — bio re-wrapped as real `{"athlete":{…}}`, trimmed `teams` map re-added for per-season team abbrev. |
 | 2 — Transport wiring | DONE* | 2026-05-17 | _this commit_ | R3 chosen. `coordinator.py`: public `async_get_player_card` boundary. `__init__.py`: `_register_player_card_websocket` (lazy `voluptuous`/`websocket_api` imports so the HA-stubbing test harness still imports the package; registered once in `async_setup` via `_ws_registered` guard) + `_any_coordinator` (any entry works — fetch is not team-specific). Card: `_fetchPlayerCard(id)` over `hass.connection.sendMessagePromise` with per-card result cache + in-flight de-dupe; interim `console.debug` in `_openPlayerProfile` (ESPN-open unchanged — Chunk 5 flips primary action; Chunk 3 replaces the debug log with the popup). 65 tests pass, `ruff check .` clean, JS `node --check` clean. **\*Round-trip NOT auto-tested** (no `pytest-homeassistant-custom-component` / HA runtime here) — see manual recipe below. |
 | 3 — Popup skeleton | DONE* | 2026-05-17 | _this commit_ | First modal in the codebase: `mlb-live-game-card.js` `_ensurePlayerCardPopup`/`_openPlayerCardPopup`/`_closePlayerCardPopup`/`_destroyPlayerCardPopup`/`_onPcKeydown`/`_setPlayerCardState`. Body-appended overlay (avoids card-container clipping), one id-guarded `<style>`, `role=dialog`+`aria-modal`+per-instance-unique `aria-labelledby`, focus trap, ESC + backdrop + close-button, scroll lock, focus restore, stale-token guard, retry on error. States driven by the real Chunk-2 fetch: loading → error/empty/**ready** (ready = placeholder for Chunk 4). **Decision:** popup is now the click action; ESPN stays reachable via the popup footer link every commit; `player_link_target` config + docs deferred to Chunk 5 (unchanged). `disconnectedCallback` cleans the overlay/scroll-lock. JS `node --check` clean, 65 tests pass, `ruff check .` clean. **\*a11y/open-close NOT browser-verified here** — manual recipe in §6. |
-| 4 — Stats/bio render | TODO | | | |
+| 4 — Stats/bio render | DONE* | 2026-05-17 | _this commit_ | `mlb-live-game-card.js`: new module-level pure builders `escapeHtml` + `playerCardBodyHtml(card, headshotSrc)` (mirrors the `playerNameMarkup`/`renderPlayerHeadshot` helper pattern → offline-verifiable). Bio header = cached headshot (`requestCachedLogo`, placeholder div fallback) + chip line (team · pos · B/T · ht · wt · Age · #) + sub line (draft · debut). Career table = `Year`+`Team` + ESPN's own `labels[]`; one row per season (`team` resolved via the parser's abbrev map), `<th scope=col>` tooltips from `glossary`, bold "Career" totals row when ESPN provides one; wrapped in `overflow-x:auto`, vertical scroll via the dialog body (no sticky header — unverifiable without a browser, deferred to Chunk 6 polish if wanted). `_setPlayerCardState(state, card)` now toggles `.mlb-pc-body--ready` (left-aligned/scroll) vs centered message layout; ready branch sets the dialog title from `card.bio.name`. Bio-only card degrades to the header + "No career stats available." note (no empty table). All dynamic text HTML-escaped (new code; defense-in-depth). **Offline acceptance:** real parser output (Trout/Kershaw fixtures) fed through the shipped builder in node — structure + frozen early-career numbers + career totals + bio chips + glossary tooltips + degrade + XSS-escape all asserted PASS. 65 py tests pass, `ruff` clean, `node --check` clean. **\*Visual/theme + a11y-with-content NOT browser-verified here** — fold into the §6 Chunk 3 recipe (now also: tables scroll, headshot loads, light/dark theme). |
 | 5 — Wire click + config | TODO | | | |
 | 6 — Polish + docs | TODO | | | |
