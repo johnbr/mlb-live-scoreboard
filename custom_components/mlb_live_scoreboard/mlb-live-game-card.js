@@ -694,13 +694,10 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     if (!link || !this.content.contains(link)) return false;
     const id = link.getAttribute("data-athlete-id");
     if (id) {
-      window.open(`https://www.espn.com/mlb/player/_/id/${encodeURIComponent(id)}`, "_blank", "noopener,noreferrer");
-      // Chunk 2 interim: prove the player_card transport works end to end.
-      // Chunk 3 replaces this console.debug with the in-card popup render;
-      // Chunk 5 makes the popup the primary action (vs. opening espn.com).
-      this._fetchPlayerCard(id).then((card) => {
-        if (card) console.debug(`[${CARD_TAG}] player_card`, card);
-      });
+      // Primary action: the in-card career popup. ESPN remains reachable via
+      // the popup's footer link. Chunk 5 adds a `player_link_target` config
+      // option to let users choose ESPN-direct (restoring Option A) + docs.
+      this._openPlayerCardPopup(id);
     }
     return true;
   }
@@ -733,6 +730,219 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       });
     this._playerCardInflight.set(id, req);
     return req;
+  }
+
+  // --- Player career popup (Chunk 3: skeleton + loading/error/empty/ready
+  // states; Chunk 4 fills the "ready" branch with bio + the career table). ---
+
+  _ensurePlayerCardPopup() {
+    if (this._pcOverlay) return;
+    if (!document.getElementById("mlb-pc-style")) {
+      const style = document.createElement("style");
+      style.id = "mlb-pc-style";
+      style.textContent = `
+        .mlb-pc-overlay {
+          position: fixed; inset: 0; z-index: 99999;
+          display: flex; align-items: center; justify-content: center;
+          padding: 16px; background: rgba(0,0,0,0.6);
+        }
+        .mlb-pc-overlay[hidden] { display: none; }
+        .mlb-pc-dialog {
+          width: min(560px, 94vw); max-height: 86vh;
+          display: flex; flex-direction: column; overflow: hidden;
+          background: var(--card-background-color, var(--ha-card-background, #1c1c1c));
+          color: var(--primary-text-color, #e1e1e1);
+          border-radius: var(--ha-card-border-radius, 12px);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+          outline: none;
+        }
+        .mlb-pc-header {
+          display: flex; align-items: center; gap: 8px;
+          padding: 12px 14px;
+          border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+        }
+        .mlb-pc-title {
+          flex: 1; min-width: 0; font-weight: 600; font-size: 1.05em;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          color: var(--warning-color, #ffb300);
+        }
+        .mlb-pc-close {
+          flex: none; cursor: pointer; border: 0; border-radius: 50%;
+          width: 30px; height: 30px; line-height: 30px; padding: 0;
+          font-size: 16px; background: transparent;
+          color: var(--secondary-text-color, #9b9b9b);
+        }
+        .mlb-pc-close:hover { color: var(--primary-text-color, #fff); }
+        .mlb-pc-close:focus-visible,
+        .mlb-pc-espn:focus-visible {
+          outline: 2px solid var(--warning-color, #ffb300); outline-offset: 2px;
+        }
+        .mlb-pc-body {
+          padding: 18px 16px; overflow: auto;
+          min-height: 96px; display: flex;
+          align-items: center; justify-content: center; text-align: center;
+        }
+        .mlb-pc-msg { color: var(--secondary-text-color, #9b9b9b); }
+        .mlb-pc-retry {
+          margin-top: 10px; cursor: pointer;
+          background: transparent; color: var(--warning-color, #ffb300);
+          border: 1px solid var(--divider-color, rgba(255,255,255,0.2));
+          border-radius: 6px; padding: 5px 12px;
+        }
+        .mlb-pc-spinner {
+          width: 26px; height: 26px; border-radius: 50%;
+          border: 3px solid var(--divider-color, rgba(255,255,255,0.2));
+          border-top-color: var(--warning-color, #ffb300);
+          animation: mlb-pc-spin 0.8s linear infinite; margin: 0 auto 10px;
+        }
+        @keyframes mlb-pc-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+          .mlb-pc-spinner { animation-duration: 2s; }
+        }
+        .mlb-pc-footer {
+          padding: 10px 14px; text-align: right;
+          border-top: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+        }
+        .mlb-pc-espn {
+          color: var(--warning-color, #ffb300);
+          text-decoration: none; font-size: 0.92em;
+        }
+        .mlb-pc-espn:hover { text-decoration: underline; }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "mlb-pc-overlay";
+    overlay.hidden = true;
+    // Unique per instance: multiple cards on one dashboard would otherwise
+    // emit duplicate ids and break aria-labelledby resolution.
+    const titleId = `mlb-pc-title-${Math.random().toString(36).slice(2, 9)}`;
+    overlay.innerHTML = `
+      <div class="mlb-pc-dialog" role="dialog" aria-modal="true"
+           aria-labelledby="${titleId}" tabindex="-1">
+        <div class="mlb-pc-header">
+          <div class="mlb-pc-title" id="${titleId}">Player</div>
+          <button class="mlb-pc-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <div class="mlb-pc-body"></div>
+        <div class="mlb-pc-footer">
+          <a class="mlb-pc-espn" target="_blank" rel="noopener noreferrer">View on ESPN ↗</a>
+        </div>
+      </div>`;
+
+    this._pcOverlay = overlay;
+    this._pcDialog = overlay.querySelector(".mlb-pc-dialog");
+    this._pcTitle = overlay.querySelector(".mlb-pc-title");
+    this._pcBody = overlay.querySelector(".mlb-pc-body");
+    this._pcEspn = overlay.querySelector(".mlb-pc-espn");
+
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) return this._closePlayerCardPopup();
+      const t = ev.target instanceof Element ? ev.target : null;
+      if (t && t.closest(".mlb-pc-close")) return this._closePlayerCardPopup();
+      if (t && t.closest(".mlb-pc-retry") && this._pcAthleteId) {
+        this._openPlayerCardPopup(this._pcAthleteId);
+      }
+    });
+    overlay.addEventListener("keydown", (ev) => this._onPcKeydown(ev));
+    document.body.appendChild(overlay);
+  }
+
+  _onPcKeydown(ev) {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      this._closePlayerCardPopup();
+      return;
+    }
+    if (ev.key !== "Tab") return;
+    const focusables = this._pcDialog.querySelectorAll(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusables.length) {
+      ev.preventDefault();
+      this._pcDialog.focus();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (ev.shiftKey && (active === first || active === this._pcDialog)) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && active === last) {
+      ev.preventDefault();
+      first.focus();
+    }
+  }
+
+  _setPlayerCardState(state) {
+    if (!this._pcBody) return;
+    if (state === "loading") {
+      this._pcBody.innerHTML =
+        `<div><div class="mlb-pc-spinner"></div><div class="mlb-pc-msg">Loading player…</div></div>`;
+    } else if (state === "error") {
+      this._pcBody.innerHTML =
+        `<div><div class="mlb-pc-msg">Couldn't load this player.</div>` +
+        `<button class="mlb-pc-retry" type="button" data-pc-retry>Retry</button></div>`;
+    } else if (state === "empty") {
+      this._pcBody.innerHTML = `<div class="mlb-pc-msg">No stats available for this player.</div>`;
+    } else {
+      // "ready": Chunk 4 replaces this with the bio header + career table
+      // (and sets the dialog title/headshot from card.bio).
+      this._pcBody.innerHTML = `<div class="mlb-pc-msg">Career stats coming soon.</div>`;
+    }
+  }
+
+  _openPlayerCardPopup(athleteId) {
+    const id = String(athleteId == null ? "" : athleteId).trim();
+    if (!id) return;
+    this._ensurePlayerCardPopup();
+    this._pcAthleteId = id;
+    if (this._pcOverlay.hidden) {
+      this._pcReturnFocus =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      this._pcPrevBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      this._pcOverlay.hidden = false;
+    }
+    this._pcTitle.textContent = "Player";
+    this._pcEspn.href = `https://www.espn.com/mlb/player/_/id/${encodeURIComponent(id)}`;
+    this._setPlayerCardState("loading");
+    this._pcDialog.focus();
+
+    const token = (this._pcToken || 0) + 1;
+    this._pcToken = token;
+    this._fetchPlayerCard(id).then((card) => {
+      // Ignore a resolution that lost the race to a newer open()/close().
+      if (token !== this._pcToken || this._pcOverlay.hidden) return;
+      if (!card) {
+        this._setPlayerCardState("error");
+      } else if (!card.bio?.name && !(card.career?.seasons || []).length) {
+        this._setPlayerCardState("empty");
+      } else {
+        this._setPlayerCardState("ready");
+      }
+    });
+  }
+
+  _closePlayerCardPopup() {
+    if (!this._pcOverlay || this._pcOverlay.hidden) return;
+    this._pcToken = (this._pcToken || 0) + 1; // invalidate any in-flight render
+    this._pcOverlay.hidden = true;
+    document.body.style.overflow = this._pcPrevBodyOverflow || "";
+    if (this._pcReturnFocus && document.contains(this._pcReturnFocus)) {
+      this._pcReturnFocus.focus();
+    }
+    this._pcReturnFocus = null;
+  }
+
+  _destroyPlayerCardPopup() {
+    if (!this._pcOverlay) return;
+    this._closePlayerCardPopup();
+    this._pcOverlay.remove();
+    this._pcOverlay = null;
+    this._pcDialog = this._pcTitle = this._pcBody = this._pcEspn = null;
   }
 
   _onContentClick(ev) {
@@ -780,6 +990,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     this._clearRefreshTimer();
     this._clearHoldExpiryTimer();
     clearTimeout(this._renderTimer);
+    this._destroyPlayerCardPopup();
   }
 
   set hass(hass) {
