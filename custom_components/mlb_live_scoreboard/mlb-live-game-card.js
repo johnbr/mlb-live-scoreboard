@@ -695,8 +695,44 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const id = link.getAttribute("data-athlete-id");
     if (id) {
       window.open(`https://www.espn.com/mlb/player/_/id/${encodeURIComponent(id)}`, "_blank", "noopener,noreferrer");
+      // Chunk 2 interim: prove the player_card transport works end to end.
+      // Chunk 3 replaces this console.debug with the in-card popup render;
+      // Chunk 5 makes the popup the primary action (vs. opening espn.com).
+      this._fetchPlayerCard(id).then((card) => {
+        if (card) console.debug(`[${CARD_TAG}] player_card`, card);
+      });
     }
     return true;
+  }
+
+  // Fetch a player's career card via the integration's WebSocket command
+  // (server-side fetch reuses the coordinator's TTL cache; see
+  // OPTION_B_HANDOFF.md route R3). Per-card result cache + in-flight de-dupe
+  // so repeated clicks on the same name don't re-hit the socket. Resolves to
+  // the card object, or null on any failure (caller renders an error state).
+  _fetchPlayerCard(athleteId) {
+    const id = String(athleteId == null ? "" : athleteId).trim();
+    if (!id || !this._hass || !this._hass.connection) return Promise.resolve(null);
+    this._playerCardCache = this._playerCardCache || new Map();
+    this._playerCardInflight = this._playerCardInflight || new Map();
+    if (this._playerCardCache.has(id)) return Promise.resolve(this._playerCardCache.get(id));
+    if (this._playerCardInflight.has(id)) return this._playerCardInflight.get(id);
+    const req = this._hass.connection
+      .sendMessagePromise({ type: "mlb_live_scoreboard/player_card", athlete_id: id })
+      .then((res) => {
+        const card = (res && res.player_card) || null;
+        if (card) this._playerCardCache.set(id, card);
+        return card;
+      })
+      .catch((err) => {
+        console.debug(`[${CARD_TAG}] player_card fetch failed for ${id}:`, err);
+        return null;
+      })
+      .finally(() => {
+        this._playerCardInflight.delete(id);
+      });
+    this._playerCardInflight.set(id, req);
+    return req;
   }
 
   _onContentClick(ev) {

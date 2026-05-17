@@ -1,6 +1,8 @@
 # Option B Handoff — In-card Player Career Stats popup
 
-> **Status:** Chunks 0–1 DONE. Branch `feat/player-career-card`, based on `main` @ v1.10.0.
+> **Status:** Chunks 0–2 DONE (Chunk 2 round-trip pending manual HA verify —
+> recipe in Progress Log). Branch `feat/player-career-card`, based on `main`
+> @ v1.10.0.
 > **Audience:** A fresh Claude instance or developer resuming this work on any machine.
 > This file is the single source of truth for resuming. Keep the **Progress Log**
 > (bottom) updated as the *last* step of every chunk before committing.
@@ -252,6 +254,27 @@ python3 -m py_compile custom_components/mlb_live_scoreboard/*.py
 plus `validate.yml` (HACS), `hassfest.yml`, `release-please.yml`. The PR is
 green when `tests.yml` passes.
 
+**Chunk 2 manual round-trip verification (pending — do this in real HA):**
+The WebSocket handler is thin glue over the Chunk-1-tested parser but is not
+auto-testable here (no HA runtime / `pytest-homeassistant-custom-component`).
+To verify in a running HA with this integration configured:
+
+1. Deploy the branch's `custom_components/mlb_live_scoreboard/` to HA;
+   restart HA so `async_setup` registers the command.
+2. In a dashboard with the card, click any yellow player name. Expected:
+   ESPN page still opens (unchanged), **and** the browser console logs
+   `[mlb-live-game-card] player_card { id, bio, career, glossary }`.
+3. Or exercise the socket directly in the browser console:
+   ```js
+   await document.querySelector("home-assistant").hass.connection
+     .sendMessagePromise({ type: "mlb_live_scoreboard/player_card",
+                           athlete_id: "30836" });
+   // → { player_card: { id:"30836", bio:{name:"Mike Trout",...}, career:{kind:"batting",...} } }
+   ```
+4. Error paths: unknown id → still resolves with a card whose `bio.name` is
+   empty / `career` empty (ESPN 404s tolerated); no entry configured →
+   `not_ready` error. Record pass/fail + HA version in the Progress Log.
+
 ## 7. Versioning & PR workflow
 
 - **Do NOT manually edit** `manifest.json` `version` or the card's
@@ -309,7 +332,7 @@ Update the matching row as the **last step before committing** each chunk.
 | Scaffold (this doc) | DONE | 2026-05-17 | 71667c3 | Branch off main @ v1.10.0; Option A merged. |
 | 0 — Spike CORS+payloads | DONE | 2026-05-17 | af3f9b1 | CORS `*` on both endpoints → R1 viable, R3 primary. Bio + stats are **separate** endpoints (2 fetches). Stats shape confirmed (labels/names/statistics/totals/glossary). **Two-way limitation found** (Ohtani = pitching-only) — see Open Questions. Fixtures: `tests/fixtures/` (Trout/Kershaw/Ohtani bio+stats) + README. |
 | 1 — Backend fetch/parse | DONE | 2026-05-17 | _this commit_ | `const.py`: `PLAYER_CARD_TTL_SECONDS` (6 h) + stale fallback (24 h). `types.py`: `PlayerCard`/`PlayerCardBio`/`PlayerCareerTable`/`PlayerCareerSeason`. `coordinator.py`: `_get_player_card` (concurrent bio+stats `asyncio.gather`, TTL cache, stale fallback), pure `_parse_player_card` + `_team_abbr_map`. 7 fixture-driven tests (hitter/pitcher/two-way/empty/partial), 65 pass, `ruff check .` clean. **Dropped** speculative `two_way_note` (can't detect Ohtani-type from payload — limitation stays documented only). **Fixture fidelity fixed:** Chunk 0 over-trimmed — bio re-wrapped as real `{"athlete":{…}}`, trimmed `teams` map re-added for per-season team abbrev. |
-| 2 — Transport wiring | TODO | | | |
+| 2 — Transport wiring | DONE* | 2026-05-17 | _this commit_ | R3 chosen. `coordinator.py`: public `async_get_player_card` boundary. `__init__.py`: `_register_player_card_websocket` (lazy `voluptuous`/`websocket_api` imports so the HA-stubbing test harness still imports the package; registered once in `async_setup` via `_ws_registered` guard) + `_any_coordinator` (any entry works — fetch is not team-specific). Card: `_fetchPlayerCard(id)` over `hass.connection.sendMessagePromise` with per-card result cache + in-flight de-dupe; interim `console.debug` in `_openPlayerProfile` (ESPN-open unchanged — Chunk 5 flips primary action; Chunk 3 replaces the debug log with the popup). 65 tests pass, `ruff check .` clean, JS `node --check` clean. **\*Round-trip NOT auto-tested** (no `pytest-homeassistant-custom-component` / HA runtime here) — see manual recipe below. |
 | 3 — Popup skeleton | TODO | | | |
 | 4 — Stats/bio render | TODO | | | |
 | 5 — Wire click + config | TODO | | | |

@@ -1211,6 +1211,15 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
     # ``opponent-batting`` (opponents' line, not the player's) are skipped.
     _PRIMARY_STAT_CATEGORIES: tuple[str, ...] = ("career-batting", "batting", "pitching")
 
+    async def async_get_player_card(self, athlete_id: str) -> PlayerCard:
+        """Public entrypoint for the player-card WebSocket command.
+
+        Thin boundary over :meth:`_get_player_card` so cross-module callers
+        (the integration's websocket handler) don't reach into a private
+        method; all fetch/cache/parse logic lives in the private impl.
+        """
+        return await self._get_player_card(athlete_id)
+
     async def _get_player_card(self, athlete_id: str) -> PlayerCard:
         """Fetch a player's full career card (bio + career stats), TTL-cached.
 
