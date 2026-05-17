@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.9.3...v1.10.0) (2026-05-17)
+
+
+### Features
+
+* **card:** link player names to ESPN player pages ([7a1786c](https://github.com/johnbr/mlb-live-scoreboard/commit/7a1786c9a15f3b25f3ddbb4665d064a41dc94b59))
+
 ## [1.9.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.9.2...v1.9.3) (2026-05-15)
 
 
