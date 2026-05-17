@@ -222,6 +222,71 @@ class Leaders(TypedDict, total=False):
     home: list[LeaderEntry]
 
 
+class PlayerCardBio(TypedDict, total=False):
+    """Bio header of a :class:`PlayerCard` (from the ESPN ``/athletes/{id}``
+    endpoint's ``athlete`` object)."""
+
+    name: str
+    team: str
+    position: str
+    bats_throws: str
+    height: str
+    weight: str
+    age: str
+    jersey: str
+    headshot: str
+    draft: str
+    debut_year: str
+
+
+class PlayerCareerSeason(TypedDict, total=False):
+    """One season row of a :class:`PlayerCareerTable`.
+
+    ``stats`` is index-parallel to the table's ``columns`` / ``keys``.
+    """
+
+    year: str
+    team: str
+    stats: list[str]
+
+
+class PlayerCareerTable(TypedDict, total=False):
+    """Normalized career stats table built from the primary ESPN stats
+    category (``career-batting`` for hitters, ``pitching`` for pitchers).
+
+    ``kind`` is ``"batting"`` or ``"pitching"``. ``columns`` are ESPN's own
+    short labels (e.g. ``GP AB R H HR RBI AVG``); ``keys`` are the parallel
+    machine names. ``totals`` is the career aggregate row (parallel to
+    ``columns``), empty when ESPN omits it.
+    """
+
+    kind: str
+    columns: list[str]
+    keys: list[str]
+    seasons: list[PlayerCareerSeason]
+    totals: list[str]
+
+
+class PlayerCard(TypedDict, total=False):
+    """Shape returned by ``MlbLiveScoreboardCoordinator._get_player_card`` and
+    its pure parser ``_parse_player_card``.
+
+    ``career`` is empty when ESPN exposes no usable primary category.
+    ``glossary`` maps a stat abbreviation to its long name (for tooltips).
+
+    Note: ESPN's ``/stats`` endpoint returns categories by the player's
+    *listed* position only, so a two-way player yields a single side here
+    (e.g. pitching only). This is a documented limitation (see
+    ``OPTION_B_HANDOFF.md`` and ``tests/fixtures/README.md``), not signalled
+    in this shape.
+    """
+
+    id: str
+    bio: PlayerCardBio
+    career: PlayerCareerTable
+    glossary: dict[str, str]
+
+
 # Competition is the raw ESPN competition object passed through unchanged.
 # We keep it as a loose mapping rather than enumerate ESPN's schema, since
 # the card and coordinator only read a small subset and ESPN occasionally

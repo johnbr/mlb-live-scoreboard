@@ -1256,5 +1256,19 @@
       "abbreviation": "WP",
       "displayName": "Wild Pitches"
     }
-  ]
+  ],
+  "teams": {
+    "19": {
+      "abbreviation": "LAD",
+      "displayName": "Los Angeles Dodgers",
+      "id": "19",
+      "shortDisplayName": "Dodgers"
+    },
+    "3": {
+      "abbreviation": "LAA",
+      "displayName": "Los Angeles Angels",
+      "id": "3",
+      "shortDisplayName": "Angels"
+    }
+  }
 }

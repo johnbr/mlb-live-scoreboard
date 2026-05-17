@@ -1,6 +1,6 @@
 # Option B Handoff — In-card Player Career Stats popup
 
-> **Status:** Chunk 0 DONE (spike). Branch `feat/player-career-card`, based on `main` @ v1.10.0.
+> **Status:** Chunks 0–1 DONE. Branch `feat/player-career-card`, based on `main` @ v1.10.0.
 > **Audience:** A fresh Claude instance or developer resuming this work on any machine.
 > This file is the single source of truth for resuming. Keep the **Progress Log**
 > (bottom) updated as the *last* step of every chunk before committing.
@@ -284,13 +284,17 @@ green when `tests.yml` passes.
       `statistics[]` (one row per season: `season.year`, `stats[]`) plus
       `totals[]`/`averages[]` career rows and a top-level `glossary[]`. ESPN
       gives ready-made column headers — Chunk 4 rendering is straightforward.
-- [ ] **Chunk 1/4 (NEW — raised by Chunk 0):** Two-way players. ESPN's
-      `/stats` returns categories by the player's *currently listed
-      position* only. Ohtani (listed `SP`) returns **pitching only, no
-      batting**. A single `/stats` call cannot show both sides. **Proposed:
-      document as a known limitation and render whatever side `/stats`
-      returns; defer true dual-side two-way support** (would need extra
-      endpoint spelunking, out of current scope). Revisit in Chunk 4.
+- [x] **Chunk 1/4 (raised by Chunk 0):** Two-way players. ESPN's `/stats`
+      returns categories by the player's *currently listed position* only;
+      Ohtani (listed `SP`) returns **pitching only, no batting**. **Decided
+      in Chunk 1:** render whatever single side `/stats` returns; the
+      limitation is documented (here + `tests/fixtures/README.md`) and
+      *not* signalled at runtime — a `two_way_note` heuristic was prototyped
+      and dropped because the canonical case (Ohtani = listed SP) is
+      indistinguishable from a normal pitcher in the payload, so the field
+      would never fire for the case that motivates it. Still open for Chunk
+      4 only if a reliable dual-side source is found (extra endpoint
+      spelunking, out of current scope).
 - [ ] Chunk 1: Exact column sets to show for hitter vs pitcher — use ESPN's
       own `labels[]` from the primary category (`career-batting` /
       `pitching`); advanced/splits/postseason categories out of scope.
@@ -303,8 +307,8 @@ Update the matching row as the **last step before committing** each chunk.
 | Chunk | Status | Date | Commit | Notes / decisions |
 |---|---|---|---|---|
 | Scaffold (this doc) | DONE | 2026-05-17 | 71667c3 | Branch off main @ v1.10.0; Option A merged. |
-| 0 — Spike CORS+payloads | DONE | 2026-05-17 | _this commit_ | CORS `*` on both endpoints → R1 viable, R3 primary. Bio + stats are **separate** endpoints (2 fetches). Stats shape confirmed (labels/names/statistics/totals/glossary). **Two-way limitation found** (Ohtani = pitching-only) — see Open Questions. Fixtures: `tests/fixtures/` (Trout/Kershaw/Ohtani bio+stats) + README. |
-| 1 — Backend fetch/parse | TODO | | | |
+| 0 — Spike CORS+payloads | DONE | 2026-05-17 | af3f9b1 | CORS `*` on both endpoints → R1 viable, R3 primary. Bio + stats are **separate** endpoints (2 fetches). Stats shape confirmed (labels/names/statistics/totals/glossary). **Two-way limitation found** (Ohtani = pitching-only) — see Open Questions. Fixtures: `tests/fixtures/` (Trout/Kershaw/Ohtani bio+stats) + README. |
+| 1 — Backend fetch/parse | DONE | 2026-05-17 | _this commit_ | `const.py`: `PLAYER_CARD_TTL_SECONDS` (6 h) + stale fallback (24 h). `types.py`: `PlayerCard`/`PlayerCardBio`/`PlayerCareerTable`/`PlayerCareerSeason`. `coordinator.py`: `_get_player_card` (concurrent bio+stats `asyncio.gather`, TTL cache, stale fallback), pure `_parse_player_card` + `_team_abbr_map`. 7 fixture-driven tests (hitter/pitcher/two-way/empty/partial), 65 pass, `ruff check .` clean. **Dropped** speculative `two_way_note` (can't detect Ohtani-type from payload — limitation stays documented only). **Fixture fidelity fixed:** Chunk 0 over-trimmed — bio re-wrapped as real `{"athlete":{…}}`, trimmed `teams` map re-added for per-season team abbrev. |
 | 2 — Transport wiring | TODO | | | |
 | 3 — Popup skeleton | TODO | | | |
 | 4 — Stats/bio render | TODO | | | |

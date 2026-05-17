@@ -1790,5 +1790,13 @@
       "abbreviation": "XBH",
       "displayName": "Extra Base Hits"
     }
-  ]
+  ],
+  "teams": {
+    "3": {
+      "abbreviation": "LAA",
+      "displayName": "Los Angeles Angels",
+      "id": "3",
+      "shortDisplayName": "Angels"
+    }
+  }
 }

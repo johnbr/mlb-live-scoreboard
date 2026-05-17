@@ -21,13 +21,19 @@ https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{ID}?r
 ```
 
 Trimming applied:
-- **bio**: kept only the `athlete` object, reduced to bio-relevant keys
+- **bio**: kept the real `{"athlete": {...}}` wrapper (so the fixture
+  mirrors the live endpoint and exercises the parser's real code path),
+  with the inner object reduced to bio-relevant keys
   (`id, firstName, lastName, displayName, fullName, jersey, headshot,
   position, team, age, displayHeight, displayWeight, displayBirthPlace,
   displayDOB, displayBatsThrows, displayExperience, displayDraft, debutYear,
   active, status, statsSummary`). Dropped `videos/standings/quicklinks/...`.
-- **stats**: kept `categories` (verbatim — the point of the fixture) and
-  `glossary`. Dropped `filters`/`teams`.
+- **stats**: kept `categories` (verbatim — the point of the fixture),
+  `glossary`, and a **trimmed** `teams` map (id-keyed →
+  `{id, abbreviation, displayName, shortDisplayName}`; the raw block is
+  dual-keyed by id+slug with full team objects). Dropped `filters`. Season
+  rows reference a team via numeric `teamId`; the `teams` map resolves it to
+  an abbreviation (e.g. `"3"` → `LAA`).
 
 These are stable veteran/active players; stat *values* will grow over time
 but the **structure** (the thing parsers test) is stable. Prefer asserting
@@ -44,6 +50,8 @@ A stats `categories[]` entry has, index-parallel:
   `labels`/`names`)
 - `totals[]`, `averages[]` — career aggregate rows (also parallel)
 - top-level `glossary[]` — `{abbreviation, displayName}`
+- top-level `teams` (trimmed map) — `teamId` → `{abbreviation, displayName,
+  shortDisplayName}`, to resolve each season row's `teamId`
 
 Category names are position-driven:
 - Hitter (Trout): `career-batting, postseason-batting, expanded-batting,
