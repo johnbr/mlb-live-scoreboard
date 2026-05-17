@@ -606,6 +606,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             elif isinstance(head, str):
                 headshot = head
             probables[side] = {
+                "id": str(athlete.get("id") or ""),
                 "name": athlete.get("displayName") or athlete.get("shortName") or "",
                 "short_name": athlete.get("shortName") or athlete.get("displayName") or "",
                 "era": era,
@@ -815,6 +816,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     "category": str(category.get("displayName") or category.get("name") or ""),
                     "value": str(leader.get("displayValue") or leader.get("value") or ""),
                     "name": athlete.get("shortName") or athlete.get("displayName") or "",
+                    "id": str(athlete.get("id") or ""),
                 })
                 if len(compact) >= LEADER_LIMIT:
                     break

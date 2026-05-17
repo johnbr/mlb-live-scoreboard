@@ -156,6 +156,7 @@ class ProbablePitcher(TypedDict, total=False):
     when ESPN provides one in the probables payload.
     """
 
+    id: str
     name: str
     short_name: str
     era: str
@@ -211,6 +212,7 @@ class LeaderEntry(TypedDict, total=False):
     category: str
     value: str
     name: str
+    id: str
 
 
 class Leaders(TypedDict, total=False):

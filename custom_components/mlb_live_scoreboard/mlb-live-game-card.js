@@ -249,7 +249,7 @@ function renderOnDeckRow(onDeck) {
   return `
     <div class="on-deck-row">
       <span class="on-deck-label">On Deck:</span>
-      <span class="on-deck-name">${name}</span>
+      <span class="on-deck-name">${playerNameMarkup(name, onDeck.id)}</span>
       ${stats ? `<span class="on-deck-stats">${stats}</span>` : ""}
     </div>`;
 }
@@ -418,6 +418,17 @@ function shortPersonName(name) {
   return `${parts[0].charAt(0)}. ${parts[parts.length - 1]}${suffix}`;
 }
 
+// Wrap an already display-formatted player name in a clickable link to that
+// player's ESPN profile. Falls back to plain text when no athlete id is
+// available (ESPN occasionally omits it) so the name is never lost. Click /
+// keyboard activation is handled by the delegated listeners on .card-content.
+function playerNameMarkup(name, athleteId) {
+  const text = String(name == null ? "" : name);
+  const id = String(athleteId || "").trim();
+  if (!id || !text) return text;
+  return `<span class="player-link" role="link" tabindex="0" data-athlete-id="${id}" title="View ${text} on ESPN">${text}</span>`;
+}
+
 function renderPlayerHeadshot(card, url, alt = "") {
   const src = requestCachedLogo(card, url);
   return src
@@ -436,7 +447,7 @@ function renderDueUpCards(card, dueUp, inningDescription = "") {
         ${list.map((item) => `
           <div class="dueup-card">
             ${renderPlayerHeadshot(card, item.headshot || "", item.short_name || item.display_name || "")}
-            <div class="dueup-name">${shortPersonName(item.short_name || item.display_name || "—")}</div>
+            <div class="dueup-name">${playerNameMarkup(shortPersonName(item.short_name || item.display_name || "—"), item.id)}</div>
             <div class="dueup-stat">${[item.avg, item.hits_ab].filter(Boolean).join(" • ") || "—"}</div>
           </div>`).join("")}
       </div>
@@ -458,7 +469,7 @@ function renderBasesDiamond(situation) { return ""; }
 function renderLeaderList(items) {
   const list = Array.isArray(items) ? items.filter(Boolean).slice(0, 3) : [];
   if (!list.length) return "";
-  return list.map((item) => `<div class="leader-item"><span class="leader-cat">${item.category || ""}</span><span class="leader-name">${shortPersonName(item.name || "")}</span><span class="leader-val">${item.value || ""}</span></div>`).join("");
+  return list.map((item) => `<div class="leader-item"><span class="leader-cat">${item.category || ""}</span><span class="leader-name">${playerNameMarkup(shortPersonName(item.name || ""), item.id)}</span><span class="leader-val">${item.value || ""}</span></div>`).join("");
 }
 
 
@@ -480,7 +491,7 @@ function renderUpcomingPitcherSide(card, pitcher, fallbackLogo, alignRight = fal
   return `
     <div class="upcoming-pitcher-side ${alignRight ? "align-right" : ""}">
       ${portrait}
-      <div class="upcoming-pitcher-name">${displayName}</div>
+      <div class="upcoming-pitcher-name">${playerNameMarkup(displayName, safe.id)}</div>
       <div class="upcoming-pitcher-stat">${recordLine || "—"}</div>
       <div class="upcoming-pitcher-stat secondary">${eraLine || ""}</div>
     </div>`;
@@ -678,7 +689,18 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     ].join("|");
   }
 
+  _openPlayerProfile(el) {
+    const link = el instanceof Element ? el.closest(".player-link") : null;
+    if (!link || !this.content.contains(link)) return false;
+    const id = link.getAttribute("data-athlete-id");
+    if (id) {
+      window.open(`https://www.espn.com/mlb/player/_/id/${encodeURIComponent(id)}`, "_blank", "noopener,noreferrer");
+    }
+    return true;
+  }
+
   _onContentClick(ev) {
+    if (this._openPlayerProfile(ev.target)) return;
     const target = ev.target instanceof Element ? ev.target.closest(".upcoming-expandable") : null;
     if (!target || !this.content.contains(target)) return;
     this._upcomingExpanded = !this._upcomingExpanded;
@@ -690,6 +712,12 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
 
   _onContentKeydown(ev) {
     if (ev.key !== "Enter" && ev.key !== " ") return;
+    const playerLink = ev.target instanceof Element ? ev.target.closest(".player-link") : null;
+    if (playerLink && this.content.contains(playerLink)) {
+      ev.preventDefault();
+      this._openPlayerProfile(playerLink);
+      return;
+    }
     const target = ev.target instanceof Element ? ev.target.closest(".upcoming-expandable") : null;
     if (!target || !this.content.contains(target)) return;
     ev.preventDefault();
@@ -943,7 +971,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
                 <div class="matchup-side with-headshot stacked centered-half">
                   ${renderPlayerHeadshot(this, attrs.current_pitcher?.headshot || "", pitcher || "Pitcher")}
                   <div class="matchup-copy centered-copy">
-                    <div class="matchup-value">${shortPersonName(pitcher || "TBD")}</div>
+                    <div class="matchup-value">${playerNameMarkup(shortPersonName(pitcher || "TBD"), attrs.current_pitcher?.id)}</div>
                     <div class="matchup-subtle strongish stat-line">${pitcherPrimaryLine || ""}</div>
                     <div class="matchup-subtle secondary stat-line">${pitcherSecondaryLine || ""}</div>
                   </div>
@@ -952,7 +980,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
                 <div class="matchup-side with-headshot stacked centered-half align-right">
                   ${renderPlayerHeadshot(this, attrs.current_batter?.headshot || "", batter || "Batter")}
                   <div class="matchup-copy centered-copy">
-                    <div class="matchup-value">${shortPersonName(batter || "TBD")}</div>
+                    <div class="matchup-value">${playerNameMarkup(shortPersonName(batter || "TBD"), attrs.current_batter?.id)}</div>
                     <div class="matchup-subtle strongish stat-line">${batterPrimaryLine || "—"}</div>
                     <div class="matchup-subtle secondary stat-line">${batterStats || ""}</div>
                   </div>
@@ -1510,7 +1538,18 @@ line-height:1.15;
           text-overflow: ellipsis;
           color: var(--warning-color);
         }
-        
+        .player-link {
+          color: inherit;
+          cursor: pointer;
+          text-decoration: none;
+        }
+        .player-link:hover { text-decoration: underline; }
+        .player-link:focus-visible {
+          outline: 2px solid var(--warning-color);
+          outline-offset: 1px;
+          border-radius: 2px;
+        }
+
         .stat-line {
 color: var(--primary-text-color) !important;
         }
