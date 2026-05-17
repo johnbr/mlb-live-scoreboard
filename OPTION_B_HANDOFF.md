@@ -1,6 +1,6 @@
 # Option B Handoff — In-card Player Career Stats popup
 
-> **Status:** Not started (scaffold only). Branch `feat/player-career-card`, based on `main` @ v1.10.0.
+> **Status:** Chunk 0 DONE (spike). Branch `feat/player-career-card`, based on `main` @ v1.10.0.
 > **Audience:** A fresh Claude instance or developer resuming this work on any machine.
 > This file is the single source of truth for resuming. Keep the **Progress Log**
 > (bottom) updated as the *last* step of every chunk before committing.
@@ -63,9 +63,12 @@ an arbitrary player the user just clicked. Three routes were evaluated:
 | **R2** Coordinator pre-resolves every on-screen athlete into attributes | Many extra ESPN calls/tick + large sensor state | **Rejected** — bloat, wasteful. |
 | **R3** Integration registers a WebSocket command; card calls it with an athlete id | Server-side fetch, reuses our `_get_json` + TTL cache, no CORS, HA-idiomatic | **Recommended primary.** |
 
-**Decision: pursue R3, with R1 as documented fallback.** Chunk 0 is a spike
-that confirms CORS (decides if R1 is even viable as a fallback) and captures
-real payloads. Record the final decision in the Progress Log after Chunk 0.
+**Decision (confirmed by Chunk 0): pursue R3, with R1 as a now-viable
+fallback.** Both ESPN endpoints return `access-control-allow-origin: *`, so a
+browser `fetch()` from a HA dashboard origin works cross-origin — R1 is a
+real fallback. R3 stays primary for the original reasons (one shared cached
+fetch vs. every dashboard client hitting ESPN, our `_get_json`
+resilience/timeout/headers, no ESPN rate-limit exposure, no sensor bloat).
 
 Rationale for R3: keeps ESPN access server-side (one cached fetch shared by
 all dashboard clients, our existing resilience/headers/timeout via
@@ -146,13 +149,21 @@ Each chunk is independently committable and testable. Dependencies noted.
 ### Chunk 1 — Backend: generic career-stats + bio fetch/parse
 - **Dep:** Chunk 0.
 - Generalize `_get_public_batter_stats` into a reusable
-  `_get_player_card(self, athlete_id)` (or similar) that fetches stats (and
-  bio if a separate endpoint) with its own TTL cache + stale fallback,
-  reusing `_get_json`.
-- Add a pure parser → normalized `PlayerCard` dict: bio (name, team, pos,
-  bats, throws, ht, wt, age, jersey, headshot) + a career table (list of
-  season rows with the columns ESPN shows for that player type; hitting vs
-  pitching differ — detect from the payload's categories).
+  `_get_player_card(self, athlete_id)` (or similar) that fetches **both**
+  `/athletes/{ID}` (bio) **and** `/athletes/{ID}/stats` (career) — Chunk 0
+  confirmed these are separate (the stats payload has no bio block) — with
+  its own TTL cache + stale fallback, reusing `_get_json`. Fetch the two
+  concurrently (`asyncio.gather`).
+- Add a pure parser → normalized `PlayerCard` dict: bio from `.athlete`
+  (displayName, team, position.abbreviation, displayBatsThrows,
+  displayHeight, displayWeight, age, jersey, headshot.href, displayDraft,
+  debutYear) + a career table built from the **primary** stats category
+  (`career-batting` for hitters, `pitching` for pitchers — pick by which
+  category name is present): use the category's own `labels[]` as column
+  headers, `names[]` as keys, `statistics[]` rows (per season), and the
+  `totals[]` row as a career line. Skip postseason/advanced/expanded
+  categories. For two-way players, render whichever single side `/stats`
+  returns (known limitation — see §8).
 - Add `PlayerCard` TypedDict to `types.py`; TTL const to `const.py`.
 - **Acceptance:** new unit tests in `tests/test_coordinator_helpers.py` using
   the Chunk 0 fixtures pass; parser is pure (no I/O) and unit-tested for
@@ -259,12 +270,30 @@ green when `tests.yml` passes.
 
 ## 8. Open questions / decisions log
 
-- [ ] Chunk 0: Does ESPN send CORS headers permitting browser `fetch()`?
-      (Decides R1 fallback viability. Record yes/no + evidence.)
-- [ ] Chunk 0: Is there a distinct bio endpoint, or is bio derivable from the
-      `stats` payload alone? (Determines Chunk 1 fetch count.)
-- [ ] Chunk 1: Exact column sets to show for hitter vs pitcher (mirror ESPN's
-      player-page "Stats" tab defaults; advanced/splits tabs are out of scope).
+- [x] **Chunk 0:** Does ESPN send CORS headers permitting browser `fetch()`?
+      **YES** — both `/athletes/{ID}` and `/athletes/{ID}/stats` return
+      `access-control-allow-origin: *` (verified via curl with an
+      `Origin: http://homeassistant.local:8123` header, HTTP 200). R1 is a
+      viable fallback; R3 remains primary.
+- [x] **Chunk 0:** Distinct bio endpoint, or bio in the stats payload?
+      **Distinct.** `/stats` has **no** bio block (top keys: `filters,
+      teams, categories, glossary`). Bio comes from `/athletes/{ID}`
+      (`.athlete`). **Chunk 1 needs two fetches per player** (bio + stats).
+- [x] **Chunk 0:** Stat-table shape — confirmed. Each `categories[]` entry
+      has parallel `labels[]` (column headers) / `names[]` (keys) /
+      `statistics[]` (one row per season: `season.year`, `stats[]`) plus
+      `totals[]`/`averages[]` career rows and a top-level `glossary[]`. ESPN
+      gives ready-made column headers — Chunk 4 rendering is straightforward.
+- [ ] **Chunk 1/4 (NEW — raised by Chunk 0):** Two-way players. ESPN's
+      `/stats` returns categories by the player's *currently listed
+      position* only. Ohtani (listed `SP`) returns **pitching only, no
+      batting**. A single `/stats` call cannot show both sides. **Proposed:
+      document as a known limitation and render whatever side `/stats`
+      returns; defer true dual-side two-way support** (would need extra
+      endpoint spelunking, out of current scope). Revisit in Chunk 4.
+- [ ] Chunk 1: Exact column sets to show for hitter vs pitcher — use ESPN's
+      own `labels[]` from the primary category (`career-batting` /
+      `pitching`); advanced/splits/postseason categories out of scope.
 - [ ] Chunk 5: Default for `player_link_target` — proposed `popup`.
 
 ## 9. Progress Log
@@ -273,8 +302,8 @@ Update the matching row as the **last step before committing** each chunk.
 
 | Chunk | Status | Date | Commit | Notes / decisions |
 |---|---|---|---|---|
-| Scaffold (this doc) | DONE | 2026-05-17 | _this commit_ | Branch off main @ v1.10.0; Option A merged. |
-| 0 — Spike CORS+payloads | TODO | | | |
+| Scaffold (this doc) | DONE | 2026-05-17 | 71667c3 | Branch off main @ v1.10.0; Option A merged. |
+| 0 — Spike CORS+payloads | DONE | 2026-05-17 | _this commit_ | CORS `*` on both endpoints → R1 viable, R3 primary. Bio + stats are **separate** endpoints (2 fetches). Stats shape confirmed (labels/names/statistics/totals/glossary). **Two-way limitation found** (Ohtani = pitching-only) — see Open Questions. Fixtures: `tests/fixtures/` (Trout/Kershaw/Ohtani bio+stats) + README. |
 | 1 — Backend fetch/parse | TODO | | | |
 | 2 — Transport wiring | TODO | | | |
 | 3 — Popup skeleton | TODO | | | |

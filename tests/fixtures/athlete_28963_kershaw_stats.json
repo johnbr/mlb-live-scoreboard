@@ -1,0 +1,2532 @@
+{
+  "categories": [
+    {
+      "averages": [
+        "25",
+        "25",
+        "12",
+        "5",
+        ".699",
+        "-",
+        "2.53",
+        "1.02",
+        "158.6",
+        "170",
+        "40",
+        "4.3",
+        "122",
+        "49",
+        "45",
+        "0",
+        "0",
+        "0"
+      ],
+      "descriptions": [
+        "Games Played",
+        "The number of games started by a pitcher.",
+        "The number of times the pitcher was attributed with a win",
+        "The number of losses for a pitcher.",
+        "The percentage of wins for a pitcher.",
+        "Wins Above Replacement.",
+        "The average number of runs a pitcher yields per 9 innings thrown",
+        "The number representing walks plus hits divided by innings pitched.",
+        "The number of innings pitched.",
+        "The number of times the pitcher struck out a batter.",
+        "The number of times a pitcher surrenders a base on balls.",
+        "The ratio of strikeouts to walks by a pitcher.",
+        "The number of hits surrendered by a pitcher.",
+        "The number of runs allowed by a pitcher.",
+        "The number of earned runs surrendered by a pitcher.",
+        "The number of times a pitcher enters and finishes the game without surrendering the lead in a save opportunity.",
+        "The number of times a pitcher enters the game with the lead, gets at least an out and leaves the game wihtout having given up the lead.",
+        "The number of times a pitchers has a save opportunity and surrenders the lead."
+      ],
+      "displayName": "pitching",
+      "displayNames": [
+        "Games Played",
+        "Games Started",
+        "Wins",
+        "Losses",
+        "Win Percentage",
+        "Wins Above Replacement",
+        "Earned Run Average",
+        "Walks Plus Hits Per Inning Pitched",
+        "Innings pitched",
+        "Strikeouts",
+        "Walks",
+        "Strikeout To Walk Ratio",
+        "Hits",
+        "Runs",
+        "Earned runs",
+        "Saves",
+        "Holds",
+        "Blown Saves"
+      ],
+      "labels": [
+        "GP",
+        "GS",
+        "W",
+        "L",
+        "W%",
+        "WAR",
+        "ERA",
+        "WHIP",
+        "IP",
+        "K",
+        "BB",
+        "K/BB",
+        "H",
+        "R",
+        "ER",
+        "SV",
+        "HLD",
+        "BLSV"
+      ],
+      "name": "pitching",
+      "names": [
+        "gamesPlayed",
+        "gamesStarted",
+        "wins",
+        "losses",
+        "winPct",
+        "WARBR",
+        "ERA",
+        "WHIP",
+        "innings",
+        "strikeouts",
+        "walks",
+        "strikeoutToWalkRatio",
+        "hits",
+        "runs",
+        "earnedRuns",
+        "saves",
+        "holds",
+        "blownSaves"
+      ],
+      "sortKey": "pitching",
+      "statistics": [
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2008",
+            "year": 2008
+          },
+          "stats": [
+            "22",
+            "21",
+            "5",
+            "5",
+            ".500",
+            "1.3",
+            "4.26",
+            "1.50",
+            "107.2",
+            "100",
+            "52",
+            "1.9",
+            "109",
+            "51",
+            "51",
+            "0",
+            "1",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2009",
+            "year": 2009
+          },
+          "stats": [
+            "31",
+            "30",
+            "8",
+            "8",
+            ".500",
+            "4.5",
+            "2.79",
+            "1.23",
+            "171.0",
+            "185",
+            "91",
+            "2.0",
+            "119",
+            "55",
+            "53",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2010",
+            "year": 2010
+          },
+          "stats": [
+            "32",
+            "32",
+            "13",
+            "10",
+            ".565",
+            "5.4",
+            "2.91",
+            "1.18",
+            "204.1",
+            "212",
+            "81",
+            "2.6",
+            "160",
+            "73",
+            "66",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2011",
+            "year": 2011
+          },
+          "stats": [
+            "33",
+            "33",
+            "21",
+            "5",
+            ".808",
+            "6.3",
+            "2.28",
+            "0.98",
+            "233.1",
+            "248",
+            "54",
+            "4.6",
+            "174",
+            "66",
+            "59",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2012",
+            "year": 2012
+          },
+          "stats": [
+            "33",
+            "33",
+            "14",
+            "9",
+            ".609",
+            "6.3",
+            "2.53",
+            "1.02",
+            "227.2",
+            "229",
+            "63",
+            "3.6",
+            "170",
+            "70",
+            "64",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2013",
+            "year": 2013
+          },
+          "stats": [
+            "33",
+            "33",
+            "16",
+            "9",
+            ".640",
+            "7.9",
+            "1.83",
+            "0.92",
+            "236.0",
+            "232",
+            "52",
+            "4.5",
+            "164",
+            "55",
+            "48",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2014",
+            "year": 2014
+          },
+          "stats": [
+            "27",
+            "27",
+            "21",
+            "3",
+            ".875",
+            "7.5",
+            "1.77",
+            "0.86",
+            "198.1",
+            "239",
+            "31",
+            "7.7",
+            "139",
+            "42",
+            "39",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2015",
+            "year": 2015
+          },
+          "stats": [
+            "33",
+            "33",
+            "16",
+            "7",
+            ".696",
+            "7.5",
+            "2.13",
+            "0.88",
+            "232.2",
+            "301",
+            "42",
+            "7.2",
+            "163",
+            "62",
+            "55",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2016",
+            "year": 2016
+          },
+          "stats": [
+            "21",
+            "21",
+            "12",
+            "4",
+            ".750",
+            "5.6",
+            "1.69",
+            "0.72",
+            "149.0",
+            "172",
+            "11",
+            "15.6",
+            "97",
+            "31",
+            "28",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2017",
+            "year": 2017
+          },
+          "stats": [
+            "27",
+            "27",
+            "18",
+            "4",
+            ".818",
+            "4.6",
+            "2.31",
+            "0.95",
+            "175.0",
+            "202",
+            "30",
+            "6.7",
+            "136",
+            "49",
+            "45",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "26",
+            "26",
+            "9",
+            "5",
+            ".643",
+            "3.3",
+            "2.73",
+            "1.04",
+            "161.1",
+            "155",
+            "29",
+            "5.3",
+            "139",
+            "55",
+            "49",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2019",
+            "year": 2019
+          },
+          "stats": [
+            "29",
+            "28",
+            "16",
+            "5",
+            ".762",
+            "3.5",
+            "3.03",
+            "1.04",
+            "178.1",
+            "189",
+            "41",
+            "4.6",
+            "145",
+            "63",
+            "60",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "10",
+            "10",
+            "6",
+            "2",
+            ".750",
+            "1.7",
+            "2.16",
+            "0.84",
+            "58.1",
+            "62",
+            "8",
+            "7.8",
+            "41",
+            "18",
+            "14",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2021",
+            "year": 2021
+          },
+          "stats": [
+            "22",
+            "22",
+            "10",
+            "8",
+            ".556",
+            "2.1",
+            "3.55",
+            "1.02",
+            "121.2",
+            "144",
+            "21",
+            "6.9",
+            "103",
+            "51",
+            "48",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "22",
+            "22",
+            "12",
+            "3",
+            ".800",
+            "3.8",
+            "2.28",
+            "0.94",
+            "126.1",
+            "137",
+            "23",
+            "6.0",
+            "96",
+            "36",
+            "32",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "24",
+            "24",
+            "13",
+            "5",
+            ".722",
+            "3.7",
+            "2.46",
+            "1.06",
+            "131.2",
+            "137",
+            "40",
+            "3.4",
+            "100",
+            "39",
+            "36",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2024",
+            "year": 2024
+          },
+          "stats": [
+            "7",
+            "7",
+            "2",
+            "2",
+            ".500",
+            "-0.3",
+            "4.50",
+            "1.50",
+            "30.0",
+            "24",
+            "9",
+            "2.7",
+            "36",
+            "19",
+            "15",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "23",
+            "22",
+            "11",
+            "2",
+            ".846",
+            "1.6",
+            "3.36",
+            "1.22",
+            "112.2",
+            "84",
+            "35",
+            "2.4",
+            "102",
+            "46",
+            "42",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        }
+      ],
+      "totals": [
+        "455",
+        "451",
+        "223",
+        "96",
+        ".699",
+        "--",
+        "2.53",
+        "1.02",
+        "2855.1",
+        "3052",
+        "713",
+        "4.3",
+        "2193",
+        "881",
+        "804",
+        "0",
+        "1",
+        "0"
+      ]
+    },
+    {
+      "descriptions": [
+        "Games Played",
+        "The number of games started by a pitcher.",
+        "The number of times the pitcher was attributed with a win",
+        "The number of losses for a pitcher.",
+        "The percentage of wins for a pitcher.",
+        "Wins Above Replacement.",
+        "The average number of runs a pitcher yields per 9 innings thrown",
+        "The number representing walks plus hits divided by innings pitched.",
+        "The number of innings pitched.",
+        "The number of times the pitcher struck out a batter.",
+        "The number of times a pitcher surrenders a base on balls.",
+        "The ratio of strikeouts to walks by a pitcher.",
+        "The number of hits surrendered by a pitcher.",
+        "The number of runs allowed by a pitcher.",
+        "The number of earned runs surrendered by a pitcher.",
+        "The number of times a pitcher enters and finishes the game without surrendering the lead in a save opportunity.",
+        "The number of times a pitcher enters the game with the lead, gets at least an out and leaves the game wihtout having given up the lead.",
+        "The number of times a pitchers has a save opportunity and surrenders the lead."
+      ],
+      "displayName": "Postseason Pitching",
+      "displayNames": [
+        "Games Played",
+        "Games Started",
+        "Wins",
+        "Losses",
+        "Win Percentage",
+        "Wins Above Replacement",
+        "Earned Run Average",
+        "Walks Plus Hits Per Inning Pitched",
+        "Innings pitched",
+        "Strikeouts",
+        "Walks",
+        "Strikeout To Walk Ratio",
+        "Hits",
+        "Runs",
+        "Earned runs",
+        "Saves",
+        "Holds",
+        "Blown Saves"
+      ],
+      "labels": [
+        "GP",
+        "GS",
+        "W",
+        "L",
+        "W%",
+        "WAR",
+        "ERA",
+        "WHIP",
+        "IP",
+        "K",
+        "BB",
+        "K/BB",
+        "H",
+        "R",
+        "ER",
+        "SV",
+        "HLD",
+        "BLSV"
+      ],
+      "name": "postseason-pitching",
+      "names": [
+        "gamesPlayed",
+        "gamesStarted",
+        "wins",
+        "losses",
+        "winPct",
+        "WARBR",
+        "ERA",
+        "WHIP",
+        "innings",
+        "strikeouts",
+        "walks",
+        "strikeoutToWalkRatio",
+        "hits",
+        "runs",
+        "earnedRuns",
+        "saves",
+        "holds",
+        "blownSaves"
+      ],
+      "sortKey": "postseason-pitching",
+      "statistics": [
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2008",
+            "year": 2008
+          },
+          "stats": [
+            "2",
+            "0",
+            "0",
+            "0",
+            ".000",
+            "0.0",
+            "4.50",
+            "1.50",
+            "2.0",
+            "1",
+            "2",
+            "0.5",
+            "1",
+            "1",
+            "1",
+            "0",
+            "1",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2009",
+            "year": 2009
+          },
+          "stats": [
+            "3",
+            "2",
+            "0",
+            "1",
+            ".000",
+            "0.0",
+            "6.08",
+            "1.58",
+            "13.1",
+            "10",
+            "7",
+            "1.4",
+            "14",
+            "9",
+            "9",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2013",
+            "year": 2013
+          },
+          "stats": [
+            "4",
+            "4",
+            "1",
+            "2",
+            ".333",
+            "0.0",
+            "3.13",
+            "1.09",
+            "23.0",
+            "28",
+            "7",
+            "4.0",
+            "18",
+            "11",
+            "8",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2014",
+            "year": 2014
+          },
+          "stats": [
+            "2",
+            "2",
+            "0",
+            "2",
+            ".000",
+            "0.0",
+            "7.82",
+            "1.11",
+            "12.2",
+            "19",
+            "2",
+            "9.5",
+            "12",
+            "11",
+            "11",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2015",
+            "year": 2015
+          },
+          "stats": [
+            "2",
+            "2",
+            "1",
+            "1",
+            ".500",
+            "0.0",
+            "2.63",
+            "0.88",
+            "13.2",
+            "19",
+            "5",
+            "3.8",
+            "7",
+            "4",
+            "4",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2016",
+            "year": 2016
+          },
+          "stats": [
+            "5",
+            "4",
+            "2",
+            "1",
+            ".667",
+            "0.0",
+            "4.44",
+            "1.15",
+            "24.1",
+            "29",
+            "4",
+            "7.3",
+            "24",
+            "13",
+            "12",
+            "1",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2017",
+            "year": 2017
+          },
+          "stats": [
+            "6",
+            "5",
+            "3",
+            "0",
+            "1.000",
+            "0.0",
+            "3.82",
+            "0.94",
+            "33.0",
+            "33",
+            "10",
+            "3.3",
+            "21",
+            "14",
+            "14",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "6",
+            "5",
+            "2",
+            "3",
+            ".400",
+            "0.0",
+            "4.20",
+            "1.07",
+            "30.0",
+            "26",
+            "7",
+            "3.7",
+            "25",
+            "15",
+            "14",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2019",
+            "year": 2019
+          },
+          "stats": [
+            "2",
+            "1",
+            "0",
+            "1",
+            ".000",
+            "0.0",
+            "7.11",
+            "1.42",
+            "6.1",
+            "5",
+            "1",
+            "5.0",
+            "8",
+            "5",
+            "5",
+            "0",
+            "0",
+            "1"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "5",
+            "5",
+            "4",
+            "1",
+            ".800",
+            "0.0",
+            "2.93",
+            "0.91",
+            "30.2",
+            "37",
+            "5",
+            "7.4",
+            "23",
+            "10",
+            "10",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "1",
+            "1",
+            "0",
+            "0",
+            ".000",
+            "0.0",
+            "5.40",
+            "1.20",
+            "5.0",
+            "6",
+            "0",
+            "0.0",
+            "6",
+            "3",
+            "3",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "1",
+            "1",
+            "0",
+            "1",
+            ".000",
+            "0.0",
+            "162.00",
+            "21.00",
+            "0.1",
+            "0",
+            "1",
+            "0.0",
+            "6",
+            "6",
+            "6",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "2",
+            "0",
+            "0",
+            "0",
+            ".000",
+            "0.0",
+            "15.43",
+            "3.86",
+            "2.1",
+            "0",
+            "3",
+            "0.0",
+            "6",
+            "5",
+            "4",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        }
+      ],
+      "totals": [
+        "41",
+        "32",
+        "13",
+        "13",
+        ".500",
+        "0.0",
+        "4.62",
+        "1.14",
+        "196.2",
+        "213",
+        "54",
+        "3.9",
+        "171",
+        "107",
+        "101",
+        "1",
+        "1",
+        "1"
+      ]
+    },
+    {
+      "descriptions": [
+        "The number of pitches a pitcher throws.",
+        "The number of batters faced by a pitcher.",
+        "The number of pitches a pitcher throws.-The number of batters faced by a pitcher.",
+        "The opponent's batting average for a pitcher.",
+        "THe opponent's on base percentage for a pitcher.",
+        "The opponent's slugging percentage for a pitcher.",
+        "The opponent's on base percentage plus slugging percentage for a pitcher.",
+        "The number of doubles allowed by a pitcher.",
+        "The number of triples surrendered by the picher",
+        "The number of times a pitcher has allowed a home run.",
+        "The number of bases allowed by the pitcher.",
+        "The number of runs scored due to the actions of the batter.",
+        "The number of batters hit by a pitcher.",
+        "The number of times a sacrifce bunt is allowed by a pitcher.",
+        "The number of sacrifice flies surrendered.",
+        "The number of times that a pitcher has intentionally walked a batter."
+      ],
+      "displayName": "Opponent Batting",
+      "displayNames": [
+        "Pitches",
+        "Batters Faced",
+        "Pitches-Batters Faced",
+        "Opponent Batting Average",
+        "Opponent's On-base pct.",
+        "Opponent's Slugging pct.",
+        "Opponent's OPB Pct + SLG Pct",
+        "Doubles",
+        "Triples",
+        "Home Runs",
+        "Total Bases",
+        "Runs Batted In",
+        "Batters Hit",
+        "Sacrifice Bunts",
+        "Sacrifice Flies",
+        "Intentional Walks"
+      ],
+      "labels": [
+        "P",
+        "TBF",
+        "P-TBF",
+        "OBA",
+        "OOBP",
+        "OSLUG",
+        "OOPS",
+        "2B",
+        "3B",
+        "HR",
+        "TB",
+        "RBI",
+        "BH",
+        "SH",
+        "SF",
+        "IBB"
+      ],
+      "name": "opponent-batting",
+      "names": [
+        "pitches",
+        "battersFaced",
+        "pitches-battersFaced",
+        "opponentAvg",
+        "opponentOnBasePct",
+        "opponentSlugAvg",
+        "opponentOPS",
+        "doubles",
+        "triples",
+        "homeRuns",
+        "opponentTotalBases",
+        "RBIs",
+        "battersHit",
+        "sacBunts",
+        "sacFlies",
+        "intentionalWalks"
+      ],
+      "sortKey": "opponent-batting",
+      "statistics": [
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2008",
+            "year": 2008
+          },
+          "stats": [
+            "1859",
+            "470",
+            "3.955",
+            ".265",
+            ".347",
+            ".409",
+            ".756",
+            "22",
+            "2",
+            "11",
+            "168",
+            "45",
+            "1",
+            "3",
+            "3",
+            "3"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2009",
+            "year": 2009
+          },
+          "stats": [
+            "3028",
+            "701",
+            "4.320",
+            ".200",
+            ".306",
+            ".282",
+            ".588",
+            "28",
+            "0",
+            "7",
+            "168",
+            "43",
+            "1",
+            "11",
+            "2",
+            "4"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2010",
+            "year": 2010
+          },
+          "stats": [
+            "3390",
+            "848",
+            "3.998",
+            ".214",
+            ".295",
+            ".320",
+            ".615",
+            "32",
+            "4",
+            "13",
+            "239",
+            "67",
+            "7",
+            "8",
+            "4",
+            "9"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2011",
+            "year": 2011
+          },
+          "stats": [
+            "3469",
+            "912",
+            "3.804",
+            ".207",
+            ".256",
+            ".298",
+            ".554",
+            "30",
+            "1",
+            "15",
+            "251",
+            "59",
+            "3",
+            "11",
+            "2",
+            "2"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2012",
+            "year": 2012
+          },
+          "stats": [
+            "3467",
+            "901",
+            "3.848",
+            ".210",
+            ".270",
+            ".323",
+            ".593",
+            "38",
+            "3",
+            "16",
+            "262",
+            "60",
+            "5",
+            "18",
+            "4",
+            "5"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2013",
+            "year": 2013
+          },
+          "stats": [
+            "3428",
+            "908",
+            "3.775",
+            ".195",
+            ".244",
+            ".277",
+            ".521",
+            "30",
+            "3",
+            "11",
+            "233",
+            "49",
+            "3",
+            "8",
+            "3",
+            "2"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2014",
+            "year": 2014
+          },
+          "stats": [
+            "2722",
+            "749",
+            "3.634",
+            ".196",
+            ".231",
+            ".289",
+            ".521",
+            "29",
+            "5",
+            "9",
+            "205",
+            "37",
+            "2",
+            "6",
+            "1",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2015",
+            "year": 2015
+          },
+          "stats": [
+            "3392",
+            "890",
+            "3.811",
+            ".194",
+            ".237",
+            ".284",
+            ".521",
+            "26",
+            "2",
+            "15",
+            "238",
+            "52",
+            "5",
+            "4",
+            "0",
+            "1"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2016",
+            "year": 2016
+          },
+          "stats": [
+            "2062",
+            "544",
+            "3.790",
+            ".184",
+            ".204",
+            ".268",
+            ".472",
+            "18",
+            "1",
+            "8",
+            "141",
+            "26",
+            "2",
+            "4",
+            "1",
+            "1"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2017",
+            "year": 2017
+          },
+          "stats": [
+            "2521",
+            "679",
+            "3.713",
+            ".212",
+            ".246",
+            ".357",
+            ".604",
+            "20",
+            "2",
+            "23",
+            "229",
+            "48",
+            "0",
+            "4",
+            "3",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "2364",
+            "650",
+            "3.637",
+            ".227",
+            ".264",
+            ".366",
+            ".630",
+            "30",
+            "2",
+            "17",
+            "224",
+            "51",
+            "2",
+            "3",
+            "2",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2019",
+            "year": 2019
+          },
+          "stats": [
+            "2672",
+            "706",
+            "3.785",
+            ".222",
+            ".269",
+            ".394",
+            ".664",
+            "23",
+            "3",
+            "28",
+            "258",
+            "57",
+            "2",
+            "6",
+            "1",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "888",
+            "221",
+            "4.018",
+            ".194",
+            ".226",
+            ".365",
+            ".591",
+            "10",
+            "1",
+            "8",
+            "77",
+            "15",
+            "1",
+            "0",
+            "1",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2021",
+            "year": 2021
+          },
+          "stats": [
+            "1806",
+            "488",
+            "3.701",
+            ".224",
+            ".262",
+            ".374",
+            ".636",
+            "22",
+            "1",
+            "15",
+            "172",
+            "49",
+            "3",
+            "3",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "1842",
+            "493",
+            "3.736",
+            ".206",
+            ".246",
+            ".310",
+            ".556",
+            "16",
+            "1",
+            "10",
+            "144",
+            "32",
+            "2",
+            "1",
+            "2",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "2026",
+            "523",
+            "3.874",
+            ".209",
+            ".273",
+            ".367",
+            ".641",
+            "19",
+            "0",
+            "19",
+            "176",
+            "39",
+            "3",
+            "0",
+            "1",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2024",
+            "year": 2024
+          },
+          "stats": [
+            "504",
+            "133",
+            "3.789",
+            ".303",
+            ".353",
+            ".429",
+            ".782",
+            "7",
+            "1",
+            "2",
+            "51",
+            "16",
+            "2",
+            "0",
+            "3",
+            "1"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "1770",
+            "463",
+            "3.823",
+            ".243",
+            ".302",
+            ".362",
+            ".663",
+            "22",
+            "2",
+            "8",
+            "152",
+            "43",
+            "2",
+            "2",
+            "4",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        }
+      ],
+      "totals": [
+        "43210",
+        "11279",
+        "3.831",
+        ".211",
+        ".264",
+        ".326",
+        ".590",
+        "422",
+        "34",
+        "235",
+        "3388",
+        "788",
+        "46",
+        "92",
+        "37",
+        "28"
+      ]
+    },
+    {
+      "descriptions": [
+        "The average number of pitches per game started by a pitcher.",
+        "The average number of pitches per inning.",
+        "The average number of strikeouts for a pitcher per 9 innings.",
+        "The number of quality starts for a pitcher.",
+        "The number of times that pitcher starts and finishes a game.",
+        "The number of times that a pitcher allows zero runs.",
+        "The average game score for a pitcher.",
+        "The number of ground balls hit against a pitcher.",
+        "The number of fly balls a pitcher has produced.",
+        "The number of ground balls to fly balls.",
+        "The number of baserunners when a relief pitcher enters the game.",
+        "The number of inherited runners who scored.",
+        "The number of times that a pitcher pitches a wild pitch.",
+        "The number of times that a pitcher balks.",
+        "The number of times a pitcher allows a baserunner to steal a base.",
+        "The number of times a pitcher gets out a baserunner trying to steal a base.",
+        "The average number of runs scored while the pitcher is pitching."
+      ],
+      "displayName": "Expanded Pitching",
+      "displayNames": [
+        "Pitches Per Start",
+        "Pitches Per Inning",
+        "Strikeouts Per 9 Innings",
+        "Quality Starts",
+        "Complete Games",
+        "Shutouts",
+        "Game Score",
+        "Ground Balls",
+        "Fly Balls",
+        "Ground To Fly Ball Ratio",
+        "Inherited Runners",
+        "Inherited Runners Scored",
+        "Wild Pitches",
+        "Balks",
+        "Stolen Bases",
+        "Caught Stealing",
+        "Run Support"
+      ],
+      "labels": [
+        "P/S",
+        "P/I",
+        "K/9",
+        "QS",
+        "CG",
+        "SHO",
+        "GSC",
+        "GB",
+        "FB",
+        "G/F",
+        "IR",
+        "IRS",
+        "WP",
+        "BK",
+        "SB",
+        "CS",
+        "RSUP"
+      ],
+      "name": "expanded-pitching",
+      "names": [
+        "pitchesPerStart",
+        "pitchesPerInning",
+        "strikeoutsPerNineInnings",
+        "qualityStarts",
+        "completeGames",
+        "shutouts",
+        "avgGameScore",
+        "groundBalls",
+        "flyBalls",
+        "groundToFlyRatio",
+        "inheritedRunners",
+        "inheritedRunnersScored",
+        "wildPitches",
+        "balks",
+        "stolenBases",
+        "caughtStealing",
+        "runSupport"
+      ],
+      "sortKey": "expanded-pitching",
+      "statistics": [
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2008",
+            "year": 2008
+          },
+          "stats": [
+            "87.9",
+            "17.3",
+            "8.4",
+            "8",
+            "0",
+            "0",
+            "50.0",
+            "162",
+            "155",
+            "1.0",
+            "0",
+            "0",
+            "7",
+            "0",
+            "5",
+            "2",
+            "93.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2009",
+            "year": 2009
+          },
+          "stats": [
+            "99.6",
+            "17.7",
+            "9.7",
+            "16",
+            "0",
+            "0",
+            "58.0",
+            "174",
+            "246",
+            "0.7",
+            "0",
+            "0",
+            "11",
+            "2",
+            "6",
+            "7",
+            "123.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2010",
+            "year": 2010
+          },
+          "stats": [
+            "105.9",
+            "16.6",
+            "9.3",
+            "23",
+            "1",
+            "1",
+            "59.2",
+            "232",
+            "314",
+            "0.7",
+            "0",
+            "0",
+            "5",
+            "2",
+            "8",
+            "8",
+            "125.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2011",
+            "year": 2011
+          },
+          "stats": [
+            "105.1",
+            "14.9",
+            "9.6",
+            "25",
+            "5",
+            "2",
+            "64.8",
+            "275",
+            "330",
+            "0.8",
+            "0",
+            "0",
+            "5",
+            "1",
+            "14",
+            "9",
+            "143.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2012",
+            "year": 2012
+          },
+          "stats": [
+            "105.1",
+            "15.2",
+            "9.1",
+            "25",
+            "2",
+            "2",
+            "63.0",
+            "298",
+            "303",
+            "1.0",
+            "0",
+            "0",
+            "6",
+            "2",
+            "8",
+            "12",
+            "130.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2013",
+            "year": 2013
+          },
+          "stats": [
+            "103.9",
+            "14.5",
+            "8.8",
+            "27",
+            "3",
+            "2",
+            "66.9",
+            "304",
+            "315",
+            "1.0",
+            "0",
+            "0",
+            "12",
+            "2",
+            "5",
+            "4",
+            "125.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2014",
+            "year": 2014
+          },
+          "stats": [
+            "100.8",
+            "13.7",
+            "10.8",
+            "24",
+            "6",
+            "2",
+            "70.3",
+            "251",
+            "224",
+            "1.1",
+            "0",
+            "0",
+            "7",
+            "2",
+            "5",
+            "4",
+            "136.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2015",
+            "year": 2015
+          },
+          "stats": [
+            "102.8",
+            "14.6",
+            "11.6",
+            "27",
+            "4",
+            "3",
+            "68.0",
+            "285",
+            "257",
+            "1.1",
+            "0",
+            "0",
+            "9",
+            "3",
+            "7",
+            "9",
+            "133.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2016",
+            "year": 2016
+          },
+          "stats": [
+            "98.2",
+            "13.8",
+            "10.4",
+            "17",
+            "3",
+            "3",
+            "70.3",
+            "184",
+            "175",
+            "1.1",
+            "0",
+            "0",
+            "5",
+            "3",
+            "1",
+            "1",
+            "88.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2017",
+            "year": 2017
+          },
+          "stats": [
+            "93.4",
+            "14.4",
+            "10.4",
+            "20",
+            "1",
+            "0",
+            "63.8",
+            "217",
+            "229",
+            "0.9",
+            "0",
+            "0",
+            "4",
+            "2",
+            "3",
+            "2",
+            "129.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "90.9",
+            "14.7",
+            "8.6",
+            "20",
+            "0",
+            "0",
+            "59.2",
+            "229",
+            "233",
+            "1.0",
+            "0",
+            "0",
+            "10",
+            "0",
+            "3",
+            "2",
+            "140.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2019",
+            "year": 2019
+          },
+          "stats": [
+            "94.8",
+            "15.0",
+            "9.5",
+            "22",
+            "0",
+            "0",
+            "59.7",
+            "232",
+            "240",
+            "1.0",
+            "0",
+            "0",
+            "7",
+            "1",
+            "3",
+            "3",
+            "182.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "88.8",
+            "15.2",
+            "9.6",
+            "6",
+            "0",
+            "0",
+            "61.7",
+            "80",
+            "70",
+            "1.1",
+            "0",
+            "0",
+            "0",
+            "0",
+            "1",
+            "1",
+            "55.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2021",
+            "year": 2021
+          },
+          "stats": [
+            "82.1",
+            "14.8",
+            "10.7",
+            "11",
+            "0",
+            "0",
+            "57.2",
+            "161",
+            "158",
+            "1.0",
+            "0",
+            "0",
+            "7",
+            "1",
+            "7",
+            "5",
+            "118.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "83.7",
+            "14.6",
+            "9.8",
+            "12",
+            "0",
+            "0",
+            "60.4",
+            "158",
+            "173",
+            "0.9",
+            "0",
+            "0",
+            "0",
+            "1",
+            "3",
+            "2",
+            "120.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "84.4",
+            "15.4",
+            "9.4",
+            "11",
+            "0",
+            "0",
+            "59.0",
+            "164",
+            "179",
+            "0.9",
+            "0",
+            "0",
+            "6",
+            "2",
+            "6",
+            "4",
+            "124.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2024",
+            "year": 2024
+          },
+          "stats": [
+            "72.0",
+            "16.8",
+            "7.2",
+            "1",
+            "0",
+            "0",
+            "46.1",
+            "39",
+            "59",
+            "0.7",
+            "0",
+            "0",
+            "2",
+            "1",
+            "0",
+            "3",
+            "34.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "79.8",
+            "15.7",
+            "6.7",
+            "6",
+            "0",
+            "0",
+            "52.3",
+            "165",
+            "177",
+            "0.9",
+            "0",
+            "0",
+            "5",
+            "1",
+            "0",
+            "1",
+            "131.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        }
+      ],
+      "totals": [
+        "95.6",
+        "15.1",
+        "9.6",
+        "301",
+        "25",
+        "15",
+        "0.0",
+        "3610",
+        "3837",
+        "0.9",
+        "0",
+        "0",
+        "108",
+        "26",
+        "85",
+        "79",
+        "2129.0"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "abbreviation": "2B",
+      "displayName": "Doubles"
+    },
+    {
+      "abbreviation": "3B",
+      "displayName": "Triples"
+    },
+    {
+      "abbreviation": "BB",
+      "displayName": "Walks"
+    },
+    {
+      "abbreviation": "BH",
+      "displayName": "Batters Hit"
+    },
+    {
+      "abbreviation": "BK",
+      "displayName": "Balks"
+    },
+    {
+      "abbreviation": "BLSV",
+      "displayName": "Blown Saves"
+    },
+    {
+      "abbreviation": "CG",
+      "displayName": "Complete Games"
+    },
+    {
+      "abbreviation": "CS",
+      "displayName": "Caught Stealing"
+    },
+    {
+      "abbreviation": "ER",
+      "displayName": "Earned runs"
+    },
+    {
+      "abbreviation": "ERA",
+      "displayName": "Earned Run Average"
+    },
+    {
+      "abbreviation": "FB",
+      "displayName": "Fly Balls"
+    },
+    {
+      "abbreviation": "G/F",
+      "displayName": "Ground To Fly Ball Ratio"
+    },
+    {
+      "abbreviation": "GB",
+      "displayName": "Ground Balls"
+    },
+    {
+      "abbreviation": "GP",
+      "displayName": "Games Played"
+    },
+    {
+      "abbreviation": "GS",
+      "displayName": "Games Started"
+    },
+    {
+      "abbreviation": "GSC",
+      "displayName": "Game Score"
+    },
+    {
+      "abbreviation": "H",
+      "displayName": "Hits"
+    },
+    {
+      "abbreviation": "HLD",
+      "displayName": "Holds"
+    },
+    {
+      "abbreviation": "HR",
+      "displayName": "Home Runs"
+    },
+    {
+      "abbreviation": "IBB",
+      "displayName": "Intentional Walks"
+    },
+    {
+      "abbreviation": "IP",
+      "displayName": "Innings pitched"
+    },
+    {
+      "abbreviation": "IR",
+      "displayName": "Inherited Runners"
+    },
+    {
+      "abbreviation": "IRS",
+      "displayName": "Inherited Runners Scored"
+    },
+    {
+      "abbreviation": "K",
+      "displayName": "Strikeouts"
+    },
+    {
+      "abbreviation": "K/9",
+      "displayName": "Strikeouts Per 9 Innings"
+    },
+    {
+      "abbreviation": "K/BB",
+      "displayName": "Strikeout To Walk Ratio"
+    },
+    {
+      "abbreviation": "L",
+      "displayName": "Losses"
+    },
+    {
+      "abbreviation": "OBA",
+      "displayName": "Opponent Batting Average"
+    },
+    {
+      "abbreviation": "OOBP",
+      "displayName": "Opponent's On-base pct."
+    },
+    {
+      "abbreviation": "OOPS",
+      "displayName": "Opponent's OPB Pct + SLG Pct"
+    },
+    {
+      "abbreviation": "OSLUG",
+      "displayName": "Opponent's Slugging pct."
+    },
+    {
+      "abbreviation": "P",
+      "displayName": "Pitches"
+    },
+    {
+      "abbreviation": "P-TBF",
+      "displayName": "Pitches-Batters Faced"
+    },
+    {
+      "abbreviation": "P/I",
+      "displayName": "Pitches Per Inning"
+    },
+    {
+      "abbreviation": "P/S",
+      "displayName": "Pitches Per Start"
+    },
+    {
+      "abbreviation": "QS",
+      "displayName": "Quality Starts"
+    },
+    {
+      "abbreviation": "R",
+      "displayName": "Runs"
+    },
+    {
+      "abbreviation": "RBI",
+      "displayName": "Runs Batted In"
+    },
+    {
+      "abbreviation": "RSUP",
+      "displayName": "Run Support"
+    },
+    {
+      "abbreviation": "SB",
+      "displayName": "Stolen Bases"
+    },
+    {
+      "abbreviation": "SF",
+      "displayName": "Sacrifice Flies"
+    },
+    {
+      "abbreviation": "SH",
+      "displayName": "Sacrifice Bunts"
+    },
+    {
+      "abbreviation": "SHO",
+      "displayName": "Shutouts"
+    },
+    {
+      "abbreviation": "SV",
+      "displayName": "Saves"
+    },
+    {
+      "abbreviation": "TB",
+      "displayName": "Total Bases"
+    },
+    {
+      "abbreviation": "TBF",
+      "displayName": "Batters Faced"
+    },
+    {
+      "abbreviation": "W",
+      "displayName": "Wins"
+    },
+    {
+      "abbreviation": "W%",
+      "displayName": "Win Percentage"
+    },
+    {
+      "abbreviation": "WAR",
+      "displayName": "Wins Above Replacement"
+    },
+    {
+      "abbreviation": "WHIP",
+      "displayName": "Walks Plus Hits Per Inning Pitched"
+    },
+    {
+      "abbreviation": "WP",
+      "displayName": "Wild Pitches"
+    }
+  ]
+}

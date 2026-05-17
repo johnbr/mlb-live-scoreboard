@@ -1,0 +1,1794 @@
+{
+  "categories": [
+    {
+      "averages": [
+        "106",
+        "383",
+        "77",
+        "112",
+        "21",
+        "3",
+        "26",
+        "65",
+        "69",
+        "7",
+        "107",
+        "14",
+        "2",
+        ".292",
+        ".406",
+        ".568",
+        ".974",
+        "-"
+      ],
+      "descriptions": [
+        "Games Played",
+        "The number of times a batter comes up to bat not counting walks and sacrifices.",
+        "The number of runs scored.",
+        "The number of hits.",
+        "The number of times that a batter reaches second base as the result of a hit without an error being committed.",
+        "The number of hits that result in the batter reaching 3rd base without the aid of an error.",
+        "The number of hits that allowed the batter to round the bases and score without the aid of an error of the defense.",
+        "The number of runs scored by a batter's play.",
+        "The number of times a batter reaches base on four balls",
+        "The number of times a player has been by a pitch.",
+        "The number of times a player strikes out.",
+        "The number of bases stolen.",
+        "The number of times that a baserunner attempts to steal a base but is thrown out.",
+        "The average number of times the batter reached successfully on base due to a hit: hits / atBats",
+        "The ratio of the number of times the batter reached base per plate appearnce: (hits + walks + hbp / plateAppearances)",
+        "Slugging percentage is a metric that is meant to measuring how many bases the hitter safely advances to after making contact with the ball: (totalBases / atBats)",
+        "The average calculated by adding up on-base percentage and slugging percentage.",
+        "Wins Above Replacement."
+      ],
+      "displayName": "Career Batting",
+      "displayNames": [
+        "Games Played",
+        "At Bats",
+        "Runs",
+        "Hits",
+        "Doubles",
+        "Triples",
+        "Home Runs",
+        "Runs Batted In",
+        "Walks",
+        "Hit By Pitch",
+        "Strikeouts",
+        "Stolen Bases",
+        "Caught Stealing",
+        "Batting Average",
+        "On Base Percentage",
+        "Slugging Percentage",
+        "OBP Pct + SLG Pct",
+        "Wins Above Replacement"
+      ],
+      "labels": [
+        "GP",
+        "AB",
+        "R",
+        "H",
+        "2B",
+        "3B",
+        "HR",
+        "RBI",
+        "BB",
+        "HBP",
+        "SO",
+        "SB",
+        "CS",
+        "AVG",
+        "OBP",
+        "SLG",
+        "OPS",
+        "WAR"
+      ],
+      "name": "career-batting",
+      "names": [
+        "gamesPlayed",
+        "atBats",
+        "runs",
+        "hits",
+        "doubles",
+        "triples",
+        "homeRuns",
+        "RBIs",
+        "walks",
+        "hitByPitch",
+        "strikeouts",
+        "stolenBases",
+        "caughtStealing",
+        "avg",
+        "onBasePct",
+        "slugAvg",
+        "OPS",
+        "WARBR"
+      ],
+      "sortKey": "career-batting",
+      "statistics": [
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2011",
+            "year": 2011
+          },
+          "stats": [
+            "40",
+            "123",
+            "20",
+            "27",
+            "6",
+            "0",
+            "5",
+            "16",
+            "9",
+            "2",
+            "30",
+            "4",
+            "0",
+            ".220",
+            ".281",
+            ".390",
+            ".672",
+            "0.6"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2012",
+            "year": 2012
+          },
+          "stats": [
+            "139",
+            "559",
+            "129",
+            "182",
+            "27",
+            "8",
+            "30",
+            "83",
+            "67",
+            "6",
+            "139",
+            "49",
+            "5",
+            ".326",
+            ".399",
+            ".564",
+            ".963",
+            "10.7"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2013",
+            "year": 2013
+          },
+          "stats": [
+            "157",
+            "589",
+            "109",
+            "190",
+            "39",
+            "9",
+            "27",
+            "97",
+            "110",
+            "9",
+            "136",
+            "33",
+            "7",
+            ".323",
+            ".432",
+            ".557",
+            ".988",
+            "9.2"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2014",
+            "year": 2014
+          },
+          "stats": [
+            "157",
+            "602",
+            "115",
+            "173",
+            "39",
+            "9",
+            "36",
+            "111",
+            "83",
+            "10",
+            "184",
+            "16",
+            "2",
+            ".287",
+            ".377",
+            ".561",
+            ".939",
+            "7.9"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2015",
+            "year": 2015
+          },
+          "stats": [
+            "159",
+            "575",
+            "104",
+            "172",
+            "32",
+            "6",
+            "41",
+            "90",
+            "92",
+            "10",
+            "158",
+            "11",
+            "7",
+            ".299",
+            ".402",
+            ".590",
+            ".991",
+            "9.4"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2016",
+            "year": 2016
+          },
+          "stats": [
+            "159",
+            "549",
+            "123",
+            "173",
+            "32",
+            "5",
+            "29",
+            "100",
+            "116",
+            "11",
+            "137",
+            "30",
+            "7",
+            ".315",
+            ".441",
+            ".550",
+            ".991",
+            "10.6"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2017",
+            "year": 2017
+          },
+          "stats": [
+            "114",
+            "402",
+            "92",
+            "123",
+            "25",
+            "3",
+            "33",
+            "72",
+            "94",
+            "7",
+            "90",
+            "22",
+            "4",
+            ".306",
+            ".442",
+            ".629",
+            "1.071",
+            "6.7"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "140",
+            "471",
+            "101",
+            "147",
+            "24",
+            "4",
+            "39",
+            "79",
+            "122",
+            "10",
+            "124",
+            "24",
+            "2",
+            ".312",
+            ".460",
+            ".628",
+            "1.088",
+            "10.2"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2019",
+            "year": 2019
+          },
+          "stats": [
+            "134",
+            "470",
+            "110",
+            "137",
+            "27",
+            "2",
+            "45",
+            "104",
+            "110",
+            "16",
+            "120",
+            "11",
+            "2",
+            ".291",
+            ".438",
+            ".645",
+            "1.083",
+            "8.3"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "53",
+            "199",
+            "41",
+            "56",
+            "9",
+            "2",
+            "17",
+            "46",
+            "35",
+            "3",
+            "56",
+            "1",
+            "1",
+            ".281",
+            ".390",
+            ".603",
+            ".993",
+            "1.6"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2021",
+            "year": 2021
+          },
+          "stats": [
+            "36",
+            "117",
+            "23",
+            "39",
+            "8",
+            "1",
+            "8",
+            "18",
+            "27",
+            "2",
+            "41",
+            "2",
+            "0",
+            ".333",
+            ".466",
+            ".624",
+            "1.090",
+            "1.8"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "119",
+            "438",
+            "85",
+            "124",
+            "28",
+            "2",
+            "40",
+            "80",
+            "54",
+            "6",
+            "139",
+            "1",
+            "0",
+            ".283",
+            ".369",
+            ".630",
+            ".999",
+            "6.3"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "82",
+            "308",
+            "54",
+            "81",
+            "14",
+            "1",
+            "18",
+            "44",
+            "45",
+            "7",
+            "104",
+            "2",
+            "0",
+            ".263",
+            ".367",
+            ".490",
+            ".858",
+            "2.9"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2024",
+            "year": 2024
+          },
+          "stats": [
+            "29",
+            "109",
+            "17",
+            "24",
+            "1",
+            "2",
+            "10",
+            "14",
+            "16",
+            "1",
+            "27",
+            "6",
+            "1",
+            ".220",
+            ".325",
+            ".541",
+            ".867",
+            "1.1"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "130",
+            "456",
+            "73",
+            "106",
+            "14",
+            "1",
+            "26",
+            "64",
+            "87",
+            "6",
+            "178",
+            "2",
+            "0",
+            ".232",
+            ".359",
+            ".439",
+            ".797",
+            "1.5"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2026",
+            "year": 2026
+          },
+          "stats": [
+            "45",
+            "160",
+            "33",
+            "38",
+            "6",
+            "0",
+            "11",
+            "23",
+            "41",
+            "3",
+            "53",
+            "5",
+            "0",
+            ".238",
+            ".402",
+            ".481",
+            ".883",
+            "1.9"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        }
+      ],
+      "totals": [
+        "1693",
+        "6127",
+        "1229",
+        "1792",
+        "331",
+        "55",
+        "415",
+        "1041",
+        "1108",
+        "109",
+        "1716",
+        "219",
+        "38",
+        ".292",
+        ".406",
+        ".568",
+        ".974",
+        "--"
+      ]
+    },
+    {
+      "descriptions": [
+        "Games Played",
+        "The number of times a batter comes up to bat not counting walks and sacrifices.",
+        "The number of runs scored.",
+        "The number of hits.",
+        "The number of times that a batter reaches second base as the result of a hit without an error being committed.",
+        "The number of hits that result in the batter reaching 3rd base without the aid of an error.",
+        "The number of hits that allowed the batter to round the bases and score without the aid of an error of the defense.",
+        "The number of runs scored by a batter's play.",
+        "The number of times a batter reaches base on four balls",
+        "The number of times a player has been by a pitch.",
+        "The number of times a player strikes out.",
+        "The number of bases stolen.",
+        "The number of times that a baserunner attempts to steal a base but is thrown out.",
+        "The average number of times the batter reached successfully on base due to a hit: hits / atBats",
+        "The ratio of the number of times the batter reached base per plate appearnce: (hits + walks + hbp / plateAppearances)",
+        "Slugging percentage is a metric that is meant to measuring how many bases the hitter safely advances to after making contact with the ball: (totalBases / atBats)",
+        "The average calculated by adding up on-base percentage and slugging percentage."
+      ],
+      "displayName": "Postseason Batting",
+      "displayNames": [
+        "Games Played",
+        "At Bats",
+        "Runs",
+        "Hits",
+        "Doubles",
+        "Triples",
+        "Home Runs",
+        "Runs Batted In",
+        "Walks",
+        "Hit By Pitch",
+        "Strikeouts",
+        "Stolen Bases",
+        "Caught Stealing",
+        "Batting Average",
+        "On Base Percentage",
+        "Slugging Percentage",
+        "OBP Pct + SLG Pct"
+      ],
+      "labels": [
+        "GP",
+        "AB",
+        "R",
+        "H",
+        "2B",
+        "3B",
+        "HR",
+        "RBI",
+        "BB",
+        "HBP",
+        "K",
+        "SB",
+        "CS",
+        "AVG",
+        "OBP",
+        "SLG",
+        "OPS"
+      ],
+      "name": "postseason-batting",
+      "names": [
+        "gamesPlayed",
+        "atBats",
+        "runs",
+        "hits",
+        "doubles",
+        "triples",
+        "homeRuns",
+        "RBIs",
+        "walks",
+        "hitByPitch",
+        "strikeouts",
+        "stolenBases",
+        "caughtStealing",
+        "avg",
+        "onBasePct",
+        "slugAvg",
+        "OPS"
+      ],
+      "sortKey": "postseason-batting",
+      "statistics": [
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2014",
+            "year": 2014
+          },
+          "stats": [
+            "3",
+            "12",
+            "1",
+            "1",
+            "0",
+            "0",
+            "1",
+            "1",
+            "3",
+            "0",
+            "2",
+            "0",
+            "1",
+            ".083",
+            ".267",
+            ".333",
+            ".600"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        }
+      ],
+      "totals": [
+        "3",
+        "12",
+        "1",
+        "1",
+        "0",
+        "0",
+        "1",
+        "1",
+        "3",
+        "0",
+        "2",
+        "0",
+        "1",
+        ".083",
+        ".267",
+        ".333",
+        ".600"
+      ]
+    },
+    {
+      "descriptions": [
+        "The number of times a batter comes up to bat.",
+        "The number of pitches faced.",
+        "The average number of pitches a batter sees per plate appearance.",
+        "The number of hits that are greater than singles.",
+        "The number of bases calculated as 1 for a 1B, 2 for a 2B, 3 for a 3B and 4 for a HR.",
+        "The number of times that a batter is walked by four intentionally thrown balls by the pitcher.",
+        "The number of times a player has been by a pitch.",
+        "The number of times a batter grounds into a double play.",
+        "The number of sacrifice bunts that allow baserunners to advance",
+        "The number of times a batter advances a runner with a fly out.",
+        "The number of bases stolen.",
+        "The number of times that a baserunner attempts to steal a base but is thrown out.",
+        "The percentage of stolen bases successfully stolen by a baserunner."
+      ],
+      "displayName": "Expanded Batting",
+      "displayNames": [
+        "Plate Appearances",
+        "Pitches",
+        "Pitches Per Plate Appearance",
+        "Extra Base Hits",
+        "Total Bases",
+        "Intentional Walks",
+        "Hit By Pitch",
+        "Ground Into Double Play",
+        "Sacrifice Hit",
+        "Sacrifice Flies",
+        "Stolen Bases",
+        "Caught Stealing",
+        "Stolen Base Percentage"
+      ],
+      "labels": [
+        "PA",
+        "P",
+        "P/PA",
+        "XBH",
+        "TB",
+        "IBB",
+        "HBP",
+        "GIDP",
+        "SH",
+        "SF",
+        "SB",
+        "CS",
+        "SB%"
+      ],
+      "name": "expanded-batting",
+      "names": [
+        "plateAppearances",
+        "pitches",
+        "pitchesPerPlateAppearance",
+        "extraBaseHits",
+        "totalBases",
+        "intentionalWalks",
+        "hitByPitch",
+        "GIDPs",
+        "sacHits",
+        "sacFlies",
+        "stolenBases",
+        "caughtStealing",
+        "stolenBasePct"
+      ],
+      "sortKey": "expanded-batting",
+      "statistics": [
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2011",
+            "year": 2011
+          },
+          "stats": [
+            "135",
+            "534",
+            "3.96",
+            "11",
+            "48",
+            "0",
+            "2",
+            "2",
+            "0",
+            "1",
+            "4",
+            "0",
+            "1.00"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2012",
+            "year": 2012
+          },
+          "stats": [
+            "639",
+            "2608",
+            "4.08",
+            "65",
+            "315",
+            "4",
+            "6",
+            "7",
+            "0",
+            "7",
+            "49",
+            "5",
+            "0.91"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2013",
+            "year": 2013
+          },
+          "stats": [
+            "716",
+            "3015",
+            "4.21",
+            "75",
+            "328",
+            "10",
+            "9",
+            "8",
+            "0",
+            "8",
+            "33",
+            "7",
+            "0.83"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2014",
+            "year": 2014
+          },
+          "stats": [
+            "705",
+            "3136",
+            "4.45",
+            "84",
+            "338",
+            "6",
+            "10",
+            "6",
+            "0",
+            "10",
+            "16",
+            "2",
+            "0.89"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2015",
+            "year": 2015
+          },
+          "stats": [
+            "682",
+            "2980",
+            "4.37",
+            "79",
+            "339",
+            "14",
+            "10",
+            "11",
+            "0",
+            "5",
+            "11",
+            "7",
+            "0.61"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2016",
+            "year": 2016
+          },
+          "stats": [
+            "681",
+            "3014",
+            "4.43",
+            "66",
+            "302",
+            "12",
+            "11",
+            "5",
+            "0",
+            "5",
+            "30",
+            "7",
+            "0.81"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2017",
+            "year": 2017
+          },
+          "stats": [
+            "507",
+            "2127",
+            "4.20",
+            "61",
+            "253",
+            "15",
+            "7",
+            "8",
+            "0",
+            "4",
+            "22",
+            "4",
+            "0.85"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "608",
+            "2543",
+            "4.18",
+            "67",
+            "296",
+            "25",
+            "10",
+            "5",
+            "0",
+            "4",
+            "24",
+            "2",
+            "0.92"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2019",
+            "year": 2019
+          },
+          "stats": [
+            "600",
+            "2509",
+            "4.18",
+            "74",
+            "303",
+            "14",
+            "16",
+            "5",
+            "0",
+            "4",
+            "11",
+            "2",
+            "0.85"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "241",
+            "1023",
+            "4.24",
+            "28",
+            "120",
+            "4",
+            "3",
+            "1",
+            "0",
+            "4",
+            "1",
+            "1",
+            "0.50"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2021",
+            "year": 2021
+          },
+          "stats": [
+            "146",
+            "610",
+            "4.18",
+            "17",
+            "73",
+            "5",
+            "2",
+            "0",
+            "0",
+            "0",
+            "2",
+            "0",
+            "1.00"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "499",
+            "2105",
+            "4.22",
+            "70",
+            "276",
+            "8",
+            "6",
+            "6",
+            "0",
+            "1",
+            "1",
+            "0",
+            "1.00"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "362",
+            "1546",
+            "4.27",
+            "33",
+            "151",
+            "2",
+            "7",
+            "4",
+            "0",
+            "2",
+            "2",
+            "0",
+            "1.00"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2024",
+            "year": 2024
+          },
+          "stats": [
+            "126",
+            "574",
+            "4.56",
+            "13",
+            "59",
+            "1",
+            "1",
+            "0",
+            "0",
+            "0",
+            "6",
+            "1",
+            "0.86"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "556",
+            "2482",
+            "4.46",
+            "41",
+            "200",
+            "10",
+            "6",
+            "7",
+            "0",
+            "6",
+            "2",
+            "0",
+            "1.00"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2026",
+            "year": 2026
+          },
+          "stats": [
+            "204",
+            "871",
+            "4.27",
+            "17",
+            "77",
+            "4",
+            "3",
+            "3",
+            "0",
+            "0",
+            "5",
+            "0",
+            "1.00"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        }
+      ],
+      "totals": [
+        "7407",
+        "31677",
+        "4.28",
+        "801",
+        "3478",
+        "134",
+        "109",
+        "78",
+        "0",
+        "61",
+        "219",
+        "38",
+        "0.85"
+      ]
+    },
+    {
+      "descriptions": [
+        "Wins Above Replacement.",
+        "Offensive Wins Above Replacement.",
+        "The estimate of how many runs a player has created.",
+        "The estimated number of runs created per 27 outs played.",
+        "The measure of a batter's ability to hit for extra bases, calculated by subtracting batting average from slugging percentage.",
+        "The average of extra bases gained via hits, walks and stolen bases versus at bats.",
+        "The ratio of at bats per home run hit.",
+        "The ratio of walks to plate appearances for a batter.",
+        "The number of walks to the number of strikeouts by a batter.",
+        "The number of ground outs made by a player or team.",
+        "The number of time a batter flies out.",
+        "The ratio of ground outs to fly outs."
+      ],
+      "displayName": "Advanced Batting",
+      "displayNames": [
+        "Wins Above Replacement",
+        "Offensive Wins Above Replacement",
+        "Runs Created",
+        "Runs Created Per 27 Outs",
+        "Isolated Power",
+        "Secondary Average",
+        "At Bats Per Home Run",
+        "Walks Per Plate Appearance",
+        "Walk To Strikeout Ratio",
+        "Ground Balls",
+        "Fly Balls",
+        "Ground To Fly Ball Ratio"
+      ],
+      "labels": [
+        "WAR",
+        "OWAR",
+        "RC",
+        "RC/27",
+        "ISOP",
+        "SECA",
+        "AB/HR",
+        "BB/PA",
+        "BB/K",
+        "GO",
+        "FO",
+        "GO/FO"
+      ],
+      "name": "advanced-batting",
+      "names": [
+        "WARBR",
+        "offWARBR",
+        "runsCreated",
+        "runsCreatedPer27Outs",
+        "isolatedPower",
+        "secondaryAvg",
+        "atBatsPerHomeRun",
+        "walksPerPlateAppearance",
+        "walkToStrikeoutRatio",
+        "groundBalls",
+        "flyBalls",
+        "groundToFlyRatio"
+      ],
+      "sortKey": "advanced-batting",
+      "statistics": [
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2011",
+            "year": 2011
+          },
+          "stats": [
+            "0.6",
+            "0.4",
+            "14.2",
+            "3.9",
+            ".171",
+            ".276",
+            "24.6",
+            ".067",
+            "0.30",
+            "37",
+            "56",
+            "0.7"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2012",
+            "year": 2012
+          },
+          "stats": [
+            "10.7",
+            "8.6",
+            "129.8",
+            "8.9",
+            ".238",
+            ".436",
+            "18.6",
+            ".105",
+            "0.48",
+            "198",
+            "229",
+            "0.9"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2013",
+            "year": 2013
+          },
+          "stats": [
+            "9.2",
+            "10.1",
+            "145.1",
+            "9.3",
+            ".234",
+            ".465",
+            "21.8",
+            ".154",
+            "0.81",
+            "197",
+            "264",
+            "0.7"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2014",
+            "year": 2014
+          },
+          "stats": [
+            "7.9",
+            "8.7",
+            "129.9",
+            "7.8",
+            ".274",
+            ".435",
+            "16.7",
+            ".118",
+            "0.45",
+            "149",
+            "279",
+            "0.5"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2015",
+            "year": 2015
+          },
+          "stats": [
+            "9.4",
+            "8.9",
+            "131.4",
+            "8.3",
+            ".290",
+            ".457",
+            "14.0",
+            ".135",
+            "0.58",
+            "160",
+            "262",
+            "0.6"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2016",
+            "year": 2016
+          },
+          "stats": [
+            "10.6",
+            "9.9",
+            "138.5",
+            "9.5",
+            ".235",
+            ".488",
+            "18.9",
+            ".170",
+            "0.85",
+            "176",
+            "241",
+            "0.7"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2017",
+            "year": 2017
+          },
+          "stats": [
+            "6.7",
+            "7.4",
+            "111.6",
+            "10.2",
+            ".323",
+            ".602",
+            "12.2",
+            ".185",
+            "1.04",
+            "119",
+            "197",
+            "0.6"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "10.2",
+            "9.2",
+            "138.9",
+            "11.2",
+            ".316",
+            ".622",
+            "12.1",
+            ".201",
+            "0.98",
+            "110",
+            "241",
+            "0.5"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2019",
+            "year": 2019
+          },
+          "stats": [
+            "8.3",
+            "8.3",
+            "132.5",
+            "10.4",
+            ".353",
+            ".606",
+            "10.4",
+            ".183",
+            "0.92",
+            "90",
+            "264",
+            "0.3"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "1.6",
+            "2.5",
+            "47.0",
+            "8.5",
+            ".322",
+            ".497",
+            "11.7",
+            ".145",
+            "0.63",
+            "38",
+            "109",
+            "0.3"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2021",
+            "year": 2021
+          },
+          "stats": [
+            "1.8",
+            "2.2",
+            "33.7",
+            "11.7",
+            ".291",
+            ".538",
+            "14.6",
+            ".185",
+            "0.66",
+            "33",
+            "43",
+            "0.8"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "6.3",
+            "6.3",
+            "97.8",
+            "8.2",
+            ".347",
+            ".473",
+            "11.0",
+            ".108",
+            "0.39",
+            "75",
+            "225",
+            "0.3"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "2.9",
+            "2.8",
+            "56.9",
+            "6.6",
+            ".227",
+            ".380",
+            "17.1",
+            ".124",
+            "0.43",
+            "69",
+            "137",
+            "0.5"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2024",
+            "year": 2024
+          },
+          "stats": [
+            "1.1",
+            "1.2",
+            "20.8",
+            "6.5",
+            ".321",
+            ".514",
+            "10.9",
+            ".127",
+            "0.59",
+            "20",
+            "62",
+            "0.3"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "1.5",
+            "1.8",
+            "76.6",
+            "5.7",
+            ".206",
+            ".401",
+            "17.5",
+            ".156",
+            "0.49",
+            "97",
+            "187",
+            "0.5"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "CF",
+          "season": {
+            "displayName": "2026",
+            "year": 2026
+          },
+          "stats": [
+            "1.9",
+            "2.2",
+            "33.8",
+            "7.3",
+            ".244",
+            ".531",
+            "14.5",
+            ".201",
+            "0.77",
+            "39",
+            "68",
+            "0.6"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        }
+      ],
+      "totals": [
+        "--",
+        "--",
+        "1437.9",
+        "8.6",
+        ".275",
+        ".486",
+        "14.8",
+        ".150",
+        "0.65",
+        "1607",
+        "2864",
+        "0.6"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "abbreviation": "2B",
+      "displayName": "Doubles"
+    },
+    {
+      "abbreviation": "3B",
+      "displayName": "Triples"
+    },
+    {
+      "abbreviation": "AB",
+      "displayName": "At Bats"
+    },
+    {
+      "abbreviation": "AB/HR",
+      "displayName": "At Bats Per Home Run"
+    },
+    {
+      "abbreviation": "AVG",
+      "displayName": "Batting Average"
+    },
+    {
+      "abbreviation": "BB",
+      "displayName": "Walks"
+    },
+    {
+      "abbreviation": "BB/K",
+      "displayName": "Walk To Strikeout Ratio"
+    },
+    {
+      "abbreviation": "BB/PA",
+      "displayName": "Walks Per Plate Appearance"
+    },
+    {
+      "abbreviation": "CS",
+      "displayName": "Caught Stealing"
+    },
+    {
+      "abbreviation": "FO",
+      "displayName": "Fly Balls"
+    },
+    {
+      "abbreviation": "GIDP",
+      "displayName": "Ground Into Double Play"
+    },
+    {
+      "abbreviation": "GO",
+      "displayName": "Ground Balls"
+    },
+    {
+      "abbreviation": "GO/FO",
+      "displayName": "Ground To Fly Ball Ratio"
+    },
+    {
+      "abbreviation": "GP",
+      "displayName": "Games Played"
+    },
+    {
+      "abbreviation": "H",
+      "displayName": "Hits"
+    },
+    {
+      "abbreviation": "HBP",
+      "displayName": "Hit By Pitch"
+    },
+    {
+      "abbreviation": "HR",
+      "displayName": "Home Runs"
+    },
+    {
+      "abbreviation": "IBB",
+      "displayName": "Intentional Walks"
+    },
+    {
+      "abbreviation": "ISOP",
+      "displayName": "Isolated Power"
+    },
+    {
+      "abbreviation": "OBP",
+      "displayName": "On Base Percentage"
+    },
+    {
+      "abbreviation": "OPS",
+      "displayName": "OBP Pct + SLG Pct"
+    },
+    {
+      "abbreviation": "OWAR",
+      "displayName": "Offensive Wins Above Replacement"
+    },
+    {
+      "abbreviation": "P",
+      "displayName": "Pitches"
+    },
+    {
+      "abbreviation": "P/PA",
+      "displayName": "Pitches Per Plate Appearance"
+    },
+    {
+      "abbreviation": "PA",
+      "displayName": "Plate Appearances"
+    },
+    {
+      "abbreviation": "R",
+      "displayName": "Runs"
+    },
+    {
+      "abbreviation": "RBI",
+      "displayName": "Runs Batted In"
+    },
+    {
+      "abbreviation": "RC",
+      "displayName": "Runs Created"
+    },
+    {
+      "abbreviation": "RC/27",
+      "displayName": "Runs Created Per 27 Outs"
+    },
+    {
+      "abbreviation": "SB",
+      "displayName": "Stolen Bases"
+    },
+    {
+      "abbreviation": "SB%",
+      "displayName": "Stolen Base Percentage"
+    },
+    {
+      "abbreviation": "SECA",
+      "displayName": "Secondary Average"
+    },
+    {
+      "abbreviation": "SF",
+      "displayName": "Sacrifice Flies"
+    },
+    {
+      "abbreviation": "SH",
+      "displayName": "Sacrifice Hit"
+    },
+    {
+      "abbreviation": "SLG",
+      "displayName": "Slugging Percentage"
+    },
+    {
+      "abbreviation": "SO",
+      "displayName": "Strikeouts"
+    },
+    {
+      "abbreviation": "TB",
+      "displayName": "Total Bases"
+    },
+    {
+      "abbreviation": "WAR",
+      "displayName": "Wins Above Replacement"
+    },
+    {
+      "abbreviation": "XBH",
+      "displayName": "Extra Base Hits"
+    }
+  ]
+}

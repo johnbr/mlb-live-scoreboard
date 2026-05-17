@@ -1,0 +1,1260 @@
+{
+  "categories": [
+    {
+      "averages": [
+        "15",
+        "15",
+        "6",
+        "3",
+        ".656",
+        "-",
+        "2.83",
+        "1.06",
+        "81.7",
+        "103",
+        "28",
+        "3.7",
+        "59",
+        "27",
+        "26",
+        "0",
+        "0",
+        "0"
+      ],
+      "descriptions": [
+        "Games Played",
+        "The number of games started by a pitcher.",
+        "The number of times the pitcher was attributed with a win",
+        "The number of losses for a pitcher.",
+        "The percentage of wins for a pitcher.",
+        "Wins Above Replacement.",
+        "The average number of runs a pitcher yields per 9 innings thrown",
+        "The number representing walks plus hits divided by innings pitched.",
+        "The number of innings pitched.",
+        "The number of times the pitcher struck out a batter.",
+        "The number of times a pitcher surrenders a base on balls.",
+        "The ratio of strikeouts to walks by a pitcher.",
+        "The number of hits surrendered by a pitcher.",
+        "The number of runs allowed by a pitcher.",
+        "The number of earned runs surrendered by a pitcher.",
+        "The number of times a pitcher enters and finishes the game without surrendering the lead in a save opportunity.",
+        "The number of times a pitcher enters the game with the lead, gets at least an out and leaves the game wihtout having given up the lead.",
+        "The number of times a pitchers has a save opportunity and surrenders the lead."
+      ],
+      "displayName": "pitching",
+      "displayNames": [
+        "Games Played",
+        "Games Started",
+        "Wins",
+        "Losses",
+        "Win Percentage",
+        "Wins Above Replacement",
+        "Earned Run Average",
+        "Walks Plus Hits Per Inning Pitched",
+        "Innings pitched",
+        "Strikeouts",
+        "Walks",
+        "Strikeout To Walk Ratio",
+        "Hits",
+        "Runs",
+        "Earned runs",
+        "Saves",
+        "Holds",
+        "Blown Saves"
+      ],
+      "labels": [
+        "GP",
+        "GS",
+        "W",
+        "L",
+        "W%",
+        "WAR",
+        "ERA",
+        "WHIP",
+        "IP",
+        "K",
+        "BB",
+        "K/BB",
+        "H",
+        "R",
+        "ER",
+        "SV",
+        "HLD",
+        "BLSV"
+      ],
+      "name": "pitching",
+      "names": [
+        "gamesPlayed",
+        "gamesStarted",
+        "wins",
+        "losses",
+        "winPct",
+        "WARBR",
+        "ERA",
+        "WHIP",
+        "innings",
+        "strikeouts",
+        "walks",
+        "strikeoutToWalkRatio",
+        "hits",
+        "runs",
+        "earnedRuns",
+        "saves",
+        "holds",
+        "blownSaves"
+      ],
+      "sortKey": "pitching",
+      "statistics": [
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "10",
+            "10",
+            "4",
+            "2",
+            ".667",
+            "1.2",
+            "3.31",
+            "1.16",
+            "51.2",
+            "63",
+            "22",
+            "2.9",
+            "38",
+            "19",
+            "19",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "2",
+            "2",
+            "0",
+            "1",
+            ".000",
+            "-0.5",
+            "37.80",
+            "6.60",
+            "1.2",
+            "3",
+            "8",
+            "0.4",
+            "3",
+            "7",
+            "7",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2021",
+            "year": 2021
+          },
+          "stats": [
+            "23",
+            "23",
+            "9",
+            "2",
+            ".818",
+            "4.1",
+            "3.18",
+            "1.09",
+            "130.1",
+            "156",
+            "44",
+            "3.5",
+            "98",
+            "48",
+            "46",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "28",
+            "28",
+            "15",
+            "9",
+            ".625",
+            "6.1",
+            "2.33",
+            "1.01",
+            "166.0",
+            "219",
+            "44",
+            "5.0",
+            "124",
+            "45",
+            "43",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "23",
+            "23",
+            "10",
+            "5",
+            ".667",
+            "4.0",
+            "3.14",
+            "1.06",
+            "132.0",
+            "167",
+            "55",
+            "3.0",
+            "85",
+            "50",
+            "46",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "14",
+            "14",
+            "1",
+            "1",
+            ".500",
+            "1.1",
+            "2.87",
+            "1.04",
+            "47.0",
+            "62",
+            "9",
+            "6.9",
+            "40",
+            "15",
+            "15",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2026",
+            "year": 2026
+          },
+          "stats": [
+            "7",
+            "7",
+            "3",
+            "2",
+            ".600",
+            "1.9",
+            "0.82",
+            "0.82",
+            "44.0",
+            "50",
+            "11",
+            "4.5",
+            "25",
+            "6",
+            "4",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        }
+      ],
+      "totals": [
+        "107",
+        "107",
+        "42",
+        "22",
+        ".656",
+        "--",
+        "2.83",
+        "1.06",
+        "572.2",
+        "720",
+        "193",
+        "3.7",
+        "413",
+        "190",
+        "180",
+        "0",
+        "0",
+        "0"
+      ]
+    },
+    {
+      "descriptions": [
+        "Games Played",
+        "The number of games started by a pitcher.",
+        "The number of times the pitcher was attributed with a win",
+        "The number of losses for a pitcher.",
+        "The percentage of wins for a pitcher.",
+        "Wins Above Replacement.",
+        "The average number of runs a pitcher yields per 9 innings thrown",
+        "The number representing walks plus hits divided by innings pitched.",
+        "The number of innings pitched.",
+        "The number of times the pitcher struck out a batter.",
+        "The number of times a pitcher surrenders a base on balls.",
+        "The ratio of strikeouts to walks by a pitcher.",
+        "The number of hits surrendered by a pitcher.",
+        "The number of runs allowed by a pitcher.",
+        "The number of earned runs surrendered by a pitcher.",
+        "The number of times a pitcher enters and finishes the game without surrendering the lead in a save opportunity.",
+        "The number of times a pitcher enters the game with the lead, gets at least an out and leaves the game wihtout having given up the lead.",
+        "The number of times a pitchers has a save opportunity and surrenders the lead."
+      ],
+      "displayName": "Postseason Pitching",
+      "displayNames": [
+        "Games Played",
+        "Games Started",
+        "Wins",
+        "Losses",
+        "Win Percentage",
+        "Wins Above Replacement",
+        "Earned Run Average",
+        "Walks Plus Hits Per Inning Pitched",
+        "Innings pitched",
+        "Strikeouts",
+        "Walks",
+        "Strikeout To Walk Ratio",
+        "Hits",
+        "Runs",
+        "Earned runs",
+        "Saves",
+        "Holds",
+        "Blown Saves"
+      ],
+      "labels": [
+        "GP",
+        "GS",
+        "W",
+        "L",
+        "W%",
+        "WAR",
+        "ERA",
+        "WHIP",
+        "IP",
+        "K",
+        "BB",
+        "K/BB",
+        "H",
+        "R",
+        "ER",
+        "SV",
+        "HLD",
+        "BLSV"
+      ],
+      "name": "postseason-pitching",
+      "names": [
+        "gamesPlayed",
+        "gamesStarted",
+        "wins",
+        "losses",
+        "winPct",
+        "WARBR",
+        "ERA",
+        "WHIP",
+        "innings",
+        "strikeouts",
+        "walks",
+        "strikeoutToWalkRatio",
+        "hits",
+        "runs",
+        "earnedRuns",
+        "saves",
+        "holds",
+        "blownSaves"
+      ],
+      "sortKey": "postseason-pitching",
+      "statistics": [
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "4",
+            "4",
+            "2",
+            "1",
+            ".667",
+            "0.0",
+            "4.43",
+            "1.13",
+            "20.1",
+            "28",
+            "7",
+            "4.0",
+            "16",
+            "10",
+            "10",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        }
+      ],
+      "totals": [
+        "4",
+        "4",
+        "2",
+        "1",
+        ".667",
+        "0.0",
+        "4.43",
+        "1.13",
+        "20.1",
+        "28",
+        "7",
+        "4.0",
+        "16",
+        "10",
+        "10",
+        "0",
+        "0",
+        "0"
+      ]
+    },
+    {
+      "descriptions": [
+        "The number of pitches a pitcher throws.",
+        "The number of batters faced by a pitcher.",
+        "The number of pitches a pitcher throws.-The number of batters faced by a pitcher.",
+        "The opponent's batting average for a pitcher.",
+        "THe opponent's on base percentage for a pitcher.",
+        "The opponent's slugging percentage for a pitcher.",
+        "The opponent's on base percentage plus slugging percentage for a pitcher.",
+        "The number of doubles allowed by a pitcher.",
+        "The number of triples surrendered by the picher",
+        "The number of times a pitcher has allowed a home run.",
+        "The number of bases allowed by the pitcher.",
+        "The number of runs scored due to the actions of the batter.",
+        "The number of batters hit by a pitcher.",
+        "The number of times a sacrifce bunt is allowed by a pitcher.",
+        "The number of sacrifice flies surrendered.",
+        "The number of times that a pitcher has intentionally walked a batter."
+      ],
+      "displayName": "Opponent Batting",
+      "displayNames": [
+        "Pitches",
+        "Batters Faced",
+        "Pitches-Batters Faced",
+        "Opponent Batting Average",
+        "Opponent's On-base pct.",
+        "Opponent's Slugging pct.",
+        "Opponent's OPB Pct + SLG Pct",
+        "Doubles",
+        "Triples",
+        "Home Runs",
+        "Total Bases",
+        "Runs Batted In",
+        "Batters Hit",
+        "Sacrifice Bunts",
+        "Sacrifice Flies",
+        "Intentional Walks"
+      ],
+      "labels": [
+        "P",
+        "TBF",
+        "P-TBF",
+        "OBA",
+        "OOBP",
+        "OSLUG",
+        "OOPS",
+        "2B",
+        "3B",
+        "HR",
+        "TB",
+        "RBI",
+        "BH",
+        "SH",
+        "SF",
+        "IBB"
+      ],
+      "name": "opponent-batting",
+      "names": [
+        "pitches",
+        "battersFaced",
+        "pitches-battersFaced",
+        "opponentAvg",
+        "opponentOnBasePct",
+        "opponentSlugAvg",
+        "opponentOPS",
+        "doubles",
+        "triples",
+        "homeRuns",
+        "opponentTotalBases",
+        "RBIs",
+        "battersHit",
+        "sacBunts",
+        "sacFlies",
+        "intentionalWalks"
+      ],
+      "sortKey": "opponent-batting",
+      "statistics": [
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "853",
+            "211",
+            "4.043",
+            ".203",
+            ".289",
+            ".332",
+            ".621",
+            "6",
+            "0",
+            "6",
+            "62",
+            "17",
+            "1",
+            "0",
+            "1",
+            "0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "80",
+            "16",
+            "5.000",
+            ".375",
+            ".688",
+            ".375",
+            "1.063",
+            "0",
+            "0",
+            "0",
+            "3",
+            "6",
+            "0",
+            "0",
+            "0",
+            "0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2021",
+            "year": 2021
+          },
+          "stats": [
+            "2027",
+            "533",
+            "3.803",
+            ".207",
+            ".286",
+            ".351",
+            ".637",
+            "23",
+            "0",
+            "15",
+            "166",
+            "36",
+            "10",
+            "2",
+            "4",
+            "2"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "2629",
+            "660",
+            "3.983",
+            ".203",
+            ".258",
+            ".316",
+            ".574",
+            "23",
+            "2",
+            "14",
+            "193",
+            "41",
+            "2",
+            "0",
+            "3",
+            "0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "2094",
+            "531",
+            "3.944",
+            ".184",
+            ".285",
+            ".333",
+            ".618",
+            "15",
+            "0",
+            "18",
+            "154",
+            "47",
+            "11",
+            "0",
+            "1",
+            "0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "753",
+            "188",
+            "4.005",
+            ".227",
+            ".261",
+            ".313",
+            ".573",
+            "6",
+            "0",
+            "3",
+            "55",
+            "13",
+            "0",
+            "0",
+            "3",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2026",
+            "year": 2026
+          },
+          "stats": [
+            "667",
+            "171",
+            "3.901",
+            ".161",
+            ".229",
+            ".245",
+            ".475",
+            "7",
+            "0",
+            "2",
+            "38",
+            "6",
+            "3",
+            "1",
+            "1",
+            "0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        }
+      ],
+      "totals": [
+        "9103",
+        "2310",
+        "3.941",
+        ".199",
+        ".275",
+        ".324",
+        ".598",
+        "80",
+        "2",
+        "58",
+        "671",
+        "166",
+        "27",
+        "3",
+        "13",
+        "2"
+      ]
+    },
+    {
+      "descriptions": [
+        "The average number of pitches per game started by a pitcher.",
+        "The average number of pitches per inning.",
+        "The average number of strikeouts for a pitcher per 9 innings.",
+        "The number of quality starts for a pitcher.",
+        "The number of times that pitcher starts and finishes a game.",
+        "The number of times that a pitcher allows zero runs.",
+        "The average game score for a pitcher.",
+        "The number of ground balls hit against a pitcher.",
+        "The number of fly balls a pitcher has produced.",
+        "The number of ground balls to fly balls.",
+        "The number of baserunners when a relief pitcher enters the game.",
+        "The number of inherited runners who scored.",
+        "The number of times that a pitcher pitches a wild pitch.",
+        "The number of times that a pitcher balks.",
+        "The number of times a pitcher allows a baserunner to steal a base.",
+        "The number of times a pitcher gets out a baserunner trying to steal a base.",
+        "The average number of runs scored while the pitcher is pitching."
+      ],
+      "displayName": "Expanded Pitching",
+      "displayNames": [
+        "Pitches Per Start",
+        "Pitches Per Inning",
+        "Strikeouts Per 9 Innings",
+        "Quality Starts",
+        "Complete Games",
+        "Shutouts",
+        "Game Score",
+        "Ground Balls",
+        "Fly Balls",
+        "Ground To Fly Ball Ratio",
+        "Inherited Runners",
+        "Inherited Runners Scored",
+        "Wild Pitches",
+        "Balks",
+        "Stolen Bases",
+        "Caught Stealing",
+        "Run Support"
+      ],
+      "labels": [
+        "P/S",
+        "P/I",
+        "K/9",
+        "QS",
+        "CG",
+        "SHO",
+        "GSC",
+        "GB",
+        "FB",
+        "G/F",
+        "IR",
+        "IRS",
+        "WP",
+        "BK",
+        "SB",
+        "CS",
+        "RSUP"
+      ],
+      "name": "expanded-pitching",
+      "names": [
+        "pitchesPerStart",
+        "pitchesPerInning",
+        "strikeoutsPerNineInnings",
+        "qualityStarts",
+        "completeGames",
+        "shutouts",
+        "avgGameScore",
+        "groundBalls",
+        "flyBalls",
+        "groundToFlyRatio",
+        "inheritedRunners",
+        "inheritedRunnersScored",
+        "wildPitches",
+        "balks",
+        "stolenBases",
+        "caughtStealing",
+        "runSupport"
+      ],
+      "sortKey": "expanded-pitching",
+      "statistics": [
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2018",
+            "year": 2018
+          },
+          "stats": [
+            "85.3",
+            "16.5",
+            "11.0",
+            "5",
+            "0",
+            "0",
+            "48.6",
+            "50",
+            "75",
+            "0.7",
+            "0",
+            "0",
+            "5",
+            "0",
+            "1",
+            "1",
+            "44.0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2020",
+            "year": 2020
+          },
+          "stats": [
+            "40.0",
+            "48.0",
+            "16.2",
+            "0",
+            "0",
+            "0",
+            "33.0",
+            "2",
+            "3",
+            "0.7",
+            "0",
+            "0",
+            "1",
+            "0",
+            "0",
+            "0",
+            "9.0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2021",
+            "year": 2021
+          },
+          "stats": [
+            "88.1",
+            "15.6",
+            "10.8",
+            "14",
+            "0",
+            "0",
+            "58.5",
+            "150",
+            "173",
+            "0.9",
+            "0",
+            "0",
+            "10",
+            "2",
+            "2",
+            "2",
+            "97.0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2022",
+            "year": 2022
+          },
+          "stats": [
+            "93.9",
+            "15.8",
+            "11.9",
+            "16",
+            "0",
+            "0",
+            "62.7",
+            "165",
+            "229",
+            "0.7",
+            "0",
+            "0",
+            "14",
+            "0",
+            "4",
+            "1",
+            "101.0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2023",
+            "year": 2023
+          },
+          "stats": [
+            "91.0",
+            "15.9",
+            "11.4",
+            "12",
+            "1",
+            "1",
+            "60.2",
+            "136",
+            "161",
+            "0.8",
+            "0",
+            "0",
+            "12",
+            "0",
+            "5",
+            "3",
+            "98.0"
+          ],
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2025",
+            "year": 2025
+          },
+          "stats": [
+            "53.8",
+            "16.0",
+            "11.9",
+            "1",
+            "0",
+            "0",
+            "54.4",
+            "49",
+            "68",
+            "0.7",
+            "0",
+            "0",
+            "10",
+            "0",
+            "1",
+            "0",
+            "64.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        },
+        {
+          "position": "SP",
+          "season": {
+            "displayName": "2026",
+            "year": 2026
+          },
+          "stats": [
+            "95.3",
+            "15.2",
+            "10.2",
+            "7",
+            "0",
+            "0",
+            "69.0",
+            "56",
+            "51",
+            "1.1",
+            "0",
+            "0",
+            "0",
+            "1",
+            "1",
+            "0",
+            "21.0"
+          ],
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers"
+        }
+      ],
+      "totals": [
+        "85.1",
+        "15.9",
+        "11.3",
+        "55",
+        "1",
+        "1",
+        "0.0",
+        "608",
+        "760",
+        "0.8",
+        "0",
+        "0",
+        "52",
+        "3",
+        "14",
+        "7",
+        "434.0"
+      ]
+    }
+  ],
+  "glossary": [
+    {
+      "abbreviation": "2B",
+      "displayName": "Doubles"
+    },
+    {
+      "abbreviation": "3B",
+      "displayName": "Triples"
+    },
+    {
+      "abbreviation": "BB",
+      "displayName": "Walks"
+    },
+    {
+      "abbreviation": "BH",
+      "displayName": "Batters Hit"
+    },
+    {
+      "abbreviation": "BK",
+      "displayName": "Balks"
+    },
+    {
+      "abbreviation": "BLSV",
+      "displayName": "Blown Saves"
+    },
+    {
+      "abbreviation": "CG",
+      "displayName": "Complete Games"
+    },
+    {
+      "abbreviation": "CS",
+      "displayName": "Caught Stealing"
+    },
+    {
+      "abbreviation": "ER",
+      "displayName": "Earned runs"
+    },
+    {
+      "abbreviation": "ERA",
+      "displayName": "Earned Run Average"
+    },
+    {
+      "abbreviation": "FB",
+      "displayName": "Fly Balls"
+    },
+    {
+      "abbreviation": "G/F",
+      "displayName": "Ground To Fly Ball Ratio"
+    },
+    {
+      "abbreviation": "GB",
+      "displayName": "Ground Balls"
+    },
+    {
+      "abbreviation": "GP",
+      "displayName": "Games Played"
+    },
+    {
+      "abbreviation": "GS",
+      "displayName": "Games Started"
+    },
+    {
+      "abbreviation": "GSC",
+      "displayName": "Game Score"
+    },
+    {
+      "abbreviation": "H",
+      "displayName": "Hits"
+    },
+    {
+      "abbreviation": "HLD",
+      "displayName": "Holds"
+    },
+    {
+      "abbreviation": "HR",
+      "displayName": "Home Runs"
+    },
+    {
+      "abbreviation": "IBB",
+      "displayName": "Intentional Walks"
+    },
+    {
+      "abbreviation": "IP",
+      "displayName": "Innings pitched"
+    },
+    {
+      "abbreviation": "IR",
+      "displayName": "Inherited Runners"
+    },
+    {
+      "abbreviation": "IRS",
+      "displayName": "Inherited Runners Scored"
+    },
+    {
+      "abbreviation": "K",
+      "displayName": "Strikeouts"
+    },
+    {
+      "abbreviation": "K/9",
+      "displayName": "Strikeouts Per 9 Innings"
+    },
+    {
+      "abbreviation": "K/BB",
+      "displayName": "Strikeout To Walk Ratio"
+    },
+    {
+      "abbreviation": "L",
+      "displayName": "Losses"
+    },
+    {
+      "abbreviation": "OBA",
+      "displayName": "Opponent Batting Average"
+    },
+    {
+      "abbreviation": "OOBP",
+      "displayName": "Opponent's On-base pct."
+    },
+    {
+      "abbreviation": "OOPS",
+      "displayName": "Opponent's OPB Pct + SLG Pct"
+    },
+    {
+      "abbreviation": "OSLUG",
+      "displayName": "Opponent's Slugging pct."
+    },
+    {
+      "abbreviation": "P",
+      "displayName": "Pitches"
+    },
+    {
+      "abbreviation": "P-TBF",
+      "displayName": "Pitches-Batters Faced"
+    },
+    {
+      "abbreviation": "P/I",
+      "displayName": "Pitches Per Inning"
+    },
+    {
+      "abbreviation": "P/S",
+      "displayName": "Pitches Per Start"
+    },
+    {
+      "abbreviation": "QS",
+      "displayName": "Quality Starts"
+    },
+    {
+      "abbreviation": "R",
+      "displayName": "Runs"
+    },
+    {
+      "abbreviation": "RBI",
+      "displayName": "Runs Batted In"
+    },
+    {
+      "abbreviation": "RSUP",
+      "displayName": "Run Support"
+    },
+    {
+      "abbreviation": "SB",
+      "displayName": "Stolen Bases"
+    },
+    {
+      "abbreviation": "SF",
+      "displayName": "Sacrifice Flies"
+    },
+    {
+      "abbreviation": "SH",
+      "displayName": "Sacrifice Bunts"
+    },
+    {
+      "abbreviation": "SHO",
+      "displayName": "Shutouts"
+    },
+    {
+      "abbreviation": "SV",
+      "displayName": "Saves"
+    },
+    {
+      "abbreviation": "TB",
+      "displayName": "Total Bases"
+    },
+    {
+      "abbreviation": "TBF",
+      "displayName": "Batters Faced"
+    },
+    {
+      "abbreviation": "W",
+      "displayName": "Wins"
+    },
+    {
+      "abbreviation": "W%",
+      "displayName": "Win Percentage"
+    },
+    {
+      "abbreviation": "WAR",
+      "displayName": "Wins Above Replacement"
+    },
+    {
+      "abbreviation": "WHIP",
+      "displayName": "Walks Plus Hits Per Inning Pitched"
+    },
+    {
+      "abbreviation": "WP",
+      "displayName": "Wild Pitches"
+    }
+  ]
+}
