@@ -520,8 +520,11 @@ function playerCardBodyHtml(card, headshotSrc) {
         `</tr>`
       : "";
     const kind = career.kind === "pitching" ? "Pitching" : "Batting";
+    // tabindex+role so keyboard-only users can scroll the wide table while
+    // focus is trapped in the dialog (WCAG 2.1.1); :focus-visible styled.
     table =
-      `<div class="mlb-pc-table-wrap"><table class="mlb-pc-table">` +
+      `<div class="mlb-pc-table-wrap" tabindex="0" role="group" ` +
+      `aria-label="${escapeHtml(kind)} career stats, scrollable"><table class="mlb-pc-table">` +
       `<caption class="mlb-pc-caption">${kind} — career by season</caption>` +
       `<thead><tr><th scope="col">Year</th><th scope="col">Team</th>${headCells}</tr></thead>` +
       `<tbody>${bodyRows}${totalRow}</tbody></table></div>`;
@@ -882,7 +885,8 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
         }
         .mlb-pc-close:hover { color: var(--primary-text-color, #fff); }
         .mlb-pc-close:focus-visible,
-        .mlb-pc-espn:focus-visible {
+        .mlb-pc-espn:focus-visible,
+        .mlb-pc-table-wrap:focus-visible {
           outline: 2px solid var(--warning-color, #ffb300); outline-offset: 2px;
         }
         .mlb-pc-body {
@@ -977,10 +981,10 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       <div class="mlb-pc-dialog" role="dialog" aria-modal="true"
            aria-labelledby="${titleId}" tabindex="-1">
         <div class="mlb-pc-header">
-          <div class="mlb-pc-title" id="${titleId}">Player</div>
+          <div class="mlb-pc-title" id="${titleId}" role="heading" aria-level="2">Player</div>
           <button class="mlb-pc-close" type="button" aria-label="Close">✕</button>
         </div>
-        <div class="mlb-pc-body"></div>
+        <div class="mlb-pc-body" aria-live="polite"></div>
         <div class="mlb-pc-footer">
           <a class="mlb-pc-espn" target="_blank" rel="noopener noreferrer">View on ESPN ↗</a>
         </div>
@@ -1033,6 +1037,11 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
 
   _setPlayerCardState(state, card) {
     if (!this._pcBody) return;
+    // Tell assistive tech the dialog is fetching; flipping it back to
+    // "false" is what makes the polite live region announce the result.
+    if (this._pcDialog) {
+      this._pcDialog.setAttribute("aria-busy", state === "loading" ? "true" : "false");
+    }
     // The "ready" body is a left-aligned scrolling layout; the message
     // states stay centered (default .mlb-pc-body flexbox).
     this._pcBody.className =

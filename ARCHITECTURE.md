@@ -103,6 +103,42 @@ A plain ES module custom element (not Lit). It:
 - Renders one of three layouts based on `stateInfo.pillClass`:
   `live`, `final`, or `next` (compact pre-game layout).
 
+## Player career popup (on-demand path)
+
+Distinct from the push flow above. Clicking a (yellow) player name can open
+an in-card popup with that player's bio + season-by-season career stats. The
+data is **not** carried in sensor attributes — it is fetched on demand for an
+arbitrary athlete id:
+
+```
+  card click → hass WebSocket → mlb_live_scoreboard/player_card
+                                   (__init__.py command handler)
+                                          │
+                                          ▼
+                 coordinator._get_player_card(athlete_id)
+                   - concurrent bio + career stats fetch (asyncio.gather)
+                   - own TTL cache (PLAYER_CARD_TTL_SECONDS) + stale fallback
+                   - pure _parse_player_card → PlayerCard (types.py)
+                                          │
+                                          ▼
+              card._fetchPlayerCard() → playerCardBodyHtml() → modal
+```
+
+- **Route R3** (server-side fetch via a registered WebSocket command) was
+  chosen over a browser-direct fetch: one shared cached fetch for all
+  dashboard clients, reuses the coordinator's `_get_json` resilience, no
+  dependency on ESPN CORS, no sensor-state growth. The command is registered
+  once in `async_setup` (`_register_player_card_websocket`, guarded by
+  `_ws_registered`); any configured entry's coordinator can service it
+  (`_any_coordinator`) since the fetch is not team-specific.
+- The card de-dupes in-flight requests and caches resolved cards per
+  instance. The modal is the first in the codebase: `role="dialog"`,
+  `aria-modal`, focus trap, ESC/backdrop/close, scroll-lock, polite live
+  region. ESPN's player page stays reachable via the popup footer link, or
+  directly when `player_link_target: espn`.
+- Two-way players: ESPN's `/stats` returns categories for the player's
+  *listed* position only, so a single side renders (documented limitation).
+
 ## Sensor attributes (HA state)
 
 Top-level `extra_state_attributes` exposed on the sensor:
@@ -154,6 +190,8 @@ All card options have safe defaults. Minimum required is `entity`.
 | `show_base_occupancy` | `true` | show occupied-bases summary row |
 | `show_diamond` | `true` | show the bases diamond graphic |
 | `show_count` | `true` | show ball/strike/out count dots |
+| `show_win_probability` | `true` | show the live win-probability bar |
+| `player_link_target` | `popup` | clicking a player name: `popup` (in-card career popup) or `espn` (open ESPN's player page) |
 | `refresh_rate` | `0` | seconds; `0` disables (rely on HA state updates) |
 
 ## ESPN endpoints used
@@ -163,7 +201,8 @@ All card options have safe defaults. Minimum required is `entity`.
 | `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/<abbr>/schedule` | team schedule | per refresh + 5 min stale fallback |
 | `site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=<id>` | live game state | per refresh |
 | `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/<id>` | team logo / record | 1 hour (`TEAM_METADATA_TTL_SECONDS`) |
-| `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>/stats` | batter season stats | 60 s (`BATTER_SEASON_STATS_TTL_SECONDS`) |
+| `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>/stats` | batter season stats / popup career table | 60 s batter (`BATTER_SEASON_STATS_TTL_SECONDS`); 6 h popup (`PLAYER_CARD_TTL_SECONDS`) |
+| `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>` | player bio (popup header) | 6 h (`PLAYER_CARD_TTL_SECONDS`) + 24 h stale fallback |
 
 These are unauthenticated public endpoints. Calls share a single aiohttp
 session and are awaited concurrently where independent.
