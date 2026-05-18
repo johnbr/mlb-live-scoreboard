@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.10.0...v1.11.0) (2026-05-18)
+
+
+### Features
+
+* in-card player career stats popup ([#10](https://github.com/johnbr/mlb-live-scoreboard/issues/10)) ([ea4657b](https://github.com/johnbr/mlb-live-scoreboard/commit/ea4657bb9d4e74e40905dcb2c3b65feb6eceac87))
+
 ## [1.10.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.9.3...v1.10.0) (2026-05-17)
 
 
