@@ -436,6 +436,105 @@ function renderPlayerHeadshot(card, url, alt = "") {
     : `<div class="player-shot placeholder"></div>`;
 }
 
+function escapeHtml(value) {
+  return String(value == null ? "" : value).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+  );
+}
+
+// ESPN's human-facing player page. Used both for the `player_link_target:
+// espn` direct-open mode (Option A behavior) and the popup footer link, so
+// the URL shape lives in one place.
+function espnPlayerUrl(id) {
+  return `https://www.espn.com/mlb/player/_/id/${encodeURIComponent(String(id == null ? "" : id))}`;
+}
+
+// Build the player career popup body — bio header + season-by-season career
+// table — from a normalized PlayerCard (see coordinator._parse_player_card /
+// types.PlayerCard). Pure string builder (no DOM/`this`) so it can be
+// unit-checked offline against the Chunk 0 fixtures; the caller pre-resolves
+// `headshotSrc` via requestCachedLogo. Tolerates a bio-only or stats-only
+// card: a missing career table degrades to a short note, the bio header to
+// whatever fields are present.
+function playerCardBodyHtml(card, headshotSrc) {
+  const safe = card && typeof card === "object" ? card : {};
+  const bio = safe.bio || {};
+  const career = safe.career || {};
+  const glossary = safe.glossary || {};
+
+  const shot = headshotSrc
+    ? `<img class="mlb-pc-shot" src="${escapeHtml(headshotSrc)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+    : `<div class="mlb-pc-shot mlb-pc-shot--ph" aria-hidden="true"></div>`;
+
+  const chips = [
+    bio.team,
+    bio.position,
+    bio.bats_throws ? `B/T ${bio.bats_throws}` : "",
+    bio.height,
+    bio.weight,
+    bio.age ? `Age ${bio.age}` : "",
+    bio.jersey ? `#${bio.jersey}` : "",
+  ].filter((x) => x && String(x).trim());
+  const sub = [
+    bio.draft ? `Draft: ${bio.draft}` : "",
+    bio.debut_year ? `MLB debut ${bio.debut_year}` : "",
+  ].filter((x) => x && String(x).trim());
+
+  const header =
+    `<div class="mlb-pc-bio">${shot}<div class="mlb-pc-bio-meta">` +
+    (chips.length
+      ? `<div class="mlb-pc-bio-line">${chips.map((c) => escapeHtml(c)).join(" · ")}</div>`
+      : "") +
+    (sub.length
+      ? `<div class="mlb-pc-bio-sub">${sub.map((c) => escapeHtml(c)).join(" · ")}</div>`
+      : "") +
+    `</div></div>`;
+
+  const columns = Array.isArray(career.columns) ? career.columns : [];
+  const seasons = Array.isArray(career.seasons) ? career.seasons : [];
+  const totals = Array.isArray(career.totals) ? career.totals : [];
+
+  let table;
+  if (columns.length && seasons.length) {
+    const headCells = columns
+      .map((label) => {
+        const tip = glossary[label];
+        return `<th scope="col"${tip ? ` title="${escapeHtml(tip)}"` : ""}>${escapeHtml(label)}</th>`;
+      })
+      .join("");
+    const bodyRows = seasons
+      .map((s) => {
+        const cells = columns
+          .map((_, i) => `<td>${escapeHtml((s.stats || [])[i] ?? "")}</td>`)
+          .join("");
+        return (
+          `<tr><th scope="row">${escapeHtml(s.year || "")}</th>` +
+          `<td class="mlb-pc-team">${escapeHtml(s.team || "")}</td>${cells}</tr>`
+        );
+      })
+      .join("");
+    const totalRow = totals.length
+      ? `<tr class="mlb-pc-total"><th scope="row">Career</th><td class="mlb-pc-team"></td>` +
+        columns.map((_, i) => `<td>${escapeHtml(totals[i] ?? "")}</td>`).join("") +
+        `</tr>`
+      : "";
+    const kind = career.kind === "pitching" ? "Pitching" : "Batting";
+    // tabindex+role so keyboard-only users can scroll the wide table while
+    // focus is trapped in the dialog (WCAG 2.1.1); :focus-visible styled.
+    table =
+      `<div class="mlb-pc-table-wrap" tabindex="0" role="group" ` +
+      `aria-label="${escapeHtml(kind)} career stats, scrollable"><table class="mlb-pc-table">` +
+      `<caption class="mlb-pc-caption">${kind} — career by season</caption>` +
+      `<thead><tr><th scope="col">Year</th><th scope="col">Team</th>${headCells}</tr></thead>` +
+      `<tbody>${bodyRows}${totalRow}</tbody></table></div>`;
+  } else {
+    table = `<div class="mlb-pc-msg mlb-pc-nostats">No career stats available for this player.</div>`;
+  }
+
+  return header + table;
+}
+
 function renderDueUpCards(card, dueUp, inningDescription = "") {
   const list = Array.isArray(dueUp) ? dueUp.filter(Boolean).slice(0, 3) : [];
   if (!list.length) return "";
@@ -625,6 +724,11 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       show_count: true,
       show_win_probability: true,
       refresh_rate: 0, // seconds, 0 = disabled (rely on hass state updates)
+      // Clicking a (yellow) player name: "popup" opens the in-card career
+      // popup (default); "espn" opens ESPN's player page directly (the
+      // original Option A behavior). ESPN stays reachable either way — the
+      // popup footer always carries a "View on ESPN" link.
+      player_link_target: "popup",
       ...config,
     };
     // Clear any existing refresh timer when config changes
@@ -694,9 +798,323 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     if (!link || !this.content.contains(link)) return false;
     const id = link.getAttribute("data-athlete-id");
     if (id) {
-      window.open(`https://www.espn.com/mlb/player/_/id/${encodeURIComponent(id)}`, "_blank", "noopener,noreferrer");
+      // `player_link_target` (default "popup") chooses the action. "espn"
+      // restores Option A's direct-to-ESPN behavior; either way ESPN stays
+      // reachable (the popup footer always links out). Both click and
+      // keyboard activation funnel through here, so parity is automatic.
+      const target = String(this.config?.player_link_target || "popup").toLowerCase();
+      if (target === "espn") {
+        window.open(espnPlayerUrl(id), "_blank", "noopener");
+      } else {
+        this._openPlayerCardPopup(id);
+      }
     }
     return true;
+  }
+
+  // Fetch a player's career card via the integration's WebSocket command
+  // (server-side fetch reuses the coordinator's TTL cache; see
+  // OPTION_B_HANDOFF.md route R3). Per-card result cache + in-flight de-dupe
+  // so repeated clicks on the same name don't re-hit the socket. Resolves to
+  // the card object, or null on any failure (caller renders an error state).
+  _fetchPlayerCard(athleteId) {
+    const id = String(athleteId == null ? "" : athleteId).trim();
+    if (!id || !this._hass || !this._hass.connection) return Promise.resolve(null);
+    this._playerCardCache = this._playerCardCache || new Map();
+    this._playerCardInflight = this._playerCardInflight || new Map();
+    if (this._playerCardCache.has(id)) return Promise.resolve(this._playerCardCache.get(id));
+    if (this._playerCardInflight.has(id)) return this._playerCardInflight.get(id);
+    const req = this._hass.connection
+      .sendMessagePromise({ type: "mlb_live_scoreboard/player_card", athlete_id: id })
+      .then((res) => {
+        const card = (res && res.player_card) || null;
+        if (card) this._playerCardCache.set(id, card);
+        return card;
+      })
+      .catch((err) => {
+        console.debug(`[${CARD_TAG}] player_card fetch failed for ${id}:`, err);
+        return null;
+      })
+      .finally(() => {
+        this._playerCardInflight.delete(id);
+      });
+    this._playerCardInflight.set(id, req);
+    return req;
+  }
+
+  // --- Player career popup. Chunk 3 built the modal shell + loading/error/
+  // empty states; Chunk 4 fills the "ready" branch (bio header + career
+  // table) via the module-level playerCardBodyHtml builder. ---
+
+  _ensurePlayerCardPopup() {
+    if (this._pcOverlay) return;
+    if (!document.getElementById("mlb-pc-style")) {
+      const style = document.createElement("style");
+      style.id = "mlb-pc-style";
+      style.textContent = `
+        .mlb-pc-overlay {
+          position: fixed; inset: 0; z-index: 99999;
+          display: flex; align-items: center; justify-content: center;
+          padding: 16px; background: rgba(0,0,0,0.6);
+        }
+        .mlb-pc-overlay[hidden] { display: none; }
+        .mlb-pc-dialog {
+          width: min(560px, 94vw); max-height: 86vh;
+          display: flex; flex-direction: column; overflow: hidden;
+          background: var(--card-background-color, var(--ha-card-background, #1c1c1c));
+          color: var(--primary-text-color, #e1e1e1);
+          border-radius: var(--ha-card-border-radius, 12px);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+          outline: none;
+        }
+        .mlb-pc-header {
+          display: flex; align-items: center; gap: 8px;
+          padding: 12px 14px;
+          border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+        }
+        .mlb-pc-title {
+          flex: 1; min-width: 0; font-weight: 600; font-size: 1.05em;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          color: var(--warning-color, #ffb300);
+        }
+        .mlb-pc-close {
+          flex: none; cursor: pointer; border: 0; border-radius: 50%;
+          width: 30px; height: 30px; line-height: 30px; padding: 0;
+          font-size: 16px; background: transparent;
+          color: var(--secondary-text-color, #9b9b9b);
+        }
+        .mlb-pc-close:hover { color: var(--primary-text-color, #fff); }
+        .mlb-pc-close:focus-visible,
+        .mlb-pc-espn:focus-visible,
+        .mlb-pc-table-wrap:focus-visible {
+          outline: 2px solid var(--warning-color, #ffb300); outline-offset: 2px;
+        }
+        .mlb-pc-body {
+          padding: 18px 16px; overflow: auto;
+          min-height: 96px; display: flex;
+          align-items: center; justify-content: center; text-align: center;
+        }
+        .mlb-pc-msg { color: var(--secondary-text-color, #9b9b9b); }
+        .mlb-pc-retry {
+          margin-top: 10px; cursor: pointer;
+          background: transparent; color: var(--warning-color, #ffb300);
+          border: 1px solid var(--divider-color, rgba(255,255,255,0.2));
+          border-radius: 6px; padding: 5px 12px;
+        }
+        .mlb-pc-spinner {
+          width: 26px; height: 26px; border-radius: 50%;
+          border: 3px solid var(--divider-color, rgba(255,255,255,0.2));
+          border-top-color: var(--warning-color, #ffb300);
+          animation: mlb-pc-spin 0.8s linear infinite; margin: 0 auto 10px;
+        }
+        @keyframes mlb-pc-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+          .mlb-pc-spinner { animation-duration: 2s; }
+        }
+        .mlb-pc-footer {
+          padding: 10px 14px; text-align: right;
+          border-top: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+        }
+        .mlb-pc-espn {
+          color: var(--warning-color, #ffb300);
+          text-decoration: none; font-size: 0.92em;
+        }
+        .mlb-pc-espn:hover { text-decoration: underline; }
+        .mlb-pc-body--ready {
+          display: block; text-align: left; align-items: stretch;
+        }
+        .mlb-pc-bio {
+          display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+        }
+        .mlb-pc-shot {
+          flex: none; width: 64px; height: 64px; border-radius: 50%;
+          object-fit: cover;
+          background: var(--divider-color, rgba(255,255,255,0.12));
+        }
+        .mlb-pc-shot--ph { display: block; }
+        .mlb-pc-bio-meta { min-width: 0; }
+        .mlb-pc-bio-line {
+          font-size: 0.9em; color: var(--primary-text-color, #e1e1e1);
+        }
+        .mlb-pc-bio-sub {
+          font-size: 0.82em; color: var(--secondary-text-color, #9b9b9b);
+          margin-top: 4px;
+        }
+        .mlb-pc-table-wrap {
+          overflow-x: auto; -webkit-overflow-scrolling: touch;
+        }
+        .mlb-pc-table {
+          border-collapse: collapse; width: 100%;
+          font-size: 0.82em; white-space: nowrap;
+        }
+        .mlb-pc-caption {
+          caption-side: top; text-align: left; padding: 0 0 6px;
+          font-size: 0.92em; color: var(--secondary-text-color, #9b9b9b);
+        }
+        .mlb-pc-table th, .mlb-pc-table td {
+          padding: 5px 8px; text-align: right;
+          border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.08));
+        }
+        .mlb-pc-table thead th {
+          color: var(--secondary-text-color, #9b9b9b);
+          font-weight: 600; cursor: help;
+        }
+        .mlb-pc-table th[scope="row"] { text-align: left; }
+        .mlb-pc-table td.mlb-pc-team { text-align: left; }
+        .mlb-pc-total th, .mlb-pc-total td {
+          font-weight: 700;
+          color: var(--primary-text-color, #e1e1e1);
+          border-top: 2px solid var(--divider-color, rgba(255,255,255,0.2));
+          border-bottom: 0;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "mlb-pc-overlay";
+    overlay.hidden = true;
+    // Unique per instance: multiple cards on one dashboard would otherwise
+    // emit duplicate ids and break aria-labelledby resolution.
+    const titleId = `mlb-pc-title-${Math.random().toString(36).slice(2, 9)}`;
+    overlay.innerHTML = `
+      <div class="mlb-pc-dialog" role="dialog" aria-modal="true"
+           aria-labelledby="${titleId}" tabindex="-1">
+        <div class="mlb-pc-header">
+          <div class="mlb-pc-title" id="${titleId}" role="heading" aria-level="2">Player</div>
+          <button class="mlb-pc-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <div class="mlb-pc-body" aria-live="polite"></div>
+        <div class="mlb-pc-footer">
+          <a class="mlb-pc-espn" target="_blank" rel="noopener noreferrer">View on ESPN ↗</a>
+        </div>
+      </div>`;
+
+    this._pcOverlay = overlay;
+    this._pcDialog = overlay.querySelector(".mlb-pc-dialog");
+    this._pcTitle = overlay.querySelector(".mlb-pc-title");
+    this._pcBody = overlay.querySelector(".mlb-pc-body");
+    this._pcEspn = overlay.querySelector(".mlb-pc-espn");
+
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) return this._closePlayerCardPopup();
+      const t = ev.target instanceof Element ? ev.target : null;
+      if (t && t.closest(".mlb-pc-close")) return this._closePlayerCardPopup();
+      if (t && t.closest(".mlb-pc-retry") && this._pcAthleteId) {
+        this._openPlayerCardPopup(this._pcAthleteId);
+      }
+    });
+    overlay.addEventListener("keydown", (ev) => this._onPcKeydown(ev));
+    document.body.appendChild(overlay);
+  }
+
+  _onPcKeydown(ev) {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      this._closePlayerCardPopup();
+      return;
+    }
+    if (ev.key !== "Tab") return;
+    const focusables = this._pcDialog.querySelectorAll(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusables.length) {
+      ev.preventDefault();
+      this._pcDialog.focus();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (ev.shiftKey && (active === first || active === this._pcDialog)) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && active === last) {
+      ev.preventDefault();
+      first.focus();
+    }
+  }
+
+  _setPlayerCardState(state, card) {
+    if (!this._pcBody) return;
+    // Tell assistive tech the dialog is fetching; flipping it back to
+    // "false" is what makes the polite live region announce the result.
+    if (this._pcDialog) {
+      this._pcDialog.setAttribute("aria-busy", state === "loading" ? "true" : "false");
+    }
+    // The "ready" body is a left-aligned scrolling layout; the message
+    // states stay centered (default .mlb-pc-body flexbox).
+    this._pcBody.className =
+      state === "ready" ? "mlb-pc-body mlb-pc-body--ready" : "mlb-pc-body";
+    if (state === "loading") {
+      this._pcBody.innerHTML =
+        `<div><div class="mlb-pc-spinner"></div><div class="mlb-pc-msg">Loading player…</div></div>`;
+    } else if (state === "error") {
+      this._pcBody.innerHTML =
+        `<div><div class="mlb-pc-msg">Couldn't load this player.</div>` +
+        `<button class="mlb-pc-retry" type="button" data-pc-retry>Retry</button></div>`;
+    } else if (state === "empty") {
+      this._pcBody.innerHTML = `<div class="mlb-pc-msg">No stats available for this player.</div>`;
+    } else {
+      // "ready": bio header + career table. requestCachedLogo reuses the
+      // shared image cache (returns the remote URL synchronously on a miss,
+      // so the <img> always loads even before the blob resolves).
+      const safe = card || {};
+      const shot = requestCachedLogo(this, (safe.bio && safe.bio.headshot) || "");
+      this._pcBody.innerHTML = playerCardBodyHtml(safe, shot);
+    }
+  }
+
+  _openPlayerCardPopup(athleteId) {
+    const id = String(athleteId == null ? "" : athleteId).trim();
+    if (!id) return;
+    this._ensurePlayerCardPopup();
+    this._pcAthleteId = id;
+    if (this._pcOverlay.hidden) {
+      this._pcReturnFocus =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      this._pcPrevBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      this._pcOverlay.hidden = false;
+    }
+    this._pcTitle.textContent = "Player";
+    this._pcEspn.href = espnPlayerUrl(id);
+    this._setPlayerCardState("loading");
+    this._pcDialog.focus();
+
+    const token = (this._pcToken || 0) + 1;
+    this._pcToken = token;
+    this._fetchPlayerCard(id).then((card) => {
+      // Ignore a resolution that lost the race to a newer open()/close().
+      if (token !== this._pcToken || this._pcOverlay.hidden) return;
+      if (!card) {
+        this._setPlayerCardState("error");
+      } else if (!card.bio?.name && !(card.career?.seasons || []).length) {
+        this._setPlayerCardState("empty");
+      } else {
+        if (card.bio?.name) this._pcTitle.textContent = card.bio.name;
+        this._setPlayerCardState("ready", card);
+      }
+    });
+  }
+
+  _closePlayerCardPopup() {
+    if (!this._pcOverlay || this._pcOverlay.hidden) return;
+    this._pcToken = (this._pcToken || 0) + 1; // invalidate any in-flight render
+    this._pcOverlay.hidden = true;
+    document.body.style.overflow = this._pcPrevBodyOverflow || "";
+    if (this._pcReturnFocus && document.contains(this._pcReturnFocus)) {
+      this._pcReturnFocus.focus();
+    }
+    this._pcReturnFocus = null;
+  }
+
+  _destroyPlayerCardPopup() {
+    if (!this._pcOverlay) return;
+    this._closePlayerCardPopup();
+    this._pcOverlay.remove();
+    this._pcOverlay = null;
+    this._pcDialog = this._pcTitle = this._pcBody = this._pcEspn = null;
   }
 
   _onContentClick(ev) {
@@ -744,6 +1162,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     this._clearRefreshTimer();
     this._clearHoldExpiryTimer();
     clearTimeout(this._renderTimer);
+    this._destroyPlayerCardPopup();
   }
 
   set hass(hass) {

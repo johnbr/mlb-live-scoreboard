@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -34,6 +35,8 @@ from .const import (
     LIVE_STATES,
     MAX_LINESCORES,
     MLB_TEAM_MAP,
+    PLAYER_CARD_STALE_FALLBACK_SECONDS,
+    PLAYER_CARD_TTL_SECONDS,
     SCHEDULE_STALE_FALLBACK_SECONDS,
     SCHEDULE_TTL_SECONDS,
     SHOW_NEXT_AFTER_PREV_SECONDS,
@@ -54,6 +57,7 @@ from .types import (
     Leaders,
     OnDeck,
     PitcherStats,
+    PlayerCard,
     ProbablePitchers,
     RecentPlay,
     Situation,
@@ -250,6 +254,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # athlete_id -> (fetched_at_ts, payload). Avoids repeat fetches for the
         # same batter during a single at-bat.
         self._batter_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # athlete_id -> (fetched_at_ts, parsed PlayerCard). Backs the player
+        # career-stats popup; opened interactively, so a long TTL keeps repeat
+        # opens instant and a stale entry is reused if ESPN is briefly down.
+        self._player_card_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         # (fetched_at_ts, payload) for the team schedule endpoint. Used as a
         # short-lived fallback when ESPN's schedule endpoint has a transient
         # failure, so a one-poll hiccup doesn't blank the card.
@@ -1196,6 +1204,163 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 "avg": get_idx(avg_idx),
             }
         return {}
+
+    # Primary stats category preference, by exact ESPN category name. A hitter
+    # exposes ``career-batting``; a pitcher (incl. a two-way player ESPN lists
+    # as a pitcher) exposes ``pitching``. Postseason / expanded / advanced and
+    # ``opponent-batting`` (opponents' line, not the player's) are skipped.
+    _PRIMARY_STAT_CATEGORIES: tuple[str, ...] = ("career-batting", "batting", "pitching")
+
+    async def async_get_player_card(self, athlete_id: str) -> PlayerCard:
+        """Public entrypoint for the player-card WebSocket command.
+
+        Thin boundary over :meth:`_get_player_card` so cross-module callers
+        (the integration's websocket handler) don't reach into a private
+        method; all fetch/cache/parse logic lives in the private impl.
+        """
+        return await self._get_player_card(athlete_id)
+
+    async def _get_player_card(self, athlete_id: str) -> PlayerCard:
+        """Fetch a player's full career card (bio + career stats), TTL-cached.
+
+        Bio and career stats live behind two separate ESPN athlete endpoints
+        (the stats payload carries no bio block), so both are fetched
+        concurrently. The popup is opened interactively rather than polled, so
+        a long TTL makes repeat opens instant; a still-recent cached card is
+        reused as a fallback when ESPN is briefly unreachable rather than
+        blanking the popup.
+        """
+        if not athlete_id:
+            return {}
+        now_ts = time.time()
+        cached = self._player_card_cache.get(athlete_id)
+        if cached is not None and (now_ts - cached[0]) < PLAYER_CARD_TTL_SECONDS:
+            return cached[1]
+        base = f"https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{athlete_id}"
+        suffix = "?region=us&lang=en&contentorigin=espn"
+        bio_res, stats_res = await asyncio.gather(
+            self._get_json(f"{base}{suffix}"),
+            self._get_json(f"{base}/stats{suffix}"),
+            return_exceptions=True,
+        )
+        bio_payload = bio_res if isinstance(bio_res, dict) else {}
+        stats_payload = stats_res if isinstance(stats_res, dict) else {}
+        if not bio_payload and not stats_payload:
+            # Both endpoints failed — serve a still-acceptable stale card
+            # rather than an empty popup.
+            if cached is not None and (now_ts - cached[0]) < PLAYER_CARD_STALE_FALLBACK_SECONDS:
+                return cached[1]
+            _LOGGER.debug(
+                "Unable to fetch player card for %s: bio=%s stats=%s",
+                athlete_id, bio_res, stats_res,
+            )
+            return {}
+        card = self._parse_player_card(athlete_id, bio_payload, stats_payload)
+        self._player_card_cache[athlete_id] = (now_ts, card)
+        return card
+
+    @staticmethod
+    def _team_abbr_map(stats_payload: dict[str, Any]) -> dict[str, str]:
+        """Build ``teamId -> abbreviation`` from the stats payload ``teams``.
+
+        ESPN keys ``teams`` by both numeric id and slug; iterating values and
+        re-keying by the entry's own numeric ``id`` collapses the duplicates
+        so a season row's ``teamId`` resolves to a short label.
+        """
+        teams = stats_payload.get("teams")
+        result: dict[str, str] = {}
+        if isinstance(teams, dict):
+            for value in teams.values():
+                if not isinstance(value, dict):
+                    continue
+                tid = str(value.get("id") or "")
+                abbr = str(value.get("abbreviation") or "")
+                if tid and abbr:
+                    result[tid] = abbr
+        return result
+
+    @classmethod
+    def _parse_player_card(
+        cls,
+        athlete_id: str,
+        bio_payload: dict[str, Any],
+        stats_payload: dict[str, Any],
+    ) -> PlayerCard:
+        """Pure transform of the two ESPN athlete payloads into a PlayerCard.
+
+        No I/O — unit-tested directly against captured fixtures. Tolerates
+        either payload being empty (one endpoint failed): a missing bio
+        yields an empty bio block, missing stats an empty career table.
+        """
+        athlete = bio_payload.get("athlete") or {}
+        position = athlete.get("position") or {}
+        team = athlete.get("team") or {}
+        headshot = athlete.get("headshot")
+        if isinstance(headshot, dict):
+            headshot_url = str(headshot.get("href") or "")
+        elif isinstance(headshot, str):
+            headshot_url = headshot
+        else:
+            headshot_url = ""
+        bio: dict[str, Any] = {
+            "name": athlete.get("displayName") or athlete.get("fullName") or "",
+            "team": team.get("displayName") or team.get("name") or team.get("abbreviation") or "",
+            "position": position.get("abbreviation") or position.get("displayName") or "",
+            "bats_throws": athlete.get("displayBatsThrows") or "",
+            "height": athlete.get("displayHeight") or "",
+            "weight": athlete.get("displayWeight") or "",
+            "age": str(athlete.get("age") or ""),
+            "jersey": str(athlete.get("jersey") or athlete.get("displayJersey") or ""),
+            "headshot": headshot_url,
+            "draft": athlete.get("displayDraft") or "",
+            "debut_year": str(athlete.get("debutYear") or ""),
+        }
+
+        categories = {
+            str(c.get("name") or ""): c
+            for c in (stats_payload.get("categories") or [])
+            if isinstance(c, dict)
+        }
+        primary_name = next((n for n in cls._PRIMARY_STAT_CATEGORIES if n in categories), "")
+        career: dict[str, Any] = {}
+        if primary_name:
+            cat = categories[primary_name]
+            team_abbr = cls._team_abbr_map(stats_payload)
+
+            def _cell(value: Any) -> str:
+                return "" if value is None else str(value)
+
+            seasons: list[dict[str, Any]] = []
+            for row in cat.get("statistics") or []:
+                if not isinstance(row, dict):
+                    continue
+                season = row.get("season") or {}
+                tid = str(row.get("teamId") or "")
+                seasons.append({
+                    "year": str(season.get("year") or season.get("displayName") or ""),
+                    "team": team_abbr.get(tid, "") or str(row.get("teamSlug") or ""),
+                    "stats": [_cell(s) for s in (row.get("stats") or [])],
+                })
+            career = {
+                "kind": "pitching" if "pitch" in primary_name else "batting",
+                "columns": [str(x or "") for x in (cat.get("labels") or [])],
+                "keys": [str(x or "") for x in (cat.get("names") or [])],
+                "seasons": seasons,
+                "totals": [_cell(s) for s in (cat.get("totals") or [])],
+            }
+
+        glossary = {
+            str(g.get("abbreviation") or ""): str(g.get("displayName") or "")
+            for g in (stats_payload.get("glossary") or [])
+            if isinstance(g, dict) and g.get("abbreviation")
+        }
+
+        return {
+            "id": str(athlete_id or athlete.get("id") or ""),
+            "bio": bio,
+            "career": career,
+            "glossary": glossary,
+        }
 
     @classmethod
     def _normalize_situation(cls, summary: dict[str, Any]) -> dict[str, Any]:

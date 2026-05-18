@@ -1,0 +1,507 @@
+{
+  "athlete": {
+    "active": true,
+    "age": 34,
+    "debutYear": 2011,
+    "displayBatsThrows": "Right/Right",
+    "displayBirthPlace": "Vineland, NJ",
+    "displayDOB": "8/7/1991",
+    "displayDraft": "2009: Rd 1, Pk 25 (LAA)",
+    "displayExperience": "16th Season",
+    "displayHeight": "6' 1\"",
+    "displayName": "Mike Trout",
+    "displayWeight": "235 lbs",
+    "firstName": "Mike",
+    "fullName": "Mike Trout",
+    "headshot": {
+      "alt": "Mike Trout",
+      "href": "https://a.espncdn.com/i/headshots/mlb/players/full/30836.png"
+    },
+    "id": "30836",
+    "jersey": "27",
+    "lastName": "Trout",
+    "position": {
+      "abbreviation": "CF",
+      "displayName": "Center Fielder",
+      "id": "8",
+      "leaf": true,
+      "name": "Center Field",
+      "parent": {
+        "leaf": false
+      },
+      "slug": "center-field"
+    },
+    "statsSummary": {
+      "displayName": "2026 season stats",
+      "statistics": [
+        {
+          "abbreviation": "AVG",
+          "description": "The average number of times the batter reached successfully on base due to a hit: hits / atBats",
+          "displayName": "Batting Average",
+          "displayValue": ".238",
+          "name": "avg",
+          "rank": 110,
+          "rankDisplayValue": "Tied-110th",
+          "shortDisplayName": "AVG",
+          "value": 0.2375
+        },
+        {
+          "abbreviation": "HR",
+          "description": "The number of hits that allowed the batter to round the bases and score without the aid of an error of the defense.",
+          "displayName": "Home Runs",
+          "displayValue": "11",
+          "name": "homeRuns",
+          "rank": 16,
+          "rankDisplayValue": "Tied-16th",
+          "shortDisplayName": "HR",
+          "value": 11.0
+        },
+        {
+          "abbreviation": "RBI",
+          "description": "The number of runs scored by a batter's play.",
+          "displayName": "Runs Batted In",
+          "displayValue": "23",
+          "name": "RBIs",
+          "rank": 59,
+          "rankDisplayValue": "Tied-59th",
+          "shortDisplayName": "RBI",
+          "value": 23.0
+        },
+        {
+          "abbreviation": "OPS",
+          "description": "The average calculated by adding up on-base percentage and slugging percentage.",
+          "displayName": "OBP Pct + SLG Pct",
+          "displayValue": ".883",
+          "name": "OPS",
+          "rank": 26,
+          "rankDisplayValue": "26th",
+          "shortDisplayName": "OPS",
+          "value": 0.8832107
+        }
+      ]
+    },
+    "status": {
+      "abbreviation": "Active",
+      "id": "1",
+      "name": "Active",
+      "type": "active"
+    },
+    "team": {
+      "abbreviation": "LAA",
+      "alternateColor": "c4ced4",
+      "athletes": {},
+      "coaches": {},
+      "color": "ba0021",
+      "displayName": "Los Angeles Angels",
+      "franchise": {
+        "abbreviation": "LAA",
+        "displayName": "Los Angeles Angels",
+        "id": "3",
+        "location": "Los Angeles",
+        "name": "Angels",
+        "shortDisplayName": "Angels",
+        "slug": "los-angeles-angels",
+        "uid": "s:1~l:10~f:3"
+      },
+      "groups": {
+        "abbreviation": "ALW",
+        "id": "3",
+        "isConference": false,
+        "midsizeName": "AL West",
+        "name": "American League West",
+        "parent": {
+          "abbreviation": "AL",
+          "id": "7",
+          "isConference": true,
+          "midsizeName": "AL",
+          "name": "American League",
+          "parent": {},
+          "season": {},
+          "shortName": "AL",
+          "slug": "american-league",
+          "standings": {},
+          "teams": {},
+          "uid": "s:1~l:10~g:7"
+        },
+        "season": {
+          "displayName": "2026",
+          "endDate": "2026-11-12T07:59:00.000+00:00",
+          "startDate": "2026-02-19T08:00:00.000+00:00",
+          "type": {
+            "abbreviation": "reg",
+            "endDate": "2026-09-30T06:59:00.000+00:00",
+            "hasGroups": false,
+            "hasLegs": false,
+            "hasStandings": true,
+            "id": "2",
+            "name": "Regular Season",
+            "slug": "regular-season",
+            "startDate": "2026-03-25T07:00:00.000+00:00",
+            "type": 2,
+            "week": {
+              "endDate": "2026-05-20T06:59:00.000+00:00",
+              "number": 8,
+              "startDate": "2026-05-13T07:00:00.000+00:00",
+              "text": "Week 8"
+            },
+            "weeks": {},
+            "year": 2026
+          },
+          "types": {
+            "count": 4,
+            "items": [
+              {
+                "abbreviation": "pre",
+                "endDate": "2026-03-25T06:59:00.000+00:00",
+                "hasGroups": false,
+                "hasLegs": false,
+                "hasStandings": true,
+                "id": "1",
+                "name": "Spring Training",
+                "slug": "preseason",
+                "startDate": "2026-02-19T08:00:00.000+00:00",
+                "type": 1,
+                "weeks": {},
+                "year": 2026
+              },
+              {
+                "abbreviation": "reg",
+                "endDate": "2026-09-30T06:59:00.000+00:00",
+                "hasGroups": false,
+                "hasLegs": false,
+                "hasStandings": true,
+                "id": "2",
+                "name": "Regular Season",
+                "slug": "regular-season",
+                "startDate": "2026-03-25T07:00:00.000+00:00",
+                "type": 2,
+                "week": {
+                  "endDate": "2026-05-20T06:59:00.000+00:00",
+                  "number": 8,
+                  "startDate": "2026-05-13T07:00:00.000+00:00",
+                  "text": "Week 8"
+                },
+                "weeks": {},
+                "year": 2026
+              },
+              {
+                "abbreviation": "post",
+                "endDate": "2026-11-12T07:59:00.000+00:00",
+                "hasGroups": false,
+                "hasLegs": false,
+                "hasStandings": false,
+                "id": "3",
+                "name": "Postseason",
+                "slug": "post-season",
+                "startDate": "2026-09-30T07:00:00.000+00:00",
+                "type": 3,
+                "weeks": {},
+                "year": 2026
+              },
+              {
+                "abbreviation": "off",
+                "endDate": "2027-02-19T07:59:00.000+00:00",
+                "hasGroups": false,
+                "hasLegs": false,
+                "hasStandings": false,
+                "id": "4",
+                "name": "Off Season",
+                "slug": "off-season",
+                "startDate": "2026-11-12T08:00:00.000+00:00",
+                "type": 4,
+                "weeks": {},
+                "year": 2026
+              }
+            ],
+            "pageCount": 1,
+            "pageIndex": 1,
+            "pageSize": 4
+          },
+          "year": 2026
+        },
+        "shortName": "AL West",
+        "slug": "american-league-west",
+        "standings": {},
+        "teams": {},
+        "uid": "s:1~l:10~g:3"
+      },
+      "guid": "053868c7-8bff-5edb-3cb6-f5490f33ef99",
+      "id": "3",
+      "isActive": true,
+      "isAllStar": false,
+      "links": [
+        {
+          "href": "https://www.espn.com/mlb/team/_/name/laa/los-angeles-angels",
+          "isExternal": false,
+          "isPremium": false,
+          "language": "en-US",
+          "rel": [
+            "clubhouse",
+            "desktop",
+            "team"
+          ],
+          "shortText": "Clubhouse",
+          "text": "Clubhouse"
+        },
+        {
+          "href": "https://www.espn.com/mlb/team/roster/_/name/laa/los-angeles-angels",
+          "isExternal": false,
+          "isPremium": false,
+          "language": "en-US",
+          "rel": [
+            "roster",
+            "desktop",
+            "team"
+          ],
+          "shortText": "Roster",
+          "text": "Roster"
+        },
+        {
+          "href": "https://www.espn.com/mlb/team/stats/_/name/laa/los-angeles-angels",
+          "isExternal": false,
+          "isPremium": false,
+          "language": "en-US",
+          "rel": [
+            "stats",
+            "desktop",
+            "team"
+          ],
+          "shortText": "Statistics",
+          "text": "Statistics"
+        },
+        {
+          "href": "https://www.espn.com/mlb/team/schedule/_/name/laa",
+          "isExternal": false,
+          "isPremium": false,
+          "language": "en-US",
+          "rel": [
+            "schedule",
+            "desktop",
+            "team"
+          ],
+          "shortText": "Schedule",
+          "text": "Schedule"
+        },
+        {
+          "href": "https://www.espn.com/mlb/team/photos/_/name/laa",
+          "isExternal": false,
+          "isPremium": false,
+          "language": "en-US",
+          "rel": [
+            "photos",
+            "desktop",
+            "team"
+          ],
+          "shortText": "photos",
+          "text": "photos"
+        },
+        {
+          "href": "https://www.vividseats.com/los-angeles-angels-of-anaheim-tickets--sports-mlb-baseball/performer/29?wsUser=717",
+          "isExternal": true,
+          "isPremium": false,
+          "language": "en-US",
+          "rel": [
+            "tickets",
+            "desktop",
+            "team"
+          ],
+          "shortText": "Tickets",
+          "text": "Tickets"
+        },
+        {
+          "href": "https://www.espn.com/mlb/team/transactions/_/name/laa",
+          "isExternal": false,
+          "isPremium": false,
+          "language": "en-US",
+          "rel": [
+            "transactions",
+            "desktop",
+            "team"
+          ],
+          "shortText": "Transactions",
+          "text": "Transactions"
+        },
+        {
+          "href": "https://www.espn.com/mlb/team/injuries/_/name/laa",
+          "isExternal": false,
+          "isPremium": false,
+          "language": "en-US",
+          "rel": [
+            "injuries",
+            "desktop",
+            "team"
+          ],
+          "shortText": "Injuries",
+          "text": "Injuries"
+        },
+        {
+          "href": "https://www.espn.com/mlb/team/depth/_/name/laa",
+          "isExternal": false,
+          "isPremium": false,
+          "language": "en-US",
+          "rel": [
+            "depthchart",
+            "desktop",
+            "team"
+          ],
+          "shortText": "Depth Chart",
+          "text": "Depth Chart"
+        }
+      ],
+      "location": "Los Angeles",
+      "logos": [
+        {
+          "height": 500,
+          "href": "https://a.espncdn.com/i/teamlogos/mlb/500/laa.png",
+          "rel": [
+            "full",
+            "default"
+          ],
+          "width": 500
+        },
+        {
+          "height": 500,
+          "href": "https://a.espncdn.com/i/teamlogos/mlb/500-dark/laa.png",
+          "rel": [
+            "full",
+            "dark"
+          ],
+          "width": 500
+        },
+        {
+          "height": 500,
+          "href": "https://a.espncdn.com/i/teamlogos/mlb/500/scoreboard/laa.png",
+          "rel": [
+            "full",
+            "scoreboard"
+          ],
+          "width": 500
+        },
+        {
+          "height": 500,
+          "href": "https://a.espncdn.com/i/teamlogos/mlb/500-dark/scoreboard/laa.png",
+          "rel": [
+            "full",
+            "scoreboard",
+            "dark"
+          ],
+          "width": 500
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/primary_logo_on_white_color.png",
+          "rel": [
+            "full",
+            "primary_logo_on_white_color"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/primary_logo_on_black_color.png",
+          "rel": [
+            "full",
+            "primary_logo_on_black_color"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/primary_logo_on_primary_color.png",
+          "rel": [
+            "full",
+            "primary_logo_on_primary_color"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/primary_logo_on_secondary_color.png",
+          "rel": [
+            "full",
+            "primary_logo_on_secondary_color"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/primary_logo_black.png",
+          "rel": [
+            "full",
+            "primary_logo_black"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/primary_logo_white.png",
+          "rel": [
+            "full",
+            "primary_logo_white"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/secondary_logo_on_white_color.png",
+          "rel": [
+            "full",
+            "secondary_logo_on_white_color"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/secondary_logo_on_black_color.png",
+          "rel": [
+            "full",
+            "secondary_logo_on_black_color"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/secondary_logo_on_primary_color.png",
+          "rel": [
+            "full",
+            "secondary_logo_on_primary_color"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/secondary_logo_on_secondary_color.png",
+          "rel": [
+            "full",
+            "secondary_logo_on_secondary_color"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/secondary_logo_black.png",
+          "rel": [
+            "full",
+            "secondary_logo_black"
+          ],
+          "width": 4096
+        },
+        {
+          "height": 4096,
+          "href": "https://a.espncdn.com/guid/053868c7-8bff-5edb-3cb6-f5490f33ef99/logos/secondary_logo_white.png",
+          "rel": [
+            "full",
+            "secondary_logo_white"
+          ],
+          "width": 4096
+        }
+      ],
+      "name": "Angels",
+      "ranks": {},
+      "record": {},
+      "shortDisplayName": "Angels",
+      "slug": "los-angeles-angels",
+      "uid": "s:1~l:10~t:3"
+    }
+  }
+}

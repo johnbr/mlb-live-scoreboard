@@ -117,6 +117,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _register_on_start)
 
+    if not hass.data[DOMAIN].get("_ws_registered"):
+        _register_player_card_websocket(hass)
+        hass.data[DOMAIN]["_ws_registered"] = True
+
     return True
 
 
@@ -173,6 +177,57 @@ async def _async_register_card(
     except Exception as err:
         _LOGGER.warning("Could not auto-register card resource: %s", err)
         _LOGGER.info("Manually add this resource: %s (type: module)", card_url)
+
+
+def _any_coordinator(hass: HomeAssistant) -> MlbLiveScoreboardCoordinator | None:
+    """Return any loaded coordinator.
+
+    ``_get_player_card`` is not team-specific (it uses the shared aiohttp
+    session and its own per-athlete cache), so any configured entry's
+    coordinator can service a player-card request. ``hass.data[DOMAIN]`` also
+    holds non-coordinator string entries (``_card_url`` etc.), hence the
+    isinstance filter.
+    """
+    for value in (hass.data.get(DOMAIN) or {}).values():
+        if isinstance(value, MlbLiveScoreboardCoordinator):
+            return value
+    return None
+
+
+def _register_player_card_websocket(hass: HomeAssistant) -> None:
+    """Register the ``mlb_live_scoreboard/player_card`` WebSocket command.
+
+    The Lovelace card calls this with an ``athlete_id`` to fetch a player's
+    career card on demand (server-side fetch reuses the coordinator's TTL
+    cache and resilience — see OPTION_B_HANDOFF.md, route R3). Imports are
+    local so the pure-helper test harness, which imports this package but
+    stubs Home Assistant, doesn't need ``websocket_api``/``voluptuous``.
+    """
+    import voluptuous as vol
+    from homeassistant.components import websocket_api
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/player_card",
+            vol.Required("athlete_id"): vol.All(cv.string, vol.Length(min=1, max=20)),
+        }
+    )
+    @websocket_api.async_response
+    async def _handle_player_card(hass, connection, msg) -> None:
+        coordinator = _any_coordinator(hass)
+        if coordinator is None:
+            connection.send_error(msg["id"], "not_ready", "No MLB Live Scoreboard entry is configured")
+            return
+        athlete_id = str(msg["athlete_id"]).strip()
+        try:
+            card = await coordinator.async_get_player_card(athlete_id)
+        except Exception as err:  # surface any fetch/parse failure to the card
+            _LOGGER.debug("player_card WS request failed for %s: %s", athlete_id, err)
+            connection.send_error(msg["id"], "fetch_failed", str(err))
+            return
+        connection.send_result(msg["id"], {"player_card": card})
+
+    websocket_api.async_register_command(hass, _handle_player_card)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

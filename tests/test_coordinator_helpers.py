@@ -922,3 +922,107 @@ def test_normalize_standings_against_real_fixture():
     assert out["entries"][0]["losses"] == "12"
     assert len(out["entries"]) == 5
     assert set(abbrs) == {"Dodgers", "Padres", "Diamondbacks", "Rockies", "Giants"}
+
+
+# ---------------------------------------------------------------------------
+# _parse_player_card / _team_abbr_map (Option B, Chunk 1)
+#
+# Driven by the real (trimmed) ESPN fixtures captured in Chunk 0. Assertions
+# target structure + frozen early-career rows (a player's debut-season line
+# never changes), so they do not churn as current stats accrue.
+# ---------------------------------------------------------------------------
+
+
+def _load_fixture(name: str) -> dict:
+    import json
+    import pathlib
+
+    return json.loads(
+        (pathlib.Path(__file__).resolve().parents[0] / "fixtures" / name).read_text()
+    )
+
+
+def test_parse_player_card_hitter_trout():
+    bio = _load_fixture("athlete_30836_trout_bio.json")
+    stats = _load_fixture("athlete_30836_trout_stats.json")
+    card = Coord._parse_player_card("30836", bio, stats)
+
+    assert card["id"] == "30836"
+    assert card["bio"]["name"] == "Mike Trout"
+    assert card["bio"]["position"] == "CF"
+    assert card["bio"]["bats_throws"] == "Right/Right"
+    assert card["bio"]["height"] == "6' 1\""
+    assert card["bio"]["headshot"].startswith("http")
+
+    career = card["career"]
+    assert career["kind"] == "batting"
+    assert career["columns"][6] == "HR" and career["columns"][7] == "RBI"
+    # Debut season (2011) is frozen history.
+    debut = career["seasons"][0]
+    assert debut["year"] == "2011"
+    assert debut["team"] == "LAA"  # teamId 3 resolved via the teams map
+    assert debut["stats"][6] == "5"  # HR
+    assert debut["stats"][7] == "16"  # RBI
+    assert debut["stats"][1] == "123"  # AB
+    assert career["totals"]  # career aggregate row present
+    assert card["glossary"].get("2B") == "Doubles"
+
+
+def test_parse_player_card_pitcher_kershaw():
+    bio = _load_fixture("athlete_28963_kershaw_bio.json")
+    stats = _load_fixture("athlete_28963_kershaw_stats.json")
+    card = Coord._parse_player_card("28963", bio, stats)
+
+    assert card["bio"]["name"] == "Clayton Kershaw"
+    career = card["career"]
+    assert career["kind"] == "pitching"
+    assert "ERA" in career["columns"] and "W" in career["columns"]
+    debut = career["seasons"][0]
+    assert debut["year"] == "2008"
+    assert debut["team"] == "LAD"  # teamId 19
+    era_idx = career["columns"].index("ERA")
+    assert debut["stats"][era_idx] == "4.26"
+
+
+def test_parse_player_card_two_way_returns_single_side():
+    # Documented limitation: ESPN's /stats returns categories by listed
+    # position only. Ohtani is listed SP, so only pitching is available.
+    bio = _load_fixture("athlete_39832_ohtani_bio.json")
+    stats = _load_fixture("athlete_39832_ohtani_stats.json")
+    card = Coord._parse_player_card("39832", bio, stats)
+
+    assert card["bio"]["name"] == "Shohei Ohtani"
+    assert card["career"]["kind"] == "pitching"
+    assert card["career"]["seasons"]
+
+
+def test_parse_player_card_handles_both_payloads_empty():
+    card = Coord._parse_player_card("999", {}, {})
+    assert card["id"] == "999"
+    assert card["bio"]["name"] == ""
+    assert card["career"] == {}
+    assert card["glossary"] == {}
+
+
+def test_parse_player_card_handles_stats_only_no_bio():
+    stats = _load_fixture("athlete_30836_trout_stats.json")
+    card = Coord._parse_player_card("30836", {}, stats)
+    assert card["bio"]["name"] == ""  # bio endpoint failed
+    assert card["career"]["kind"] == "batting"  # stats still parsed
+    assert card["career"]["seasons"]
+
+
+def test_parse_player_card_handles_bio_only_no_stats():
+    bio = _load_fixture("athlete_30836_trout_bio.json")
+    card = Coord._parse_player_card("30836", bio, {})
+    assert card["bio"]["name"] == "Mike Trout"
+    assert card["career"] == {}  # stats endpoint failed
+
+
+def test_team_abbr_map_collapses_dual_keying_and_skips_garbage():
+    stats = _load_fixture("athlete_39832_ohtani_stats.json")
+    mapping = Coord._team_abbr_map(stats)
+    assert mapping == {"3": "LAA", "19": "LAD"}
+    assert Coord._team_abbr_map({}) == {}
+    assert Coord._team_abbr_map({"teams": "not-a-dict"}) == {}
+    assert Coord._team_abbr_map({"teams": {"x": None, "y": {"id": "", "abbreviation": ""}}}) == {}

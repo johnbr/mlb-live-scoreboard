@@ -41,6 +41,16 @@ TEAM_METADATA_TTL_SECONDS = 3600
 # stat updates feel stale.
 BATTER_SEASON_STATS_TTL_SECONDS = 60
 
+# How long to cache a player's full career card (bio + career stats table).
+# Career stats change at most once per day per player, and the popup is opened
+# interactively rather than polled, so a long TTL keeps repeat opens instant
+# without staleness that matters at career granularity.
+PLAYER_CARD_TTL_SECONDS = 6 * 60 * 60
+
+# Maximum age of a cached player card still acceptable as a fallback when an
+# ESPN athlete endpoint fails, so a transient outage doesn't blank the popup.
+PLAYER_CARD_STALE_FALLBACK_SECONDS = 24 * 60 * 60
+
 # How long to cache the team's schedule payload. The schedule is only used to
 # enumerate this team's events (previous / live / next) and to read the team's
 # display name; none of the in-game state (score, count, plays) comes from it.
