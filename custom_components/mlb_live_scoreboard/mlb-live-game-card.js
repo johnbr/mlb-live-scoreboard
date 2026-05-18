@@ -134,6 +134,39 @@ function currentBatterName(attrs) {
   return attrs?.current_batter?.display_name || attrs?.current_batter?.short_name || "";
 }
 
+// Which lineup side ("away"|"home") a matchup half belongs to:
+//   role "batter"  -> the batting team's side
+//   role "pitcher" -> the fielding team's side
+// Primary signal is the coordinator-set `lineups[*].is_batting` flag (only
+// truthy during a live at-bat). When that's unresolvable (pre-game / completed
+// game has no current batter to flag), fall back to locating the current
+// pitcher/batter id within each side's roster — both signals named in the
+// handoff §5 Chunk 4. Returns "" when nothing resolves (side stays inert).
+function lineupSideForRole(attrs, role) {
+  const lu = attrs && attrs.lineups;
+  if (!lu || typeof lu !== "object") return "";
+  const away = lu.away || null;
+  const home = lu.home || null;
+  let battingSide = "";
+  if (away && away.is_batting) battingSide = "away";
+  else if (home && home.is_batting) battingSide = "home";
+  if (battingSide) {
+    const fieldingSide = battingSide === "away" ? "home" : "away";
+    return role === "pitcher" ? fieldingSide : battingSide;
+  }
+  const src = role === "pitcher" ? attrs.current_pitcher : attrs.current_batter;
+  const id = String((src && src.id) ?? "").trim();
+  if (id) {
+    const listKey = role === "pitcher" ? "pitchers" : "hitters";
+    for (const side of ["away", "home"]) {
+      const team = lu[side];
+      const arr = team && Array.isArray(team[listKey]) ? team[listKey] : [];
+      if (arr.some((p) => String(p && p.id) === id)) return side;
+    }
+  }
+  return "";
+}
+
 function formatEventDate(dateRaw) {
   if (!dateRaw) return "";
   const dt = new Date(dateRaw);
@@ -915,6 +948,21 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     return true;
   }
 
+  // Handle activation of a matchup half (the click/keydown delegates call
+  // this AFTER _openPlayerProfile, so a player-name click already returned
+  // and never reaches here — names keep opening the career popup). Returns
+  // true when it consumed the event. Same side again -> close; the other
+  // side -> _openLineupPopup switches team while the overlay stays open.
+  _toggleLineupFromMatchup(el) {
+    const side = el instanceof Element ? el.closest(".matchup-side") : null;
+    if (!side || !this.content.contains(side)) return false;
+    const popupSide = side.getAttribute("data-team-popup");
+    if (popupSide !== "away" && popupSide !== "home") return false;
+    if (this._isLineupPopupOpen(popupSide)) this._closeLineupPopup();
+    else this._openLineupPopup(popupSide);
+    return true;
+  }
+
   // Fetch a player's career card via the integration's WebSocket command
   // (server-side fetch reuses the coordinator's TTL cache; see
   // OPTION_B_HANDOFF.md route R3). Per-card result cache + in-flight de-dupe
@@ -1553,6 +1601,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
 
   _onContentClick(ev) {
     if (this._openPlayerProfile(ev.target)) return;
+    if (this._toggleLineupFromMatchup(ev.target)) return;
     const target = ev.target instanceof Element ? ev.target.closest(".upcoming-expandable") : null;
     if (!target || !this.content.contains(target)) return;
     this._upcomingExpanded = !this._upcomingExpanded;
@@ -1568,6 +1617,13 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     if (playerLink && this.content.contains(playerLink)) {
       ev.preventDefault();
       this._openPlayerProfile(playerLink);
+      return;
+    }
+    const luSide = ev.target instanceof Element ? ev.target.closest(".matchup-side") : null;
+    if (luSide && this.content.contains(luSide) &&
+        ["away", "home"].includes(luSide.getAttribute("data-team-popup"))) {
+      ev.preventDefault();
+      this._toggleLineupFromMatchup(luSide);
       return;
     }
     const target = ev.target instanceof Element ? ev.target.closest(".upcoming-expandable") : null;
@@ -1819,10 +1875,23 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     // Special count dots showing 3 outs during the hold period
     const thirdOutCountDotsPanel = (this.config.show_count !== false && holdThirdOut) ? renderCountDotsRow({ balls: 0, strikes: 0, outs: 3 }, []) : "";
     const diamondHtml = this.config.show_diamond !== false ? renderBaseDiamond(attrs.situation || {}) : "";
+    // Clicking a matchup half (anywhere but the player-name link) opens that
+    // team's lineup popup: pitcher half -> fielding team, batter half ->
+    // batting team. Resolve + bake the side into the markup so the delegated
+    // handler stays a dumb attribute read (no stale-hass re-resolution).
+    const luPitcherSide = lineupSideForRole(attrs, "pitcher");
+    const luBatterSide = lineupSideForRole(attrs, "batter");
+    const luSideAttrs = (side) => {
+      if (side !== "away" && side !== "home") return "";
+      const t = (attrs.lineups && attrs.lineups[side]) || {};
+      const nm = escapeHtml(t.name || t.abbreviation || "team");
+      return ` data-team-popup="${side}" role="button" tabindex="0"` +
+        ` aria-label="Show ${nm} lineup" title="Show ${nm} lineup"`;
+    };
     const matchupPanel = this.config.show_batter ? `
             <div class="matchup-block ${(batter || pitcher) ? "" : "muted-block"}">
               <div class="matchup-grid enhanced productionish ${this.config.show_diamond !== false ? "with-diamond" : ""}">
-                <div class="matchup-side with-headshot stacked centered-half">
+                <div class="matchup-side with-headshot stacked centered-half"${luSideAttrs(luPitcherSide)}>
                   ${renderPlayerHeadshot(this, attrs.current_pitcher?.headshot || "", pitcher || "Pitcher")}
                   <div class="matchup-copy centered-copy">
                     <div class="matchup-value">${playerNameMarkup(shortPersonName(pitcher || "TBD"), attrs.current_pitcher?.id)}</div>
@@ -1831,7 +1900,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
                   </div>
                 </div>
                 ${diamondHtml}
-                <div class="matchup-side with-headshot stacked centered-half align-right">
+                <div class="matchup-side with-headshot stacked centered-half align-right"${luSideAttrs(luBatterSide)}>
                   ${renderPlayerHeadshot(this, attrs.current_batter?.headshot || "", batter || "Batter")}
                   <div class="matchup-copy centered-copy">
                     <div class="matchup-value">${playerNameMarkup(shortPersonName(batter || "TBD"), attrs.current_batter?.id)}</div>
@@ -2379,6 +2448,17 @@ color: var(--secondary-text-color);
         }
         .matchup-side.centered {
           text-align:center;
+        }
+        .matchup-side[data-team-popup] {
+          cursor: pointer;
+          border-radius: 6px;
+        }
+        .matchup-side[data-team-popup]:hover {
+          background: var(--secondary-background-color, rgba(255,255,255,0.06));
+        }
+        .matchup-side[data-team-popup]:focus-visible {
+          outline: 2px solid var(--warning-color);
+          outline-offset: 2px;
         }
         .matchup-copy.centered {
           width:100%;
