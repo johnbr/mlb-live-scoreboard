@@ -119,6 +119,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     if not hass.data[DOMAIN].get("_ws_registered"):
         _register_player_card_websocket(hass)
+        _register_team_season_stats_websocket(hass)
         hass.data[DOMAIN]["_ws_registered"] = True
 
     return True
@@ -228,6 +229,46 @@ def _register_player_card_websocket(hass: HomeAssistant) -> None:
         connection.send_result(msg["id"], {"player_card": card})
 
     websocket_api.async_register_command(hass, _handle_player_card)
+
+
+def _register_team_season_stats_websocket(hass: HomeAssistant) -> None:
+    """Register the ``mlb_live_scoreboard/team_season_stats`` WebSocket command.
+
+    The lineup popup calls this with the athlete ids it is showing to fetch
+    each player's current-season line on demand for the Season view
+    (server-side batch fetch reuses the coordinator's per-athlete TTL cache
+    and resilience — see LINEUP_POPUP_HANDOFF.md §3). Imports are local so
+    the pure-helper test harness, which imports this package but stubs Home
+    Assistant, doesn't need ``websocket_api``/``voluptuous``.
+    """
+    import voluptuous as vol
+    from homeassistant.components import websocket_api
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/team_season_stats",
+            vol.Required("athlete_ids"): vol.All(
+                [vol.All(cv.string, vol.Length(min=1, max=20))],
+                vol.Length(min=1, max=60),
+            ),
+        }
+    )
+    @websocket_api.async_response
+    async def _handle_team_season_stats(hass, connection, msg) -> None:
+        coordinator = _any_coordinator(hass)
+        if coordinator is None:
+            connection.send_error(msg["id"], "not_ready", "No MLB Live Scoreboard entry is configured")
+            return
+        athlete_ids = [str(a).strip() for a in (msg.get("athlete_ids") or [])]
+        try:
+            stats = await coordinator.async_get_team_season_stats(athlete_ids)
+        except Exception as err:  # surface any fetch/parse failure to the card
+            _LOGGER.debug("team_season_stats WS request failed: %s", err)
+            connection.send_error(msg["id"], "fetch_failed", str(err))
+            return
+        connection.send_result(msg["id"], {"season_stats": stats})
+
+    websocket_api.async_register_command(hass, _handle_team_season_stats)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -51,6 +51,16 @@ PLAYER_CARD_TTL_SECONDS = 6 * 60 * 60
 # ESPN athlete endpoint fails, so a transient outage doesn't blank the popup.
 PLAYER_CARD_STALE_FALLBACK_SECONDS = 24 * 60 * 60
 
+# How long to cache a single athlete's parsed current-season line (the
+# lineup popup's Season view). Season totals move at most once per game per
+# player and the popup is opened interactively rather than polled, so the
+# same long-TTL semantics as the player card apply.
+TEAM_SEASON_STATS_TTL_SECONDS = 6 * 60 * 60
+
+# Maximum age of a cached season line still acceptable as a fallback when the
+# ESPN stats endpoint fails, so a transient outage doesn't blank the popup.
+TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS = 24 * 60 * 60
+
 # How long to cache the team's schedule payload. The schedule is only used to
 # enumerate this team's events (previous / live / next) and to read the team's
 # display name; none of the in-game state (score, count, plays) comes from it.

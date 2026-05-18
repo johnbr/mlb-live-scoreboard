@@ -45,6 +45,8 @@ from .const import (
     STATUS_NAME_DELAYED,
     STATUS_NAME_IN_PROGRESS,
     TEAM_METADATA_TTL_SECONDS,
+    TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS,
+    TEAM_SEASON_STATS_TTL_SECONDS,
     THIRD_OUT_HOLD_SECONDS,
 )
 from .types import (
@@ -260,6 +262,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # career-stats popup; opened interactively, so a long TTL keeps repeat
         # opens instant and a stale entry is reused if ESPN is briefly down.
         self._player_card_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # athlete_id -> (fetched_at_ts, parsed season line). Backs the lineup
+        # popup's Season view; opened interactively, so a long TTL keeps
+        # repeat opens instant and a stale entry is reused if ESPN is briefly
+        # down (same semantics as _player_card_cache).
+        self._team_season_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         # (fetched_at_ts, payload) for the team schedule endpoint. Used as a
         # short-lived fallback when ESPN's schedule endpoint has a transient
         # failure, so a one-poll hiccup doesn't blank the card.
@@ -1207,6 +1214,73 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             }
         return {}
 
+    @classmethod
+    def _extract_season_line(cls, stats_payload: dict[str, Any]) -> dict[str, Any]:
+        """Pull the current season's hitting *or* pitching line from an ESPN
+        ``/athletes/{id}/stats`` payload.
+
+        Pure (no I/O) — unit-tested directly against fixtures. Returns
+        ``{"hitting": {ab,h,hr,rbi,sb,avg}}`` for a hitter or
+        ``{"pitching": {w,l,era,ip,k,whip}}`` for a pitcher, or ``{}`` when
+        no usable category/row is present. ESPN's ``/stats`` exposes
+        categories by the player's *listed* position only, so at most one
+        side is available per call (documented Option B limitation —
+        see ``tests/fixtures/README.md``). Picks the current-year row,
+        falling back to the most recent season row when ESPN has not opened
+        the current season for that player yet.
+        """
+        categories = {
+            str(c.get("name") or ""): c
+            for c in (stats_payload.get("categories") or [])
+            if isinstance(c, dict)
+        }
+        primary = next((n for n in cls._PRIMARY_STAT_CATEGORIES if n in categories), "")
+        if not primary:
+            return {}
+        cat = categories[primary]
+        names = [str(n or "") for n in (cat.get("names") or [])]
+        rows = cat.get("statistics") or []
+        current_year = datetime.now().year
+        row = next(
+            (r for r in rows if int((r.get("season") or {}).get("year") or 0) == current_year),
+            None,
+        )
+        if row is None and rows:
+            row = rows[-1]
+        if not isinstance(row, dict):
+            return {}
+        stats = row.get("stats") or []
+
+        def by_name(*candidates: str) -> str:
+            for nm in candidates:
+                if nm in names:
+                    idx = names.index(nm)
+                    if 0 <= idx < len(stats) and stats[idx] not in (None, ""):
+                        return str(stats[idx])
+            return ""
+
+        if "pitch" in primary:
+            return {
+                "pitching": {
+                    "w": by_name("wins"),
+                    "l": by_name("losses"),
+                    "era": by_name("ERA"),
+                    "ip": by_name("innings", "inningsPitched"),
+                    "k": by_name("strikeouts"),
+                    "whip": by_name("WHIP"),
+                }
+            }
+        return {
+            "hitting": {
+                "ab": by_name("atBats"),
+                "h": by_name("hits"),
+                "hr": by_name("homeRuns"),
+                "rbi": by_name("RBIs"),
+                "sb": by_name("stolenBases"),
+                "avg": by_name("avg", "battingAverage"),
+            }
+        }
+
     # Primary stats category preference, by exact ESPN category name. A hitter
     # exposes ``career-batting``; a pitcher (incl. a two-way player ESPN lists
     # as a pitcher) exposes ``pitching``. Postseason / expanded / advanced and
@@ -1260,6 +1334,75 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         card = self._parse_player_card(athlete_id, bio_payload, stats_payload)
         self._player_card_cache[athlete_id] = (now_ts, card)
         return card
+
+    async def async_get_team_season_stats(
+        self, athlete_ids: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        """Public entrypoint for the team-season-stats WebSocket command.
+
+        Thin boundary over :meth:`_get_team_season_stats` so the
+        integration's websocket handler doesn't reach into a private method;
+        all fetch/cache/parse logic lives in the private impl.
+        """
+        return await self._get_team_season_stats(athlete_ids)
+
+    async def _get_team_season_stats(
+        self, athlete_ids: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        """Fetch current-season lines for many athletes at once.
+
+        Backs the lineup popup's Season view: opened interactively, so a
+        long per-athlete TTL keeps re-opens instant and a still-recent
+        cached line is reused when ESPN is briefly unreachable. Ids are
+        de-duplicated (preserving order) since a popup may list the same
+        player across roster + box score, then fetched concurrently.
+        Returns ``{athlete_id: {"hitting"|"pitching": {...}}}``, omitting
+        ids with no usable line.
+        """
+        ids = [
+            s
+            for s in dict.fromkeys(str(a or "").strip() for a in (athlete_ids or []))
+            if s
+        ]
+        if not ids:
+            return {}
+        results = await asyncio.gather(
+            *(self._get_one_season_line(aid) for aid in ids),
+            return_exceptions=True,
+        )
+        out: dict[str, dict[str, Any]] = {}
+        for aid, res in zip(ids, results, strict=True):
+            if isinstance(res, dict) and res:
+                out[aid] = res
+        return out
+
+    async def _get_one_season_line(self, athlete_id: str) -> dict[str, Any]:
+        """One athlete's parsed current-season line, TTL-cached with a
+        stale fallback (mirrors :meth:`_get_player_card`'s resilience)."""
+        if not athlete_id:
+            return {}
+        now_ts = time.time()
+        cached = self._team_season_stats_cache.get(athlete_id)
+        if cached is not None and (now_ts - cached[0]) < TEAM_SEASON_STATS_TTL_SECONDS:
+            return cached[1]
+        url = (
+            "https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/"
+            f"athletes/{athlete_id}/stats?region=us&lang=en&contentorigin=espn"
+        )
+        try:
+            payload = await self._get_json(url)
+        except Exception as err:
+            _LOGGER.debug("Unable to fetch season stats for %s: %s", athlete_id, err)
+            if (
+                cached is not None
+                and (now_ts - cached[0]) < TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS
+            ):
+                return cached[1]
+            return {}
+        line = self._extract_season_line(payload)
+        if line:
+            self._team_season_stats_cache[athlete_id] = (now_ts, line)
+        return line
 
     @staticmethod
     def _team_abbr_map(stats_payload: dict[str, Any]) -> dict[str, str]:
