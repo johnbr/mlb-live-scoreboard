@@ -1,0 +1,1516 @@
+{
+  "boxscore": {
+    "players": [
+      {
+        "team": {
+          "id": "2",
+          "abbreviation": "BOS",
+          "displayName": "Boston Red Sox",
+          "name": "Red Sox",
+          "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/bos.png"
+        },
+        "statistics": [
+          {
+            "type": "batting",
+            "keys": [
+              "hits-atBats",
+              "atBats",
+              "runs",
+              "hits",
+              "RBIs",
+              "homeRuns",
+              "walks",
+              "strikeouts",
+              "pitches",
+              "avg",
+              "onBasePct",
+              "slugAvg"
+            ],
+            "athletes": [
+              {
+                "batOrder": 1,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760001990057",
+                    "atBatId": "4018153760001",
+                    "playId": "4018153760001990057"
+                  },
+                  {
+                    "id": "4018153760403990057",
+                    "atBatId": "4018153760403",
+                    "playId": "4018153760403990057"
+                  },
+                  {
+                    "id": "4018153760803990057",
+                    "atBatId": "4018153760803",
+                    "playId": "4018153760803990057"
+                  },
+                  {
+                    "id": "4018153761204990057",
+                    "atBatId": "4018153761204",
+                    "playId": "4018153761204990057"
+                  },
+                  {
+                    "id": "4018153761605990057",
+                    "atBatId": "4018153761605",
+                    "playId": "4018153761605990057"
+                  }
+                ],
+                "stats": [
+                  "2-5",
+                  "5",
+                  "0",
+                  "2",
+                  "0",
+                  "0",
+                  "0",
+                  "2",
+                  "19",
+                  ".183",
+                  ".243",
+                  ".305"
+                ],
+                "position": {
+                  "id": "7",
+                  "name": "Left Field",
+                  "displayName": "Left Fielder",
+                  "abbreviation": "LF"
+                },
+                "athlete": {
+                  "id": "41610",
+                  "displayName": "Jarren Duran",
+                  "shortName": "J. Duran",
+                  "position": {
+                    "name": "Left Field",
+                    "displayName": "Left Fielder",
+                    "abbreviation": "LF"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/41610.png",
+                    "alt": "Jarren Duran"
+                  }
+                }
+              },
+              {
+                "batOrder": 2,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760002990057",
+                    "atBatId": "4018153760002",
+                    "playId": "4018153760002990057"
+                  },
+                  {
+                    "id": "4018153760404990057",
+                    "atBatId": "4018153760404",
+                    "playId": "4018153760404990057"
+                  },
+                  {
+                    "id": "4018153760804990057",
+                    "atBatId": "4018153760804",
+                    "playId": "4018153760804990057"
+                  },
+                  {
+                    "id": "4018153761401990057",
+                    "atBatId": "4018153761401",
+                    "playId": "4018153761401990057"
+                  }
+                ],
+                "stats": [
+                  "0-4",
+                  "4",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "2",
+                  "16",
+                  ".320",
+                  ".346",
+                  ".400"
+                ],
+                "position": {
+                  "id": "10",
+                  "name": "Designated Hitter",
+                  "displayName": "Designated Hitter",
+                  "abbreviation": "DH"
+                },
+                "athlete": {
+                  "id": "5132012",
+                  "displayName": "Mickey Gasper",
+                  "shortName": "M. Gasper",
+                  "position": {
+                    "name": "Catcher",
+                    "displayName": "Catcher",
+                    "abbreviation": "C"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/5132012.png",
+                    "alt": "Mickey Gasper"
+                  }
+                }
+              },
+              {
+                "batOrder": 3,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760003990057",
+                    "atBatId": "4018153760003",
+                    "playId": "4018153760003990057"
+                  },
+                  {
+                    "id": "4018153760601990057",
+                    "atBatId": "4018153760601",
+                    "playId": "4018153760601990057"
+                  },
+                  {
+                    "id": "4018153761001990057",
+                    "atBatId": "4018153761001",
+                    "playId": "4018153761001990057"
+                  },
+                  {
+                    "id": "4018153761402990057",
+                    "atBatId": "4018153761402",
+                    "playId": "4018153761402990057"
+                  }
+                ],
+                "stats": [
+                  "0-4",
+                  "4",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "13",
+                  ".300",
+                  ".372",
+                  ".459"
+                ],
+                "position": {
+                  "id": "9",
+                  "name": "Right Field",
+                  "displayName": "Right Fielder",
+                  "abbreviation": "RF"
+                },
+                "athlete": {
+                  "id": "4990055",
+                  "displayName": "Wilyer Abreu",
+                  "shortName": "W. Abreu",
+                  "position": {
+                    "name": "Right Field",
+                    "displayName": "Right Fielder",
+                    "abbreviation": "RF"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/4990055.png",
+                    "alt": "Wilyer Abreu"
+                  }
+                }
+              },
+              {
+                "batOrder": 4,
+                "starter": true,
+                "active": false,
+                "atBats": [
+                  {
+                    "id": "4018153760004990057",
+                    "atBatId": "4018153760004",
+                    "playId": "4018153760004990057"
+                  },
+                  {
+                    "id": "4018153760602990057",
+                    "atBatId": "4018153760602",
+                    "playId": "4018153760602990057"
+                  },
+                  {
+                    "id": "4018153761002990057",
+                    "atBatId": "4018153761002",
+                    "playId": "4018153761002990057"
+                  }
+                ],
+                "stats": [
+                  "1-3",
+                  "3",
+                  "0",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "10",
+                  ".253",
+                  ".362",
+                  ".468"
+                ],
+                "position": {
+                  "id": "3",
+                  "name": "First Base",
+                  "displayName": "First Baseman",
+                  "abbreviation": "1B"
+                },
+                "athlete": {
+                  "id": "32532",
+                  "displayName": "Willson Contreras",
+                  "shortName": "W. Contreras",
+                  "position": {
+                    "name": "First Base",
+                    "displayName": "First Baseman",
+                    "abbreviation": "1B"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/32532.png",
+                    "alt": "Willson Contreras"
+                  }
+                }
+              },
+              {
+                "batOrder": 4,
+                "starter": false,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153761403990057",
+                    "atBatId": "4018153761403",
+                    "playId": "4018153761403990057"
+                  }
+                ],
+                "stats": [
+                  "1-1",
+                  "1",
+                  "0",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "1",
+                  ".214",
+                  ".267",
+                  ".238"
+                ],
+                "position": {
+                  "id": "3",
+                  "name": "First Base",
+                  "displayName": "First Baseman",
+                  "abbreviation": "1B"
+                },
+                "athlete": {
+                  "id": "33572",
+                  "displayName": "Isiah Kiner-Falefa",
+                  "shortName": "I. Kiner-Falefa",
+                  "position": {
+                    "name": "Second Base",
+                    "displayName": "Second Baseman",
+                    "abbreviation": "2B"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/33572.png",
+                    "alt": "Isiah Kiner-Falefa"
+                  }
+                }
+              },
+              {
+                "batOrder": 5,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760201990057",
+                    "atBatId": "4018153760201",
+                    "playId": "4018153760201990057"
+                  },
+                  {
+                    "id": "4018153760603990057",
+                    "atBatId": "4018153760603",
+                    "playId": "4018153760603990057"
+                  },
+                  {
+                    "id": "4018153761003990057",
+                    "atBatId": "4018153761003",
+                    "playId": "4018153761003990057"
+                  },
+                  {
+                    "id": "4018153761404990057",
+                    "atBatId": "4018153761404",
+                    "playId": "4018153761404990057"
+                  }
+                ],
+                "stats": [
+                  "1-3",
+                  "3",
+                  "0",
+                  "1",
+                  "0",
+                  "0",
+                  "1",
+                  "0",
+                  "19",
+                  ".284",
+                  ".354",
+                  ".432"
+                ],
+                "position": {
+                  "id": "8",
+                  "name": "Center Field",
+                  "displayName": "Center Fielder",
+                  "abbreviation": "CF"
+                },
+                "athlete": {
+                  "id": "4987382",
+                  "displayName": "Ceddanne Rafaela",
+                  "shortName": "C. Rafaela",
+                  "position": {
+                    "name": "Center Field",
+                    "displayName": "Center Fielder",
+                    "abbreviation": "CF"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/4987382.png",
+                    "alt": "Ceddanne Rafaela"
+                  }
+                }
+              },
+              {
+                "batOrder": 6,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760202990057",
+                    "atBatId": "4018153760202",
+                    "playId": "4018153760202990057"
+                  },
+                  {
+                    "id": "4018153760604990057",
+                    "atBatId": "4018153760604",
+                    "playId": "4018153760604990057"
+                  },
+                  {
+                    "id": "4018153761004990057",
+                    "atBatId": "4018153761004",
+                    "playId": "4018153761004990057"
+                  },
+                  {
+                    "id": "4018153761601990057",
+                    "atBatId": "4018153761601",
+                    "playId": "4018153761601990057"
+                  }
+                ],
+                "stats": [
+                  "0-4",
+                  "4",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "1",
+                  "13",
+                  ".218",
+                  ".285",
+                  ".315"
+                ],
+                "position": {
+                  "id": "4",
+                  "name": "Second Base",
+                  "displayName": "Second Baseman",
+                  "abbreviation": "2B"
+                },
+                "athlete": {
+                  "id": "4872648",
+                  "displayName": "Marcelo Mayer",
+                  "shortName": "M. Mayer",
+                  "position": {
+                    "name": "Second Base",
+                    "displayName": "Second Baseman",
+                    "abbreviation": "2B"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/4872648.png",
+                    "alt": "Marcelo Mayer"
+                  }
+                }
+              },
+              {
+                "batOrder": 7,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760203990057",
+                    "atBatId": "4018153760203",
+                    "playId": "4018153760203990057"
+                  },
+                  {
+                    "id": "4018153760605990057",
+                    "atBatId": "4018153760605",
+                    "playId": "4018153760605990057"
+                  },
+                  {
+                    "id": "4018153761201990057",
+                    "atBatId": "4018153761201",
+                    "playId": "4018153761201990057"
+                  },
+                  {
+                    "id": "4018153761602990057",
+                    "atBatId": "4018153761602",
+                    "playId": "4018153761602990057"
+                  }
+                ],
+                "stats": [
+                  "1-4",
+                  "4",
+                  "0",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "12",
+                  ".243",
+                  ".291",
+                  ".392"
+                ],
+                "position": {
+                  "id": "6",
+                  "name": "Shortstop",
+                  "displayName": "Shortstop",
+                  "abbreviation": "SS"
+                },
+                "athlete": {
+                  "id": "36950",
+                  "displayName": "Andruw Monasterio",
+                  "shortName": "A. Monasterio",
+                  "position": {
+                    "name": "Shortstop",
+                    "displayName": "Shortstop",
+                    "abbreviation": "SS"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/36950.png",
+                    "alt": "Andruw Monasterio"
+                  }
+                }
+              },
+              {
+                "batOrder": 8,
+                "starter": true,
+                "active": false,
+                "atBats": [
+                  {
+                    "id": "4018153760401990057",
+                    "atBatId": "4018153760401",
+                    "playId": "4018153760401990057"
+                  },
+                  {
+                    "id": "4018153760801990057",
+                    "atBatId": "4018153760801",
+                    "playId": "4018153760801990057"
+                  }
+                ],
+                "stats": [
+                  "1-2",
+                  "2",
+                  "0",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "6",
+                  ".225",
+                  ".289",
+                  ".348"
+                ],
+                "position": {
+                  "id": "2",
+                  "name": "Catcher",
+                  "displayName": "Catcher",
+                  "abbreviation": "C"
+                },
+                "athlete": {
+                  "id": "5012120",
+                  "displayName": "Carlos Narvaez",
+                  "shortName": "C. Narvaez",
+                  "position": {
+                    "name": "Catcher",
+                    "displayName": "Catcher",
+                    "abbreviation": "C"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/5012120.png",
+                    "alt": "Carlos Narvaez"
+                  }
+                }
+              },
+              {
+                "batOrder": 8,
+                "starter": false,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153761202990057",
+                    "atBatId": "4018153761202",
+                    "playId": "4018153761202990057"
+                  },
+                  {
+                    "id": "4018153761603990057",
+                    "atBatId": "4018153761603",
+                    "playId": "4018153761603990057"
+                  }
+                ],
+                "stats": [
+                  "1-2",
+                  "2",
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "1",
+                  "6",
+                  ".255",
+                  ".333",
+                  ".353"
+                ],
+                "position": {
+                  "id": "2",
+                  "name": "Catcher",
+                  "displayName": "Catcher",
+                  "abbreviation": "C"
+                },
+                "athlete": {
+                  "id": "40086",
+                  "displayName": "Connor Wong",
+                  "shortName": "C. Wong",
+                  "position": {
+                    "name": "Catcher",
+                    "displayName": "Catcher",
+                    "abbreviation": "C"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/40086.png",
+                    "alt": "Connor Wong"
+                  }
+                }
+              },
+              {
+                "batOrder": 9,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760402990057",
+                    "atBatId": "4018153760402",
+                    "playId": "4018153760402990057"
+                  },
+                  {
+                    "id": "4018153760802990057",
+                    "atBatId": "4018153760802",
+                    "playId": "4018153760802990057"
+                  },
+                  {
+                    "id": "4018153761203990057",
+                    "atBatId": "4018153761203",
+                    "playId": "4018153761203990057"
+                  },
+                  {
+                    "id": "4018153761604990057",
+                    "atBatId": "4018153761604",
+                    "playId": "4018153761604990057"
+                  }
+                ],
+                "stats": [
+                  "1-4",
+                  "4",
+                  "0",
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "1",
+                  "13",
+                  ".250",
+                  ".250",
+                  ".500"
+                ],
+                "position": {
+                  "id": "5",
+                  "name": "Third Base",
+                  "displayName": "Third Baseman",
+                  "abbreviation": "3B"
+                },
+                "athlete": {
+                  "id": "42979",
+                  "displayName": "Nick Sogard",
+                  "shortName": "N. Sogard",
+                  "position": {
+                    "name": "First Base",
+                    "displayName": "First Baseman",
+                    "abbreviation": "1B"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/42979.png",
+                    "alt": "Nick Sogard"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "pitching",
+            "keys": [
+              "fullInnings.partInnings",
+              "hits",
+              "runs",
+              "earnedRuns",
+              "walks",
+              "strikeouts",
+              "homeRuns",
+              "pitches-strikes",
+              "ERA",
+              "pitches"
+            ],
+            "athletes": [
+              {
+                "batOrder": 0,
+                "starter": true,
+                "active": false,
+                "stats": [
+                  "5.0",
+                  "8",
+                  "7",
+                  "7",
+                  "3",
+                  "1",
+                  "2",
+                  "98-61",
+                  "7.16",
+                  "98"
+                ],
+                "notes": [
+                  {
+                    "type": "pitchingDecision",
+                    "text": "L, 2-5"
+                  }
+                ],
+                "position": {
+                  "id": "1",
+                  "name": "Pitcher",
+                  "displayName": "Pitcher",
+                  "abbreviation": "P"
+                },
+                "athlete": {
+                  "id": "4720856",
+                  "displayName": "Brayan Bello",
+                  "shortName": "B. Bello",
+                  "position": {
+                    "name": "Starting Pitcher",
+                    "displayName": "Starting Pitcher",
+                    "abbreviation": "SP"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/4720856.png",
+                    "alt": "Brayan Bello"
+                  }
+                }
+              },
+              {
+                "batOrder": 0,
+                "starter": false,
+                "active": true,
+                "stats": [
+                  "3.0",
+                  "0",
+                  "1",
+                  "1",
+                  "3",
+                  "4",
+                  "0",
+                  "48-27",
+                  "5.86",
+                  "48"
+                ],
+                "position": {
+                  "id": "1",
+                  "name": "Pitcher",
+                  "displayName": "Pitcher",
+                  "abbreviation": "P"
+                },
+                "athlete": {
+                  "id": "5125911",
+                  "displayName": "Ryan Watson",
+                  "shortName": "R. Watson",
+                  "position": {
+                    "name": "Relief Pitcher",
+                    "displayName": "Relief Pitcher",
+                    "abbreviation": "RP"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/5125911.png",
+                    "alt": "Ryan Watson"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "team": {
+          "id": "15",
+          "abbreviation": "ATL",
+          "displayName": "Atlanta Braves",
+          "name": "Braves",
+          "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/atl.png"
+        },
+        "statistics": [
+          {
+            "type": "batting",
+            "keys": [
+              "hits-atBats",
+              "atBats",
+              "runs",
+              "hits",
+              "RBIs",
+              "homeRuns",
+              "walks",
+              "strikeouts",
+              "pitches",
+              "avg",
+              "onBasePct",
+              "slugAvg"
+            ],
+            "athletes": [
+              {
+                "batOrder": 1,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760101990057",
+                    "atBatId": "4018153760101",
+                    "playId": "4018153760101990057"
+                  },
+                  {
+                    "id": "4018153760304990057",
+                    "atBatId": "4018153760304",
+                    "playId": "4018153760304990057"
+                  },
+                  {
+                    "id": "4018153760703990057",
+                    "atBatId": "4018153760703",
+                    "playId": "4018153760703990057"
+                  },
+                  {
+                    "id": "4018153761102990057",
+                    "atBatId": "4018153761102",
+                    "playId": "4018153761102990057"
+                  },
+                  {
+                    "id": "4018153761504990057",
+                    "atBatId": "4018153761504",
+                    "playId": "4018153761504990057"
+                  }
+                ],
+                "stats": [
+                  "0-2",
+                  "2",
+                  "0",
+                  "0",
+                  "2",
+                  "0",
+                  "2",
+                  "0",
+                  "22",
+                  ".301",
+                  ".385",
+                  ".543"
+                ],
+                "position": {
+                  "id": "2",
+                  "name": "Catcher",
+                  "displayName": "Catcher",
+                  "abbreviation": "C"
+                },
+                "athlete": {
+                  "id": "4810190",
+                  "displayName": "Drake Baldwin",
+                  "shortName": "D. Baldwin",
+                  "position": {
+                    "name": "Catcher",
+                    "displayName": "Catcher",
+                    "abbreviation": "C"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/4810190.png",
+                    "alt": "Drake Baldwin"
+                  }
+                }
+              },
+              {
+                "batOrder": 2,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760102990057",
+                    "atBatId": "4018153760102",
+                    "playId": "4018153760102990057"
+                  },
+                  {
+                    "id": "4018153760305990057",
+                    "atBatId": "4018153760305",
+                    "playId": "4018153760305990057"
+                  },
+                  {
+                    "id": "4018153760704990057",
+                    "atBatId": "4018153760704",
+                    "playId": "4018153760704990057"
+                  },
+                  {
+                    "id": "4018153761103990057",
+                    "atBatId": "4018153761103",
+                    "playId": "4018153761103990057"
+                  },
+                  {
+                    "id": "4018153761505990057",
+                    "atBatId": "4018153761505",
+                    "playId": "4018153761505990057"
+                  }
+                ],
+                "stats": [
+                  "1-5",
+                  "5",
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "1",
+                  "21",
+                  ".275",
+                  ".328",
+                  ".451"
+                ],
+                "position": {
+                  "id": "4",
+                  "name": "Second Base",
+                  "displayName": "Second Baseman",
+                  "abbreviation": "2B"
+                },
+                "athlete": {
+                  "id": "33783",
+                  "displayName": "Ozzie Albies",
+                  "shortName": "O. Albies",
+                  "position": {
+                    "name": "Second Base",
+                    "displayName": "Second Baseman",
+                    "abbreviation": "2B"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/33783.png",
+                    "alt": "Ozzie Albies"
+                  }
+                }
+              },
+              {
+                "batOrder": 3,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760103990057",
+                    "atBatId": "4018153760103",
+                    "playId": "4018153760103990057"
+                  },
+                  {
+                    "id": "4018153760306990057",
+                    "atBatId": "4018153760306",
+                    "playId": "4018153760306990057"
+                  },
+                  {
+                    "id": "4018153760705990057",
+                    "atBatId": "4018153760705",
+                    "playId": "4018153760705990057"
+                  },
+                  {
+                    "id": "4018153761104990057",
+                    "atBatId": "4018153761104",
+                    "playId": "4018153761104990057"
+                  }
+                ],
+                "stats": [
+                  "0-3",
+                  "3",
+                  "0",
+                  "0",
+                  "1",
+                  "0",
+                  "1",
+                  "1",
+                  "15",
+                  ".276",
+                  ".354",
+                  ".591"
+                ],
+                "position": {
+                  "id": "3",
+                  "name": "First Base",
+                  "displayName": "First Baseman",
+                  "abbreviation": "1B"
+                },
+                "athlete": {
+                  "id": "32767",
+                  "displayName": "Matt Olson",
+                  "shortName": "M. Olson",
+                  "position": {
+                    "name": "First Base",
+                    "displayName": "First Baseman",
+                    "abbreviation": "1B"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/32767.png",
+                    "alt": "Matt Olson"
+                  }
+                }
+              },
+              {
+                "batOrder": 4,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760104990057",
+                    "atBatId": "4018153760104",
+                    "playId": "4018153760104990057"
+                  },
+                  {
+                    "id": "4018153760307990057",
+                    "atBatId": "4018153760307",
+                    "playId": "4018153760307990057"
+                  },
+                  {
+                    "id": "4018153760901990057",
+                    "atBatId": "4018153760901",
+                    "playId": "4018153760901990057"
+                  },
+                  {
+                    "id": "4018153761301990057",
+                    "atBatId": "4018153761301",
+                    "playId": "4018153761301990057"
+                  }
+                ],
+                "stats": [
+                  "0-4",
+                  "4",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "13",
+                  ".293",
+                  ".323",
+                  ".487"
+                ],
+                "position": {
+                  "id": "8",
+                  "name": "Center Field",
+                  "displayName": "Center Fielder",
+                  "abbreviation": "CF"
+                },
+                "athlete": {
+                  "id": "42470",
+                  "displayName": "Michael Harris II",
+                  "shortName": "M. Harris II",
+                  "position": {
+                    "name": "Center Field",
+                    "displayName": "Center Fielder",
+                    "abbreviation": "CF"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/42470.png",
+                    "alt": "Michael Harris II"
+                  }
+                }
+              },
+              {
+                "batOrder": 5,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760105990057",
+                    "atBatId": "4018153760105",
+                    "playId": "4018153760105990057"
+                  },
+                  {
+                    "id": "4018153760501990057",
+                    "atBatId": "4018153760501",
+                    "playId": "4018153760501990057"
+                  },
+                  {
+                    "id": "4018153760902990057",
+                    "atBatId": "4018153760902",
+                    "playId": "4018153760902990057"
+                  },
+                  {
+                    "id": "4018153761302990057",
+                    "atBatId": "4018153761302",
+                    "playId": "4018153761302990057"
+                  }
+                ],
+                "stats": [
+                  "2-4",
+                  "4",
+                  "2",
+                  "2",
+                  "3",
+                  "1",
+                  "0",
+                  "1",
+                  "15",
+                  ".220",
+                  ".287",
+                  ".384"
+                ],
+                "position": {
+                  "id": "5",
+                  "name": "Third Base",
+                  "displayName": "Third Baseman",
+                  "abbreviation": "3B"
+                },
+                "athlete": {
+                  "id": "34982",
+                  "displayName": "Austin Riley",
+                  "shortName": "A. Riley",
+                  "position": {
+                    "name": "Third Base",
+                    "displayName": "Third Baseman",
+                    "abbreviation": "3B"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/34982.png",
+                    "alt": "Austin Riley"
+                  }
+                }
+              },
+              {
+                "batOrder": 6,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760106990057",
+                    "atBatId": "4018153760106",
+                    "playId": "4018153760106990057"
+                  },
+                  {
+                    "id": "4018153760502990057",
+                    "atBatId": "4018153760502",
+                    "playId": "4018153760502990057"
+                  },
+                  {
+                    "id": "4018153760903990057",
+                    "atBatId": "4018153760903",
+                    "playId": "4018153760903990057"
+                  },
+                  {
+                    "id": "4018153761303990057",
+                    "atBatId": "4018153761303",
+                    "playId": "4018153761303990057"
+                  }
+                ],
+                "stats": [
+                  "1-4",
+                  "4",
+                  "0",
+                  "1",
+                  "1",
+                  "0",
+                  "0",
+                  "0",
+                  "19",
+                  ".344",
+                  ".371",
+                  ".511"
+                ],
+                "position": {
+                  "id": "10",
+                  "name": "Designated Hitter",
+                  "displayName": "Designated Hitter",
+                  "abbreviation": "DH"
+                },
+                "athlete": {
+                  "id": "33218",
+                  "displayName": "Dominic Smith",
+                  "shortName": "D. Smith",
+                  "position": {
+                    "name": "Designated Hitter",
+                    "displayName": "Designated Hitter",
+                    "abbreviation": "DH"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/33218.png",
+                    "alt": "Dominic Smith"
+                  }
+                }
+              },
+              {
+                "batOrder": 7,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760301990057",
+                    "atBatId": "4018153760301",
+                    "playId": "4018153760301990057"
+                  },
+                  {
+                    "id": "4018153760503990057",
+                    "atBatId": "4018153760503",
+                    "playId": "4018153760503990057"
+                  },
+                  {
+                    "id": "4018153760904990057",
+                    "atBatId": "4018153760904",
+                    "playId": "4018153760904990057"
+                  },
+                  {
+                    "id": "4018153761501990057",
+                    "atBatId": "4018153761501",
+                    "playId": "4018153761501990057"
+                  }
+                ],
+                "stats": [
+                  "1-3",
+                  "3",
+                  "2",
+                  "1",
+                  "0",
+                  "0",
+                  "1",
+                  "1",
+                  "19",
+                  ".310",
+                  ".355",
+                  ".466"
+                ],
+                "position": {
+                  "id": "6",
+                  "name": "Shortstop",
+                  "displayName": "Shortstop",
+                  "abbreviation": "SS"
+                },
+                "athlete": {
+                  "id": "33832",
+                  "displayName": "Jorge Mateo",
+                  "shortName": "J. Mateo",
+                  "position": {
+                    "name": "Shortstop",
+                    "displayName": "Shortstop",
+                    "abbreviation": "SS"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/33832.png",
+                    "alt": "Jorge Mateo"
+                  }
+                }
+              },
+              {
+                "batOrder": 8,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760302990057",
+                    "atBatId": "4018153760302",
+                    "playId": "4018153760302990057"
+                  },
+                  {
+                    "id": "4018153760701990057",
+                    "atBatId": "4018153760701",
+                    "playId": "4018153760701990057"
+                  },
+                  {
+                    "id": "4018153760905990057",
+                    "atBatId": "4018153760905",
+                    "playId": "4018153760905990057"
+                  },
+                  {
+                    "id": "4018153761502990057",
+                    "atBatId": "4018153761502",
+                    "playId": "4018153761502990057"
+                  }
+                ],
+                "stats": [
+                  "2-3",
+                  "3",
+                  "2",
+                  "2",
+                  "1",
+                  "1",
+                  "1",
+                  "0",
+                  "12",
+                  ".232",
+                  ".299",
+                  ".344"
+                ],
+                "position": {
+                  "id": "9",
+                  "name": "Right Field",
+                  "displayName": "Right Fielder",
+                  "abbreviation": "RF"
+                },
+                "athlete": {
+                  "id": "33341",
+                  "displayName": "Mike Yastrzemski",
+                  "shortName": "M. Yastrzemski",
+                  "position": {
+                    "name": "Left Field",
+                    "displayName": "Left Fielder",
+                    "abbreviation": "LF"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/33341.png",
+                    "alt": "Mike Yastrzemski"
+                  }
+                }
+              },
+              {
+                "batOrder": 9,
+                "starter": true,
+                "active": true,
+                "atBats": [
+                  {
+                    "id": "4018153760303990057",
+                    "atBatId": "4018153760303",
+                    "playId": "4018153760303990057"
+                  },
+                  {
+                    "id": "4018153760702990057",
+                    "atBatId": "4018153760702",
+                    "playId": "4018153760702990057"
+                  },
+                  {
+                    "id": "4018153761101990057",
+                    "atBatId": "4018153761101",
+                    "playId": "4018153761101990057"
+                  },
+                  {
+                    "id": "4018153761503990057",
+                    "atBatId": "4018153761503",
+                    "playId": "4018153761503990057"
+                  }
+                ],
+                "stats": [
+                  "1-3",
+                  "3",
+                  "0",
+                  "1",
+                  "0",
+                  "0",
+                  "1",
+                  "1",
+                  "10",
+                  ".385",
+                  ".429",
+                  ".538"
+                ],
+                "position": {
+                  "id": "7",
+                  "name": "Left Field",
+                  "displayName": "Left Fielder",
+                  "abbreviation": "LF"
+                },
+                "athlete": {
+                  "id": "35058",
+                  "displayName": "Jose Azocar",
+                  "shortName": "J. Azocar",
+                  "position": {
+                    "name": "Right Field",
+                    "displayName": "Right Fielder",
+                    "abbreviation": "RF"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/35058.png",
+                    "alt": "Jose Azocar"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "pitching",
+            "keys": [
+              "fullInnings.partInnings",
+              "hits",
+              "runs",
+              "earnedRuns",
+              "walks",
+              "strikeouts",
+              "homeRuns",
+              "pitches-strikes",
+              "ERA",
+              "pitches"
+            ],
+            "athletes": [
+              {
+                "batOrder": 0,
+                "starter": true,
+                "active": false,
+                "stats": [
+                  "6.0",
+                  "5",
+                  "0",
+                  "0",
+                  "1",
+                  "4",
+                  "0",
+                  "87-58",
+                  "3.80",
+                  "87"
+                ],
+                "notes": [
+                  {
+                    "type": "pitchingDecision",
+                    "text": "W, 3-1"
+                  }
+                ],
+                "position": {
+                  "id": "1",
+                  "name": "Pitcher",
+                  "displayName": "Pitcher",
+                  "abbreviation": "P"
+                },
+                "athlete": {
+                  "id": "33840",
+                  "displayName": "Grant Holmes",
+                  "shortName": "G. Holmes",
+                  "position": {
+                    "name": "Starting Pitcher",
+                    "displayName": "Starting Pitcher",
+                    "abbreviation": "SP"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/33840.png",
+                    "alt": "Grant Holmes"
+                  }
+                }
+              },
+              {
+                "batOrder": 0,
+                "starter": false,
+                "active": false,
+                "stats": [
+                  "2.0",
+                  "2",
+                  "0",
+                  "0",
+                  "0",
+                  "2",
+                  "0",
+                  "26-18",
+                  "3.56",
+                  "26"
+                ],
+                "position": {
+                  "id": "1",
+                  "name": "Pitcher",
+                  "displayName": "Pitcher",
+                  "abbreviation": "P"
+                },
+                "athlete": {
+                  "id": "33860",
+                  "displayName": "Reynaldo Lopez",
+                  "shortName": "R. Lopez",
+                  "position": {
+                    "name": "Starting Pitcher",
+                    "displayName": "Starting Pitcher",
+                    "abbreviation": "SP"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/33860.png",
+                    "alt": "Reynaldo Lopez"
+                  }
+                }
+              },
+              {
+                "batOrder": 0,
+                "starter": false,
+                "active": true,
+                "stats": [
+                  "1.0",
+                  "2",
+                  "1",
+                  "1",
+                  "0",
+                  "1",
+                  "0",
+                  "15-12",
+                  "4.12",
+                  "15"
+                ],
+                "position": {
+                  "id": "1",
+                  "name": "Pitcher",
+                  "displayName": "Pitcher",
+                  "abbreviation": "P"
+                },
+                "athlete": {
+                  "id": "34166",
+                  "displayName": "Tyler Kinley",
+                  "shortName": "T. Kinley",
+                  "position": {
+                    "name": "Relief Pitcher",
+                    "displayName": "Relief Pitcher",
+                    "abbreviation": "RP"
+                  },
+                  "headshot": {
+                    "href": "https://a.espncdn.com/i/headshots/mlb/players/full/34166.png",
+                    "alt": "Tyler Kinley"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "teams": [
+      {
+        "homeAway": "away",
+        "displayOrder": 1,
+        "team": {
+          "id": "2",
+          "abbreviation": "BOS",
+          "displayName": "Boston Red Sox",
+          "name": "Red Sox",
+          "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/bos.png"
+        }
+      },
+      {
+        "homeAway": "home",
+        "displayOrder": 2,
+        "team": {
+          "id": "15",
+          "abbreviation": "ATL",
+          "displayName": "Atlanta Braves",
+          "name": "Braves",
+          "logo": "https://a.espncdn.com/i/teamlogos/mlb/500/atl.png"
+        }
+      }
+    ]
+  }
+}
