@@ -86,6 +86,7 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
             "third_out_play": data.third_out_play,
             "third_out_hold_until": data.third_out_hold_until,
             "on_deck": data.on_deck,
+            "lineups": data.lineups,
             "probable_pitchers": data.probable_pitchers,
             "win_probability": data.win_probability,
             "leaders": data.leaders,

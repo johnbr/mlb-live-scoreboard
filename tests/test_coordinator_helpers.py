@@ -409,6 +409,7 @@ def _make_data(
         third_out_play={},
         third_out_hold_until=None,
         on_deck={},
+        lineups={},
         leaders={},
         division_standings={"division_name": "", "entries": []},
         mode="live" if is_live else "previous",
@@ -1026,3 +1027,168 @@ def test_team_abbr_map_collapses_dual_keying_and_skips_garbage():
     assert Coord._team_abbr_map({}) == {}
     assert Coord._team_abbr_map({"teams": "not-a-dict"}) == {}
     assert Coord._team_abbr_map({"teams": {"x": None, "y": {"id": "", "abbreviation": ""}}}) == {}
+
+
+# ---------------------------------------------------------------------------
+# _normalize_lineups (Lineup Popup, Chunk 1)
+#
+# Driven by the real (trimmed) box-score fixture captured in Chunk 0
+# (summary_401815376_boxscore.json — BOS @ ATL 2026-05-17 Final). The game
+# is final, so every asserted stat is frozen history and will never churn.
+# ---------------------------------------------------------------------------
+
+
+def _boxscore_fixture() -> dict:
+    return _load_fixture("summary_401815376_boxscore.json")
+
+
+def test_normalize_lineups_resolves_sides_and_counts():
+    lineups = Coord._normalize_lineups(_boxscore_fixture(), "")
+
+    # away/home resolved via boxscore.teams homeAway map (not array order).
+    assert set(lineups) == {"away", "home"}
+    assert lineups["away"]["abbreviation"] == "BOS"
+    assert lineups["away"]["name"] == "Boston Red Sox"
+    assert lineups["home"]["abbreviation"] == "ATL"
+    assert lineups["home"]["logo"].startswith("http")
+
+    # Every player who appeared: BOS used 11 batters (incl. subs) + 2
+    # pitchers; ATL ran out 9 starters + 3 pitchers.
+    assert len(lineups["away"]["hitters"]) == 11
+    assert len(lineups["away"]["pitchers"]) == 2
+    assert len(lineups["home"]["hitters"]) == 9
+    assert len(lineups["home"]["pitchers"]) == 3
+
+    # No current batter passed (a completed game has none) -> neither side
+    # flagged as batting.
+    assert lineups["away"]["is_batting"] is False
+    assert lineups["home"]["is_batting"] is False
+
+
+def test_normalize_lineups_hitter_game_stats_and_position():
+    lineups = Coord._normalize_lineups(_boxscore_fixture(), "")
+    # ATL leadoff hitter, Drake Baldwin (frozen line for this final game).
+    baldwin = lineups["home"]["hitters"][0]
+    assert baldwin["id"] == "4810190"
+    assert baldwin["name"] == "Drake Baldwin"
+    assert baldwin["bat_order"] == 1
+    assert baldwin["starter"] is True
+    assert baldwin["position"] == "C"  # in-game fielding position
+    assert baldwin["ab"] == "2"
+    assert baldwin["r"] == "0"
+    assert baldwin["h"] == "0"
+    assert baldwin["hr"] == "0"
+    assert baldwin["rbi"] == "2"
+    assert baldwin["bb"] == "2"
+    assert baldwin["k"] == "0"
+    assert baldwin["avg"] == ".301"  # season avg the box score carries
+
+
+def test_normalize_lineups_orders_by_bat_order_starter_before_sub():
+    lineups = Coord._normalize_lineups(_boxscore_fixture(), "")
+    bos = lineups["away"]["hitters"]
+
+    # Sorted ascending by batting order, 1..9.
+    orders = [h["bat_order"] for h in bos]
+    assert orders == sorted(orders)
+    assert orders[0] == 1 and orders[-1] == 9
+
+    # Slot 4 was a substitution: Contreras (starter, subbed out) then
+    # Kiner-Falefa (sub, still active) — starter must precede the sub.
+    slot4 = [h for h in bos if h["bat_order"] == 4]
+    assert [h["name"] for h in slot4] == ["Willson Contreras", "Isiah Kiner-Falefa"]
+    contreras, ikf = slot4
+    assert contreras["starter"] is True and contreras["active"] is False
+    assert ikf["starter"] is False and ikf["active"] is True
+    assert ikf["id"] == "33572"
+    assert ikf["position"] == "1B"  # in-game position, not his listed 2B
+    assert ikf["h"] == "1" and ikf["ab"] == "1" and ikf["avg"] == ".214"
+
+
+def test_normalize_lineups_pitcher_game_stats_and_decision():
+    lineups = Coord._normalize_lineups(_boxscore_fixture(), "")
+    bello = lineups["away"]["pitchers"][0]  # BOS starter
+    assert bello["name"] == "Brayan Bello"
+    assert bello["starter"] is True
+    assert bello["decision"] == "L, 2-5"
+    assert bello["ip"] == "5.0"  # fullInnings.partInnings
+    assert bello["h"] == "8"
+    assert bello["r"] == "7"
+    assert bello["er"] == "7"
+    assert bello["bb"] == "3"
+    assert bello["k"] == "1"
+    assert bello["pc"] == "98"  # `pitches`, not the "98-61" pitches-strikes
+    assert bello["era"] == "7.16"  # season ERA from the box score
+
+
+def test_normalize_lineups_is_batting_from_current_batter():
+    # Baldwin (ATL / home) is the current batter -> home side flagged.
+    lineups = Coord._normalize_lineups(_boxscore_fixture(), "4810190")
+    assert lineups["home"]["is_batting"] is True
+    assert lineups["away"]["is_batting"] is False
+
+
+def test_normalize_lineups_unknown_batter_flags_no_side():
+    lineups = Coord._normalize_lineups(_boxscore_fixture(), "0000000")
+    assert lineups["away"]["is_batting"] is False
+    assert lineups["home"]["is_batting"] is False
+
+
+def test_normalize_lineups_empty_boxscore_returns_empty():
+    assert Coord._normalize_lineups({}, "") == {}
+    assert Coord._normalize_lineups({"boxscore": {}}, "") == {}
+    assert Coord._normalize_lineups({"boxscore": {"players": []}}, "") == {}
+
+
+def test_normalize_lineups_positional_fallback_without_teams_map():
+    # No boxscore.teams -> fall back to ESPN's array convention (away first).
+    summary = {
+        "boxscore": {
+            "players": [
+                {
+                    "team": {"id": "10", "abbreviation": "AAA", "displayName": "Aaa Team"},
+                    "statistics": [
+                        {
+                            "type": "batting",
+                            "keys": ["atBats", "runs", "hits", "homeRuns", "RBIs", "walks", "strikeouts", "avg"],
+                            "athletes": [
+                                {
+                                    "batOrder": 1,
+                                    "starter": True,
+                                    "active": True,
+                                    "athlete": {"id": "1", "displayName": "P One"},
+                                    "stats": ["3", "1", "2", "0", "1", "0", "0", ".333"],
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "team": {"id": "20", "abbreviation": "BBB", "displayName": "Bbb Team"},
+                    "statistics": [
+                        {
+                            "type": "pitching",
+                            "keys": ["fullInnings.partInnings", "hits", "runs", "earnedRuns", "walks", "strikeouts", "ERA", "pitches"],
+                            "athletes": [
+                                {
+                                    "starter": True,
+                                    "active": False,
+                                    "athlete": {"id": "2", "displayName": "Q Two"},
+                                    "stats": ["6.0", "4", "1", "1", "2", "7", "2.50", "95"],
+                                }
+                            ],
+                        }
+                    ],
+                },
+            ]
+        }
+    }
+    lineups = Coord._normalize_lineups(summary, "")
+    assert lineups["away"]["abbreviation"] == "AAA"
+    assert lineups["home"]["abbreviation"] == "BBB"
+    h = lineups["away"]["hitters"][0]
+    assert h["name"] == "P One" and h["bat_order"] == 1 and h["position"] == ""
+    p = lineups["home"]["pitchers"][0]
+    # No notes -> no-decision (empty string), other game stats still parsed.
+    assert p["decision"] == ""
+    assert p["ip"] == "6.0" and p["pc"] == "95" and p["era"] == "2.50"
