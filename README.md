@@ -13,6 +13,7 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Pre-game info** - Scheduled game times and probable pitchers
 - **Post-game results** - Final scores and game leaders
 - **Division standings popup** - Click an upcoming or completed game card to expand probable starters (upcoming only) and current division standings
+- **Player career popup** - Click any (yellow) player name to open an in-card popup with their bio and season-by-season career stats; configurable to open ESPN's player page instead (`player_link_target`)
 - **Configurable game-event actions** - Fire Home Assistant events (or invoke services directly from the integration options) on team scored, opponent scored, game won, game lost, and game started, so you can drive lights, TTS, notifications, or any other automation. See [Game Event Actions](#game-event-actions) below.
 - **Configurable display** - Toggle various UI elements on/off
 - **Auto-registered card** - The Lovelace card is automatically registered on install
@@ -79,6 +80,7 @@ title: Dodgers
 | `show_diamond` | boolean | `true` | Show base diamond graphic |
 | `show_count` | boolean | `true` | Show balls/strikes/outs dots |
 | `show_win_probability` | boolean | `true` | Show live win-probability bar between the score rows and the balls/strikes/outs row (hidden pre-game when ESPN doesn't yet publish a probability series) |
+| `player_link_target` | string | `popup` | What clicking a (yellow) player name does: `popup` opens an in-card career-stats popup; `espn` opens ESPN's player page directly. The popup always includes a "View on ESPN" link, so ESPN stays reachable either way |
 
 ### Example with all options
 
@@ -97,6 +99,7 @@ show_base_occupancy: true
 show_diamond: true
 show_count: true
 show_win_probability: true
+player_link_target: popup
 ```
 
 ## Game Event Actions

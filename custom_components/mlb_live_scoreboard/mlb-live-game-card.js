@@ -443,6 +443,13 @@ function escapeHtml(value) {
   );
 }
 
+// ESPN's human-facing player page. Used both for the `player_link_target:
+// espn` direct-open mode (Option A behavior) and the popup footer link, so
+// the URL shape lives in one place.
+function espnPlayerUrl(id) {
+  return `https://www.espn.com/mlb/player/_/id/${encodeURIComponent(String(id == null ? "" : id))}`;
+}
+
 // Build the player career popup body — bio header + season-by-season career
 // table — from a normalized PlayerCard (see coordinator._parse_player_card /
 // types.PlayerCard). Pure string builder (no DOM/`this`) so it can be
@@ -714,6 +721,11 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       show_count: true,
       show_win_probability: true,
       refresh_rate: 0, // seconds, 0 = disabled (rely on hass state updates)
+      // Clicking a (yellow) player name: "popup" opens the in-card career
+      // popup (default); "espn" opens ESPN's player page directly (the
+      // original Option A behavior). ESPN stays reachable either way — the
+      // popup footer always carries a "View on ESPN" link.
+      player_link_target: "popup",
       ...config,
     };
     // Clear any existing refresh timer when config changes
@@ -783,10 +795,16 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     if (!link || !this.content.contains(link)) return false;
     const id = link.getAttribute("data-athlete-id");
     if (id) {
-      // Primary action: the in-card career popup. ESPN remains reachable via
-      // the popup's footer link. Chunk 5 adds a `player_link_target` config
-      // option to let users choose ESPN-direct (restoring Option A) + docs.
-      this._openPlayerCardPopup(id);
+      // `player_link_target` (default "popup") chooses the action. "espn"
+      // restores Option A's direct-to-ESPN behavior; either way ESPN stays
+      // reachable (the popup footer always links out). Both click and
+      // keyboard activation funnel through here, so parity is automatic.
+      const target = String(this.config?.player_link_target || "popup").toLowerCase();
+      if (target === "espn") {
+        window.open(espnPlayerUrl(id), "_blank", "noopener");
+      } else {
+        this._openPlayerCardPopup(id);
+      }
     }
     return true;
   }
@@ -1051,7 +1069,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       this._pcOverlay.hidden = false;
     }
     this._pcTitle.textContent = "Player";
-    this._pcEspn.href = `https://www.espn.com/mlb/player/_/id/${encodeURIComponent(id)}`;
+    this._pcEspn.href = espnPlayerUrl(id);
     this._setPlayerCardState("loading");
     this._pcDialog.focus();
 
