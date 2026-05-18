@@ -11,6 +11,9 @@ htmlcov/
 coverage.xml
 CLAUDE.md
 
+# Internal Option B development/handoff doc — kept locally, not in-repo
+OPTION_B_HANDOFF.md
+
 # Local virtualenvs
 .venv/
 venv/
