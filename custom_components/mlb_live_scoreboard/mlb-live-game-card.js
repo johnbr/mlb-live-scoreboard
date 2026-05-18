@@ -535,6 +535,109 @@ function playerCardBodyHtml(card, headshotSrc) {
   return header + table;
 }
 
+// Build the lineup popup body — a Hitters table + a Pitchers table for one
+// team — from a LineupTeam (see coordinator._normalize_lineups /
+// types.LineupTeam). Pure string builder (no DOM/`this`) so it can be
+// unit-checked offline against the Chunk 0 box-score fixture.
+//
+// `view` is "game" (synchronous, straight from the entity attribute) or
+// "season". For the season view, `seasonStats` maps athlete id ->
+// { hitting?: {ab,h,hr,rbi,sb,avg}, pitching?: {w,l,era,ip,k,whip} } as
+// returned by the mlb_live_scoreboard/team_season_stats WS command (wired
+// in Chunk 5); a player with no season entry shows em dashes. Rows are
+// pre-sorted by the backend (batting order, starter before sub); a
+// subbed-out player (active === false) is dimmed so the table reads like a
+// box score listing everyone who appeared.
+function lineupTablesHtml(team, view, seasonStats) {
+  const t = team && typeof team === "object" ? team : {};
+  const hitters = Array.isArray(t.hitters) ? t.hitters : [];
+  const pitchers = Array.isArray(t.pitchers) ? t.pitchers : [];
+  if (!hitters.length && !pitchers.length) {
+    return `<div class="mlb-lu-msg">Lineup not posted yet.</div>`;
+  }
+  const ss = seasonStats && typeof seasonStats === "object" ? seasonStats : {};
+  const isSeason = view === "season";
+  const DASH = "—";
+
+  const cell = (v) => `<td>${escapeHtml(v == null || v === "" ? DASH : v)}</td>`;
+  const pair = (a, b) => {
+    const x = a == null || a === "" ? "" : String(a);
+    const y = b == null || b === "" ? "" : String(b);
+    return x === "" && y === "" ? DASH : `${x || "0"}-${y || "0"}`;
+  };
+
+  const hitCols = isSeason
+    ? ["H-AB", "HR", "RBI", "SB", "AVG"]
+    : ["AB", "R", "H", "HR", "RBI", "BB", "K", "AVG"];
+  const hitHead =
+    `<tr><th scope="col" class="mlb-lu-num">#</th>` +
+    `<th scope="col" class="mlb-lu-pos">Pos</th>` +
+    `<th scope="col" class="mlb-lu-name">Hitter</th>` +
+    hitCols.map((c) => `<th scope="col">${escapeHtml(c)}</th>`).join("") +
+    `</tr>`;
+  const hitRows = hitters
+    .map((h) => {
+      const cls = h.active === false ? ' class="mlb-lu-out"' : "";
+      const ord = h.bat_order ? String(h.bat_order) : "";
+      const s = (ss[String(h.id)] || {}).hitting || {};
+      const cells = isSeason
+        ? cell(pair(s.h, s.ab)) + [s.hr, s.rbi, s.sb, s.avg].map(cell).join("")
+        : [h.ab, h.r, h.h, h.hr, h.rbi, h.bb, h.k, h.avg].map(cell).join("");
+      return (
+        `<tr${cls}>` +
+        `<th scope="row" class="mlb-lu-num">${escapeHtml(ord)}</th>` +
+        `<td class="mlb-lu-pos">${escapeHtml(h.position || "")}</td>` +
+        `<td class="mlb-lu-name">${escapeHtml(
+          shortPersonName(h.name || h.short_name || DASH)
+        )}</td>` +
+        cells +
+        `</tr>`
+      );
+    })
+    .join("");
+
+  const pitCols = isSeason
+    ? ["W-L", "ERA", "IP", "K", "WHIP"]
+    : ["Dec", "IP", "H", "R", "ER", "BB", "K", "PC", "ERA"];
+  const pitHead =
+    `<tr><th scope="col" class="mlb-lu-name">Pitcher</th>` +
+    pitCols.map((c) => `<th scope="col">${escapeHtml(c)}</th>`).join("") +
+    `</tr>`;
+  const pitRows = pitchers
+    .map((p) => {
+      const cls = p.active === false ? ' class="mlb-lu-out"' : "";
+      const s = (ss[String(p.id)] || {}).pitching || {};
+      const cells = isSeason
+        ? cell(pair(s.w, s.l)) + [s.era, s.ip, s.k, s.whip].map(cell).join("")
+        : [p.decision, p.ip, p.h, p.r, p.er, p.bb, p.k, p.pc, p.era]
+            .map(cell)
+            .join("");
+      return (
+        `<tr${cls}>` +
+        `<th scope="row" class="mlb-lu-name">${escapeHtml(
+          shortPersonName(p.name || p.short_name || DASH)
+        )}</th>` +
+        cells +
+        `</tr>`
+      );
+    })
+    .join("");
+
+  const section = (label, head, rows, n) =>
+    rows
+      ? `<div class="mlb-lu-table-wrap" tabindex="0" role="group" ` +
+        `aria-label="${escapeHtml(label)}, scrollable">` +
+        `<table class="mlb-lu-table">` +
+        `<caption class="mlb-lu-caption">${escapeHtml(label)} (${n})</caption>` +
+        `<thead>${head}</thead><tbody>${rows}</tbody></table></div>`
+      : "";
+
+  return (
+    section("Hitters", hitHead, hitRows, hitters.length) +
+    section("Pitchers", pitHead, pitRows, pitchers.length)
+  );
+}
+
 function renderDueUpCards(card, dueUp, inningDescription = "") {
   const list = Array.isArray(dueUp) ? dueUp.filter(Boolean).slice(0, 3) : [];
   if (!list.length) return "";
@@ -1117,6 +1220,337 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     this._pcDialog = this._pcTitle = this._pcBody = this._pcEspn = null;
   }
 
+  // --- Team lineup popup (separate modal from the player career popup).
+  // Mirrors the mlb-pc-* scaffolding/a11y verbatim. Chunk 3 builds the
+  // shell + Game view (synchronous, straight from the `lineups` entity
+  // attribute). Chunk 4 wires the matchup-side click target that opens it;
+  // Chunk 5 fills the Season view via the team_season_stats WS command. ---
+
+  _lineupTeam(side) {
+    const ent = this.config && this.config.entity;
+    const st = ent && this._hass ? this._hass.states[ent] : null;
+    const lu = st && st.attributes ? st.attributes.lineups : null;
+    return lu && typeof lu === "object" ? lu[side] || null : null;
+  }
+
+  _ensureLineupPopup() {
+    if (this._luOverlay) return;
+    if (!document.getElementById("mlb-lu-style")) {
+      const style = document.createElement("style");
+      style.id = "mlb-lu-style";
+      style.textContent = `
+        .mlb-lu-overlay {
+          position: fixed; inset: 0; z-index: 99999;
+          display: flex; align-items: center; justify-content: center;
+          padding: 16px; background: rgba(0,0,0,0.6);
+        }
+        .mlb-lu-overlay[hidden] { display: none; }
+        .mlb-lu-dialog {
+          width: min(640px, 95vw); max-height: 88vh;
+          display: flex; flex-direction: column; overflow: hidden;
+          background: var(--card-background-color, var(--ha-card-background, #1c1c1c));
+          color: var(--primary-text-color, #e1e1e1);
+          border-radius: var(--ha-card-border-radius, 12px);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+          outline: none;
+        }
+        .mlb-lu-header {
+          display: flex; align-items: center; gap: 10px;
+          padding: 12px 14px;
+          border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+        }
+        .mlb-lu-logo {
+          flex: none; width: 30px; height: 30px; object-fit: contain;
+        }
+        .mlb-lu-title {
+          flex: 1; min-width: 0; font-weight: 600; font-size: 1.05em;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          color: var(--warning-color, #ffb300);
+        }
+        .mlb-lu-views {
+          flex: none; display: flex; gap: 2px; padding: 2px;
+          border: 1px solid var(--divider-color, rgba(255,255,255,0.2));
+          border-radius: 8px;
+        }
+        .mlb-lu-views label {
+          cursor: pointer; font-size: 0.82em; line-height: 1;
+          padding: 5px 10px; border-radius: 6px;
+          color: var(--secondary-text-color, #9b9b9b);
+        }
+        .mlb-lu-views input { position: absolute; opacity: 0; pointer-events: none; }
+        .mlb-lu-views label:has(input:checked) {
+          background: var(--warning-color, #ffb300);
+          color: var(--text-primary-color, #111);
+        }
+        .mlb-lu-views label:has(input:focus-visible) {
+          outline: 2px solid var(--warning-color, #ffb300); outline-offset: 2px;
+        }
+        .mlb-lu-close {
+          flex: none; cursor: pointer; border: 0; border-radius: 50%;
+          width: 30px; height: 30px; line-height: 30px; padding: 0;
+          font-size: 16px; background: transparent;
+          color: var(--secondary-text-color, #9b9b9b);
+        }
+        .mlb-lu-close:hover { color: var(--primary-text-color, #fff); }
+        .mlb-lu-close:focus-visible,
+        .mlb-lu-table-wrap:focus-visible {
+          outline: 2px solid var(--warning-color, #ffb300); outline-offset: 2px;
+        }
+        .mlb-lu-body {
+          padding: 14px 16px; overflow: auto; min-height: 96px;
+        }
+        .mlb-lu-body--msg {
+          display: flex; align-items: center; justify-content: center;
+          text-align: center;
+        }
+        .mlb-lu-msg { color: var(--secondary-text-color, #9b9b9b); }
+        .mlb-lu-retry {
+          margin-top: 10px; cursor: pointer;
+          background: transparent; color: var(--warning-color, #ffb300);
+          border: 1px solid var(--divider-color, rgba(255,255,255,0.2));
+          border-radius: 6px; padding: 5px 12px;
+        }
+        .mlb-lu-spinner {
+          width: 26px; height: 26px; border-radius: 50%;
+          border: 3px solid var(--divider-color, rgba(255,255,255,0.2));
+          border-top-color: var(--warning-color, #ffb300);
+          animation: mlb-lu-spin 0.8s linear infinite; margin: 0 auto 10px;
+        }
+        @keyframes mlb-lu-spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+          .mlb-lu-spinner { animation-duration: 2s; }
+        }
+        .mlb-lu-table-wrap {
+          overflow-x: auto; -webkit-overflow-scrolling: touch;
+          margin-bottom: 14px;
+        }
+        .mlb-lu-table-wrap:last-child { margin-bottom: 0; }
+        .mlb-lu-table {
+          border-collapse: collapse; width: 100%;
+          font-size: 0.82em; white-space: nowrap;
+        }
+        .mlb-lu-caption {
+          caption-side: top; text-align: left; padding: 2px 0 6px;
+          font-size: 0.92em; font-weight: 600;
+          color: var(--secondary-text-color, #9b9b9b);
+        }
+        .mlb-lu-table th, .mlb-lu-table td {
+          padding: 5px 8px; text-align: right;
+          border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.08));
+        }
+        .mlb-lu-table thead th {
+          color: var(--secondary-text-color, #9b9b9b); font-weight: 600;
+        }
+        .mlb-lu-table th.mlb-lu-name, .mlb-lu-table td.mlb-lu-name,
+        .mlb-lu-table th.mlb-lu-pos, .mlb-lu-table td.mlb-lu-pos,
+        .mlb-lu-table th.mlb-lu-num, .mlb-lu-table td.mlb-lu-num {
+          text-align: left;
+        }
+        .mlb-lu-table td.mlb-lu-name { color: var(--primary-text-color, #e1e1e1); }
+        .mlb-lu-table .mlb-lu-num { width: 1.5em; }
+        .mlb-lu-table tr.mlb-lu-out td, .mlb-lu-table tr.mlb-lu-out th {
+          opacity: 0.55;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "mlb-lu-overlay";
+    overlay.hidden = true;
+    // Unique per instance: two cards on one dashboard would otherwise emit
+    // duplicate ids / radio names and break aria-labelledby + grouping.
+    const uid = Math.random().toString(36).slice(2, 9);
+    const titleId = `mlb-lu-title-${uid}`;
+    const grp = `mlb-lu-view-${uid}`;
+    overlay.innerHTML = `
+      <div class="mlb-lu-dialog" role="dialog" aria-modal="true"
+           aria-labelledby="${titleId}" tabindex="-1">
+        <div class="mlb-lu-header">
+          <img class="mlb-lu-logo" alt="" aria-hidden="true" hidden
+               loading="lazy" decoding="async" referrerpolicy="no-referrer">
+          <div class="mlb-lu-title" id="${titleId}" role="heading" aria-level="2">Lineup</div>
+          <div class="mlb-lu-views" role="radiogroup" aria-label="Stats view">
+            <label><input type="radio" name="${grp}" class="mlb-lu-view" value="game" checked>Game</label>
+            <label><input type="radio" name="${grp}" class="mlb-lu-view" value="season">Season</label>
+          </div>
+          <button class="mlb-lu-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <div class="mlb-lu-body" aria-live="polite"></div>
+      </div>`;
+
+    this._luOverlay = overlay;
+    this._luDialog = overlay.querySelector(".mlb-lu-dialog");
+    this._luTitle = overlay.querySelector(".mlb-lu-title");
+    this._luLogo = overlay.querySelector(".mlb-lu-logo");
+    this._luBody = overlay.querySelector(".mlb-lu-body");
+
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) return this._closeLineupPopup();
+      const t = ev.target instanceof Element ? ev.target : null;
+      if (t && t.closest(".mlb-lu-close")) return this._closeLineupPopup();
+      if (t && t.closest(".mlb-lu-retry")) return this._renderLineupBody();
+    });
+    overlay.addEventListener("change", (ev) => {
+      const t = ev.target instanceof Element ? ev.target : null;
+      if (t && t.classList.contains("mlb-lu-view")) {
+        this._setLineupView(t.value === "season" ? "season" : "game");
+      }
+    });
+    overlay.addEventListener("keydown", (ev) => this._onLuKeydown(ev));
+    document.body.appendChild(overlay);
+  }
+
+  _onLuKeydown(ev) {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      this._closeLineupPopup();
+      return;
+    }
+    if (ev.key !== "Tab") return;
+    // `input` included so the Game/Season radios stay inside the trap.
+    const focusables = this._luDialog.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusables.length) {
+      ev.preventDefault();
+      this._luDialog.focus();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (ev.shiftKey && (active === first || active === this._luDialog)) {
+      ev.preventDefault();
+      last.focus();
+    } else if (!ev.shiftKey && active === last) {
+      ev.preventDefault();
+      first.focus();
+    }
+  }
+
+  _setLineupState(state) {
+    if (!this._luBody) return;
+    if (this._luDialog) {
+      this._luDialog.setAttribute("aria-busy", state === "loading" ? "true" : "false");
+    }
+    this._luBody.className =
+      state === "ready" ? "mlb-lu-body" : "mlb-lu-body mlb-lu-body--msg";
+    if (state === "loading") {
+      this._luBody.innerHTML =
+        `<div><div class="mlb-lu-spinner"></div><div class="mlb-lu-msg">Loading season stats…</div></div>`;
+    } else if (state === "error") {
+      this._luBody.innerHTML =
+        `<div><div class="mlb-lu-msg">Couldn't load season stats.</div>` +
+        `<button class="mlb-lu-retry" type="button">Retry</button></div>`;
+    } else if (state === "pregame") {
+      this._luBody.innerHTML = `<div class="mlb-lu-msg">Lineup not posted yet.</div>`;
+    }
+  }
+
+  // Render the body for the current side + view. Game is synchronous from
+  // the entity attribute. Season requires the WS fetch (wired in Chunk 5);
+  // until then, and as the fetch's empty/error fallback, it shows a note.
+  _renderLineupBody() {
+    if (!this._luBody) return;
+    const team = this._lineupTeam(this._luSide);
+    const name = (team && (team.name || team.abbreviation)) || "Lineup";
+    if (this._luTitle) this._luTitle.textContent = name;
+    if (this._luLogo) {
+      const src = team ? requestCachedLogo(this, team.logo || "") : "";
+      if (src) {
+        this._luLogo.src = src;
+        this._luLogo.hidden = false;
+      } else {
+        this._luLogo.hidden = true;
+      }
+    }
+    const hasPlayers =
+      team &&
+      ((Array.isArray(team.hitters) && team.hitters.length) ||
+        (Array.isArray(team.pitchers) && team.pitchers.length));
+    if (!hasPlayers) {
+      this._setLineupState("pregame");
+      return;
+    }
+    if (this._luView === "season") {
+      const ss = this._luSeasonStats;
+      if (!ss || (ss instanceof Map ? ss.size === 0 : !Object.keys(ss).length)) {
+        // Chunk 5 populates _luSeasonStats via the team_season_stats WS
+        // command and re-renders. Until then this is the honest state.
+        this._luBody.className = "mlb-lu-body mlb-lu-body--msg";
+        this._luBody.innerHTML =
+          `<div class="mlb-lu-msg">Season stats not loaded.</div>`;
+        return;
+      }
+      const map = ss instanceof Map ? Object.fromEntries(ss) : ss;
+      this._setLineupState("ready");
+      this._luBody.innerHTML = lineupTablesHtml(team, "season", map);
+      return;
+    }
+    this._setLineupState("ready");
+    this._luBody.innerHTML = lineupTablesHtml(team, "game", {});
+  }
+
+  _setLineupView(view) {
+    const v = view === "season" ? "season" : "game";
+    if (this._luView === v) return;
+    this._luView = v;
+    this._renderLineupBody();
+  }
+
+  // side: "away" | "home" (Chunk 4 resolves which from the matchup click).
+  _openLineupPopup(side) {
+    const s = side === "home" ? "home" : "away";
+    this._ensureLineupPopup();
+    this._luSide = s;
+    // Default to Game while the game is live, Season otherwise.
+    const ent = this.config && this.config.entity;
+    const st = ent && this._hass ? this._hass.states[ent] : null;
+    const live = !!(st && st.attributes && st.attributes.is_live);
+    this._luView = live ? "game" : "season";
+    const radios = this._luOverlay.querySelectorAll(".mlb-lu-view");
+    radios.forEach((r) => {
+      r.checked = r.value === this._luView;
+    });
+    if (this._luOverlay.hidden) {
+      this._luReturnFocus =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      this._luPrevBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      this._luOverlay.hidden = false;
+    }
+    this._renderLineupBody();
+    this._luDialog.focus();
+  }
+
+  _closeLineupPopup() {
+    if (!this._luOverlay || this._luOverlay.hidden) return;
+    this._luOverlay.hidden = true;
+    document.body.style.overflow = this._luPrevBodyOverflow || "";
+    if (this._luReturnFocus && document.contains(this._luReturnFocus)) {
+      this._luReturnFocus.focus();
+    }
+    this._luReturnFocus = null;
+  }
+
+  // Whether `side`'s lineup popup is currently open (Chunk 4 toggles on it).
+  _isLineupPopupOpen(side) {
+    return !!(
+      this._luOverlay &&
+      !this._luOverlay.hidden &&
+      (side == null || this._luSide === (side === "home" ? "home" : "away"))
+    );
+  }
+
+  _destroyLineupPopup() {
+    if (!this._luOverlay) return;
+    this._closeLineupPopup();
+    this._luOverlay.remove();
+    this._luOverlay = null;
+    this._luDialog = this._luTitle = this._luLogo = this._luBody = null;
+  }
+
   _onContentClick(ev) {
     if (this._openPlayerProfile(ev.target)) return;
     const target = ev.target instanceof Element ? ev.target.closest(".upcoming-expandable") : null;
@@ -1163,6 +1597,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     this._clearHoldExpiryTimer();
     clearTimeout(this._renderTimer);
     this._destroyPlayerCardPopup();
+    this._destroyLineupPopup();
   }
 
   set hass(hass) {
