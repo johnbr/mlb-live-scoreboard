@@ -865,6 +865,13 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       // original Option A behavior). ESPN stays reachable either way — the
       // popup footer always carries a "View on ESPN" link.
       player_link_target: "popup",
+      // Clicking a team's side of the matchup (anywhere but the yellow
+      // player name) opens an in-card popup of that team's full lineup +
+      // everyone who appeared in the game, with a Game/Season toggle.
+      show_lineup_popup: true,
+      // Which view that popup defaults to: "auto" (Game while the game is
+      // live, Season otherwise) or a forced "game" / "season".
+      lineup_default_view: "auto",
       ...config,
     };
     // Clear any existing refresh timer when config changes
@@ -1631,11 +1638,17 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const s = side === "home" ? "home" : "away";
     this._ensureLineupPopup();
     this._luSide = s;
-    // Default to Game while the game is live, Season otherwise.
-    const ent = this.config && this.config.entity;
-    const st = ent && this._hass ? this._hass.states[ent] : null;
-    const live = !!(st && st.attributes && st.attributes.is_live);
-    this._luView = live ? "game" : "season";
+    // Default view: an explicit lineup_default_view ("game"/"season") wins;
+    // "auto" (default) → Game while the game is live, Season otherwise.
+    const pref = String(this.config.lineup_default_view || "auto").toLowerCase();
+    if (pref === "game" || pref === "season") {
+      this._luView = pref;
+    } else {
+      const ent = this.config && this.config.entity;
+      const st = ent && this._hass ? this._hass.states[ent] : null;
+      const live = !!(st && st.attributes && st.attributes.is_live);
+      this._luView = live ? "game" : "season";
+    }
     const radios = this._luOverlay.querySelectorAll(".mlb-lu-view");
     radios.forEach((r) => {
       r.checked = r.value === this._luView;
@@ -1961,6 +1974,7 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
     const luPitcherSide = lineupSideForRole(attrs, "pitcher");
     const luBatterSide = lineupSideForRole(attrs, "batter");
     const luSideAttrs = (side) => {
+      if (this.config.show_lineup_popup === false) return "";
       if (side !== "away" && side !== "home") return "";
       const t = (attrs.lineups && attrs.lineups[side]) || {};
       const nm = escapeHtml(t.name || t.abbreviation || "team");
@@ -2536,7 +2550,7 @@ color: var(--secondary-text-color);
           background: var(--secondary-background-color, rgba(255,255,255,0.06));
         }
         .matchup-side[data-team-popup]:focus-visible {
-          outline: 2px solid var(--warning-color);
+          outline: 2px solid var(--warning-color, #ffb300);
           outline-offset: 2px;
         }
         .matchup-copy.centered {

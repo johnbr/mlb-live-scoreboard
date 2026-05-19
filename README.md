@@ -14,6 +14,7 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Post-game results** - Final scores and game leaders
 - **Division standings popup** - Click an upcoming or completed game card to expand probable starters (upcoming only) and current division standings
 - **Player career popup** - Click any (yellow) player name to open an in-card popup with their bio and season-by-season career stats; configurable to open ESPN's player page instead (`player_link_target`)
+- **Team lineup popup** - Click a team's side of the pitcher/batter matchup (anywhere but the player name) to open an in-card popup with that team's full lineup and every player who appeared in the game, toggleable between **Game** (this game's box score) and **Season** stats for hitters and pitchers
 - **Configurable game-event actions** - Fire Home Assistant events (or invoke services directly from the integration options) on team scored, opponent scored, game won, game lost, and game started, so you can drive lights, TTS, notifications, or any other automation. See [Game Event Actions](#game-event-actions) below.
 - **Configurable display** - Toggle various UI elements on/off
 - **Auto-registered card** - The Lovelace card is automatically registered on install
@@ -81,6 +82,8 @@ title: Dodgers
 | `show_count` | boolean | `true` | Show balls/strikes/outs dots |
 | `show_win_probability` | boolean | `true` | Show live win-probability bar between the score rows and the balls/strikes/outs row (hidden pre-game when ESPN doesn't yet publish a probability series) |
 | `player_link_target` | string | `popup` | What clicking a (yellow) player name does: `popup` opens an in-card career-stats popup; `espn` opens ESPN's player page directly. The popup always includes a "View on ESPN" link, so ESPN stays reachable either way |
+| `show_lineup_popup` | boolean | `true` | Allow clicking a team's side of the matchup to open the team-lineup popup. Set `false` to make the matchup sides inert (player-name links still work) |
+| `lineup_default_view` | string | `auto` | Which view the lineup popup opens to: `auto` (Game while the game is live, Season otherwise), or force `game` / `season` |
 
 ### Example with all options
 
@@ -100,6 +103,8 @@ show_diamond: true
 show_count: true
 show_win_probability: true
 player_link_target: popup
+show_lineup_popup: true
+lineup_default_view: auto
 ```
 
 ## Game Event Actions

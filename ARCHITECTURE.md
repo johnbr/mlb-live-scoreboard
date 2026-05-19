@@ -139,6 +139,46 @@ arbitrary athlete id:
 - Two-way players: ESPN's `/stats` returns categories for the player's
   *listed* position only, so a single side renders (documented limitation).
 
+## Team lineup popup (Game = push, Season = on-demand)
+
+A second modal, distinct from the player career popup. Clicking a team's
+side of the matchup (anywhere but the yellow player name) opens that team's
+full lineup + every player who appeared in the game, with a **Game/Season**
+toggle. The two views use deliberately opposite data routes:
+
+- **Game stats** ride the existing push flow. `coordinator._normalize_lineups`
+  flattens the already-fetched `summary["boxscore"]` into a `lineups`
+  sensor attribute (`{away, home}` → hitters/pitchers + `is_batting`). Zero
+  new ESPN calls; always fresh at the 5 s cadence. The card renders Game
+  synchronously from the attribute.
+- **Season stats** are on-demand, lazy, and batched — only fetched when the
+  user switches the toggle to Season:
+
+```
+  toggle → Season → hass WebSocket → mlb_live_scoreboard/team_season_stats
+                                       (__init__.py command handler)
+                                              │
+                                              ▼
+              coordinator.async_get_team_season_stats(athlete_ids)
+                - concurrent per-id season-line fetch (asyncio.gather)
+                - own TTL cache (TEAM_SEASON_STATS_TTL_SECONDS) + stale
+                - pure _extract_season_line  →  {id: {hitting?, pitching?}}
+                                              │
+                                              ▼
+          card._fetchTeamSeasonStats() → lineupTablesHtml() → modal
+```
+
+- Same **Route R3** rationale as the career popup: server-side, shared
+  cache, no ESPN CORS, no sensor-state growth. Registered once via
+  `_register_team_season_stats_websocket` (guarded by `_ws_registered`,
+  serviced by `_any_coordinator`).
+- The card mirrors the career popup's modal a11y (`role="dialog"`,
+  `aria-modal`, per-instance `aria-labelledby` + radio `name`, focus trap
+  incl. the radio group and the scrollable tables, ESC/backdrop/close,
+  scroll-lock, focus restore, polite live region + `aria-busy`). Per-team
+  client cache + in-flight de-dupe make Game↔Season instant after the first
+  Season load; a failed fetch is not cached, so Retry re-requests.
+
 ## Sensor attributes (HA state)
 
 Top-level `extra_state_attributes` exposed on the sensor:
@@ -168,6 +208,7 @@ Top-level `extra_state_attributes` exposed on the sensor:
 | `due_up` | list[dict] | up to `DUE_UP_LIMIT` next batters |
 | `third_out_play` | dict \| None | the play that produced the 3rd out (when ESPN flags it) |
 | `on_deck` | dict | next batter info |
+| `lineups` | dict | `{away, home}`, each: team meta + `is_batting`, `hitters[]` (Game box-score line), `pitchers[]`; drives the team lineup popup's Game view |
 
 `competition` contains the fields the card reads:
 `competitors[]` (each with `team`, `score`, `homeAway`, `linescores`, totals),
@@ -192,6 +233,8 @@ All card options have safe defaults. Minimum required is `entity`.
 | `show_count` | `true` | show ball/strike/out count dots |
 | `show_win_probability` | `true` | show the live win-probability bar |
 | `player_link_target` | `popup` | clicking a player name: `popup` (in-card career popup) or `espn` (open ESPN's player page) |
+| `show_lineup_popup` | `true` | allow the matchup sides to open the team lineup popup (`false` = inert) |
+| `lineup_default_view` | `auto` | lineup popup default view: `auto` (Game while live, else Season) / `game` / `season` |
 | `refresh_rate` | `0` | seconds; `0` disables (rely on HA state updates) |
 
 ## ESPN endpoints used
@@ -203,6 +246,7 @@ All card options have safe defaults. Minimum required is `entity`.
 | `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/<id>` | team logo / record | 1 hour (`TEAM_METADATA_TTL_SECONDS`) |
 | `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>/stats` | batter season stats / popup career table | 60 s batter (`BATTER_SEASON_STATS_TTL_SECONDS`); 6 h popup (`PLAYER_CARD_TTL_SECONDS`) |
 | `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>` | player bio (popup header) | 6 h (`PLAYER_CARD_TTL_SECONDS`) + 24 h stale fallback |
+| `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>/stats` | lineup popup Season view (batch, lazy) | 6 h (`TEAM_SEASON_STATS_TTL_SECONDS`) + 24 h stale fallback |
 
 These are unauthenticated public endpoints. Calls share a single aiohttp
 session and are awaited concurrently where independent.
