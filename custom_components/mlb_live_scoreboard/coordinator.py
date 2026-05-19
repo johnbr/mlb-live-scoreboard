@@ -45,6 +45,8 @@ from .const import (
     STATUS_NAME_DELAYED,
     STATUS_NAME_IN_PROGRESS,
     TEAM_METADATA_TTL_SECONDS,
+    TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS,
+    TEAM_SEASON_STATS_TTL_SECONDS,
     THIRD_OUT_HOLD_SECONDS,
 )
 from .types import (
@@ -55,6 +57,7 @@ from .types import (
     DueUpEntry,
     InningContext,
     Leaders,
+    Lineups,
     OnDeck,
     PitcherStats,
     PlayerCard,
@@ -232,6 +235,7 @@ class MlbLiveScoreboardData:
     third_out_play: RecentPlay
     third_out_hold_until: float | None
     on_deck: OnDeck
+    lineups: Lineups
     leaders: Leaders
     division_standings: Standings
     mode: str
@@ -258,6 +262,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # career-stats popup; opened interactively, so a long TTL keeps repeat
         # opens instant and a stale entry is reused if ESPN is briefly down.
         self._player_card_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # athlete_id -> (fetched_at_ts, parsed season line). Backs the lineup
+        # popup's Season view; opened interactively, so a long TTL keeps
+        # repeat opens instant and a stale entry is reused if ESPN is briefly
+        # down (same semantics as _player_card_cache).
+        self._team_season_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         # (fetched_at_ts, payload) for the team schedule endpoint. Used as a
         # short-lived fallback when ESPN's schedule endpoint has a transient
         # failure, so a one-poll hiccup doesn't blank the card.
@@ -1205,6 +1214,73 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             }
         return {}
 
+    @classmethod
+    def _extract_season_line(cls, stats_payload: dict[str, Any]) -> dict[str, Any]:
+        """Pull the current season's hitting *or* pitching line from an ESPN
+        ``/athletes/{id}/stats`` payload.
+
+        Pure (no I/O) — unit-tested directly against fixtures. Returns
+        ``{"hitting": {ab,h,hr,rbi,sb,avg}}`` for a hitter or
+        ``{"pitching": {w,l,era,ip,k,whip}}`` for a pitcher, or ``{}`` when
+        no usable category/row is present. ESPN's ``/stats`` exposes
+        categories by the player's *listed* position only, so at most one
+        side is available per call (documented Option B limitation —
+        see ``tests/fixtures/README.md``). Picks the current-year row,
+        falling back to the most recent season row when ESPN has not opened
+        the current season for that player yet.
+        """
+        categories = {
+            str(c.get("name") or ""): c
+            for c in (stats_payload.get("categories") or [])
+            if isinstance(c, dict)
+        }
+        primary = next((n for n in cls._PRIMARY_STAT_CATEGORIES if n in categories), "")
+        if not primary:
+            return {}
+        cat = categories[primary]
+        names = [str(n or "") for n in (cat.get("names") or [])]
+        rows = cat.get("statistics") or []
+        current_year = datetime.now().year
+        row = next(
+            (r for r in rows if int((r.get("season") or {}).get("year") or 0) == current_year),
+            None,
+        )
+        if row is None and rows:
+            row = rows[-1]
+        if not isinstance(row, dict):
+            return {}
+        stats = row.get("stats") or []
+
+        def by_name(*candidates: str) -> str:
+            for nm in candidates:
+                if nm in names:
+                    idx = names.index(nm)
+                    if 0 <= idx < len(stats) and stats[idx] not in (None, ""):
+                        return str(stats[idx])
+            return ""
+
+        if "pitch" in primary:
+            return {
+                "pitching": {
+                    "w": by_name("wins"),
+                    "l": by_name("losses"),
+                    "era": by_name("ERA"),
+                    "ip": by_name("innings", "inningsPitched"),
+                    "k": by_name("strikeouts"),
+                    "whip": by_name("WHIP"),
+                }
+            }
+        return {
+            "hitting": {
+                "ab": by_name("atBats"),
+                "h": by_name("hits"),
+                "hr": by_name("homeRuns"),
+                "rbi": by_name("RBIs"),
+                "sb": by_name("stolenBases"),
+                "avg": by_name("avg", "battingAverage"),
+            }
+        }
+
     # Primary stats category preference, by exact ESPN category name. A hitter
     # exposes ``career-batting``; a pitcher (incl. a two-way player ESPN lists
     # as a pitcher) exposes ``pitching``. Postseason / expanded / advanced and
@@ -1258,6 +1334,75 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         card = self._parse_player_card(athlete_id, bio_payload, stats_payload)
         self._player_card_cache[athlete_id] = (now_ts, card)
         return card
+
+    async def async_get_team_season_stats(
+        self, athlete_ids: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        """Public entrypoint for the team-season-stats WebSocket command.
+
+        Thin boundary over :meth:`_get_team_season_stats` so the
+        integration's websocket handler doesn't reach into a private method;
+        all fetch/cache/parse logic lives in the private impl.
+        """
+        return await self._get_team_season_stats(athlete_ids)
+
+    async def _get_team_season_stats(
+        self, athlete_ids: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        """Fetch current-season lines for many athletes at once.
+
+        Backs the lineup popup's Season view: opened interactively, so a
+        long per-athlete TTL keeps re-opens instant and a still-recent
+        cached line is reused when ESPN is briefly unreachable. Ids are
+        de-duplicated (preserving order) since a popup may list the same
+        player across roster + box score, then fetched concurrently.
+        Returns ``{athlete_id: {"hitting"|"pitching": {...}}}``, omitting
+        ids with no usable line.
+        """
+        ids = [
+            s
+            for s in dict.fromkeys(str(a or "").strip() for a in (athlete_ids or []))
+            if s
+        ]
+        if not ids:
+            return {}
+        results = await asyncio.gather(
+            *(self._get_one_season_line(aid) for aid in ids),
+            return_exceptions=True,
+        )
+        out: dict[str, dict[str, Any]] = {}
+        for aid, res in zip(ids, results, strict=True):
+            if isinstance(res, dict) and res:
+                out[aid] = res
+        return out
+
+    async def _get_one_season_line(self, athlete_id: str) -> dict[str, Any]:
+        """One athlete's parsed current-season line, TTL-cached with a
+        stale fallback (mirrors :meth:`_get_player_card`'s resilience)."""
+        if not athlete_id:
+            return {}
+        now_ts = time.time()
+        cached = self._team_season_stats_cache.get(athlete_id)
+        if cached is not None and (now_ts - cached[0]) < TEAM_SEASON_STATS_TTL_SECONDS:
+            return cached[1]
+        url = (
+            "https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/"
+            f"athletes/{athlete_id}/stats?region=us&lang=en&contentorigin=espn"
+        )
+        try:
+            payload = await self._get_json(url)
+        except Exception as err:
+            _LOGGER.debug("Unable to fetch season stats for %s: %s", athlete_id, err)
+            if (
+                cached is not None
+                and (now_ts - cached[0]) < TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS
+            ):
+                return cached[1]
+            return {}
+        line = self._extract_season_line(payload)
+        if line:
+            self._team_season_stats_cache[athlete_id] = (now_ts, line)
+        return line
 
     @staticmethod
     def _team_abbr_map(stats_payload: dict[str, Any]) -> dict[str, str]:
@@ -1502,6 +1647,155 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                         "hits_ab": f"{h}-{ab}" if h and ab else "",
                     }
         return {}
+
+    @classmethod
+    def _normalize_lineups(cls, summary: dict[str, Any], batter_id: str) -> Lineups:
+        """Flatten ``summary["boxscore"]`` into per-side Game-stat lineups.
+
+        Pure transform of the box score the coordinator already fetches every
+        tick — **zero extra ESPN calls**. Returns ``{}`` when the box score
+        has no usable players (typically pre-game; the card then shows
+        "Lineup not posted yet"). Season stats are *not* sourced here — the
+        card fetches those lazily over WebSocket (see handoff §3).
+        """
+        boxscore = summary.get("boxscore") or {}
+        team_blocks = boxscore.get("players") or []
+        if not team_blocks:
+            return {}
+
+        # Resolve away/home by joining each players block's team id to the
+        # boxscore.teams homeAway map. ESPN usually orders players[] as
+        # [away, home], but that is not guaranteed, so only fall back to
+        # positional assignment when the map can't resolve a block.
+        side_by_team_id: dict[str, str] = {}
+        for team_entry in boxscore.get("teams") or []:
+            tid = str((team_entry.get("team") or {}).get("id") or "")
+            side = str(team_entry.get("homeAway") or "").lower()
+            if tid and side in ("away", "home"):
+                side_by_team_id[tid] = side
+
+        # Which side is batting: the team block whose batting list contains
+        # the current batter (same approach as _normalize_on_deck). Empty
+        # for a pre-game or completed game (no current batter).
+        batting_team_id = ""
+        if batter_id:
+            for team_block in team_blocks:
+                for stat_block in team_block.get("statistics") or []:
+                    if stat_block.get("type") != "batting":
+                        continue
+                    for entry in stat_block.get("athletes") or []:
+                        if str((entry.get("athlete") or {}).get("id") or "") == batter_id:
+                            batting_team_id = str((team_block.get("team") or {}).get("id") or "")
+                            break
+                    if batting_team_id:
+                        break
+                if batting_team_id:
+                    break
+
+        result: Lineups = {}
+        for index, team_block in enumerate(team_blocks):
+            team = team_block.get("team") or {}
+            team_id = str(team.get("id") or "")
+            side = side_by_team_id.get(team_id, "")
+            if side not in ("away", "home"):
+                # Last-resort positional fallback (ESPN convention: away first).
+                side = "away" if (index == 0 and "away" not in result) else "home"
+            if side in result:
+                continue
+
+            hitters: list[dict[str, Any]] = []
+            pitchers: list[dict[str, Any]] = []
+            for stat_block in team_block.get("statistics") or []:
+                block_type = stat_block.get("type")
+                keys = [str(k or "") for k in (stat_block.get("keys") or [])]
+                athletes = stat_block.get("athletes") or []
+                if block_type == "batting":
+                    for entry in athletes:
+                        hitters.append(cls._lineup_hitter_row(entry, keys))
+                elif block_type == "pitching":
+                    for entry in athletes:
+                        pitchers.append(cls._lineup_pitcher_row(entry, keys))
+
+            # Stable sort by batting order (0 — i.e. pitchers who batted /
+            # missing — sinks to the end). Python's sort is stable, so a
+            # substitute keeps its position behind the starter it replaced
+            # (ESPN already lists starter-before-sub within a shared slot).
+            hitters.sort(key=lambda h: h.get("bat_order") or 99)
+
+            result[side] = {  # type: ignore[literal-required]
+                "team_id": team_id,
+                "abbreviation": str(team.get("abbreviation") or ""),
+                "name": str(team.get("displayName") or ""),
+                "short_name": str(team.get("name") or team.get("shortDisplayName") or ""),
+                "logo": str(team.get("logo") or ""),
+                "is_batting": bool(batting_team_id) and team_id == batting_team_id,
+                "hitters": hitters,
+                "pitchers": pitchers,
+            }
+
+        return result
+
+    @classmethod
+    def _lineup_hitter_row(cls, entry: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+        """One hitter row for :meth:`_normalize_lineups` (Game stats).
+
+        ``avg`` is the *season* average ESPN carries in the box score, not a
+        game value. ``position`` is the in-game fielding position (entry
+        level), falling back to the player's listed position.
+        """
+        athlete = entry.get("athlete") or {}
+        entry_pos = (entry.get("position") or {}).get("abbreviation")
+        listed_pos = (athlete.get("position") or {}).get("abbreviation")
+        return {
+            "id": str(athlete.get("id") or ""),
+            "name": str(athlete.get("displayName") or athlete.get("shortName") or ""),
+            "short_name": str(athlete.get("shortName") or athlete.get("displayName") or ""),
+            "position": str(entry_pos or listed_pos or ""),
+            "bat_order": int(entry.get("batOrder") or 0),
+            "starter": bool(entry.get("starter")),
+            "active": bool(entry.get("active")),
+            "ab": cls._stat_from_entry(entry, keys, "atBats", "ab"),
+            "r": cls._stat_from_entry(entry, keys, "runs", "r"),
+            "h": cls._stat_from_entry(entry, keys, "hits", "h"),
+            "hr": cls._stat_from_entry(entry, keys, "homeRuns", "hr"),
+            "rbi": cls._stat_from_entry(entry, keys, "RBIs", "rbi"),
+            "bb": cls._stat_from_entry(entry, keys, "walks", "bb"),
+            "k": cls._stat_from_entry(entry, keys, "strikeouts", "so", "k"),
+            "avg": cls._stat_from_entry(entry, keys, "avg", "battingAverage"),
+        }
+
+    @classmethod
+    def _lineup_pitcher_row(cls, entry: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+        """One pitcher row for :meth:`_normalize_lineups` (Game stats).
+
+        ``era`` is the *season* ERA from the box score. ``pc`` is the total
+        pitch count (``pitches``; the ``pitches-strikes`` key is the
+        ``"87-58"`` form). ``decision`` is the W/L/SV/HLD note text, empty
+        for a no-decision.
+        """
+        athlete = entry.get("athlete") or {}
+        decision = ""
+        for note in entry.get("notes") or []:
+            if str((note or {}).get("type") or "") == "pitchingDecision":
+                decision = str((note or {}).get("text") or "")
+                if decision:
+                    break
+        return {
+            "id": str(athlete.get("id") or ""),
+            "name": str(athlete.get("displayName") or athlete.get("shortName") or ""),
+            "short_name": str(athlete.get("shortName") or athlete.get("displayName") or ""),
+            "starter": bool(entry.get("starter")),
+            "active": bool(entry.get("active")),
+            "decision": decision,
+            "ip": cls._stat_from_entry(entry, keys, "fullInnings.partInnings", "ip", "inningsPitched", "IP"),
+            "h": cls._stat_from_entry(entry, keys, "hits", "h"),
+            "r": cls._stat_from_entry(entry, keys, "runs", "r"),
+            "er": cls._stat_from_entry(entry, keys, "earnedRuns", "er"),
+            "bb": cls._stat_from_entry(entry, keys, "walks", "bb"),
+            "k": cls._stat_from_entry(entry, keys, "strikeouts", "so", "k"),
+            "pc": cls._stat_from_entry(entry, keys, "pitches", "pitchCount"),
+            "era": cls._stat_from_entry(entry, keys, "ERA", "era", "earnedRunAverage"),
+        }
 
     @staticmethod
     def _resolve_display_comp(
@@ -1945,6 +2239,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             third_out_play=self._normalize_third_out_play(summary, inning_context),
             third_out_hold_until=third_out_hold_until,
             on_deck=self._normalize_on_deck(summary, inning_context, batter_id),
+            lineups=self._normalize_lineups(summary, batter_id),
             leaders=self._normalize_leaders(summary),
             division_standings=division_standings,
             mode=mode,

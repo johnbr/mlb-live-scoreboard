@@ -222,6 +222,94 @@ class Leaders(TypedDict, total=False):
     home: list[LeaderEntry]
 
 
+class LineupHitter(TypedDict, total=False):
+    """One hitter row in :class:`LineupTeam` ``hitters``.
+
+    Game stats are read straight from the box score
+    (``boxscore.players[].statistics[type=batting]``). ``avg`` is the
+    player's *season* batting average as ESPN carries it in the box score
+    (not a game value). ``position`` is the player's **in-game fielding**
+    position (the entry-level position, which differs from the listed
+    position for utility players). Substitutes share a ``bat_order`` slot
+    with the starter they replaced; ``starter``/``active`` disambiguate.
+    """
+
+    id: str
+    name: str
+    short_name: str
+    position: str
+    bat_order: int
+    starter: bool
+    active: bool
+    ab: str
+    r: str
+    h: str
+    hr: str
+    rbi: str
+    bb: str
+    k: str
+    avg: str
+
+
+class LineupPitcher(TypedDict, total=False):
+    """One pitcher row in :class:`LineupTeam` ``pitchers``.
+
+    Game stats from ``boxscore.players[].statistics[type=pitching]``.
+    ``era`` is the *season* ERA the box score carries (not a game value).
+    ``pc`` is the total pitch count. ``decision`` is the W/L/SV/HLD line
+    from the entry's ``notes`` (e.g. ``"L, 2-5"``); empty for a
+    no-decision. Order follows ESPN's appearance order (starter first).
+    """
+
+    id: str
+    name: str
+    short_name: str
+    starter: bool
+    active: bool
+    decision: str
+    ip: str
+    h: str
+    r: str
+    er: str
+    bb: str
+    k: str
+    pc: str
+    era: str
+
+
+class LineupTeam(TypedDict, total=False):
+    """One side of the :class:`Lineups` attribute.
+
+    ``is_batting`` is resolved like :meth:`_normalize_on_deck` — the
+    box-score team whose batting block contains the current batter. It is
+    ``False`` for both sides when there is no current batter (pre-game or a
+    completed game).
+    """
+
+    team_id: str
+    abbreviation: str
+    name: str
+    short_name: str
+    logo: str
+    is_batting: bool
+    hitters: list[LineupHitter]
+    pitchers: list[LineupPitcher]
+
+
+class Lineups(TypedDict, total=False):
+    """Shape of the ``lineups`` attribute.
+
+    Built purely from the already-fetched ``summary["boxscore"]`` (zero
+    extra ESPN calls). Empty (``{}``) when the box score has no usable
+    players yet (typically pre-game — the card shows "Lineup not posted
+    yet"). Season stats are *not* here; the card fetches those lazily via
+    the ``mlb_live_scoreboard/team_season_stats`` WebSocket command.
+    """
+
+    away: LineupTeam
+    home: LineupTeam
+
+
 class PlayerCardBio(TypedDict, total=False):
     """Bio header of a :class:`PlayerCard` (from the ESPN ``/athletes/{id}``
     endpoint's ``athlete`` object)."""

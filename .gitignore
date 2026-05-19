@@ -11,8 +11,10 @@ htmlcov/
 coverage.xml
 CLAUDE.md
 
-# Internal Option B development/handoff doc — kept locally, not in-repo
+# Internal development/handoff docs + reference assets — kept local, not in-repo
 OPTION_B_HANDOFF.md
+LINEUP_POPUP_HANDOFF.md
+screenshot-atl-batters.png
 
 # Local virtualenvs
 .venv/
