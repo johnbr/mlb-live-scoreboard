@@ -1274,6 +1274,62 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
   // attribute). Chunk 4 wires the matchup-side click target that opens it;
   // Chunk 5 fills the Season view via the team_season_stats WS command. ---
 
+  // Lazily fetch every rostered player's season line for `side`'s team via
+  // the integration's WebSocket batch command (server-side fetch reuses the
+  // coordinator's TTL cache; see LINEUP_POPUP_HANDOFF.md §3 / Chunk 2).
+  // Per-team result cache + in-flight de-dupe (mirrors _fetchPlayerCard) so
+  // flipping Game<->Season, switching sides, or reopening the popup doesn't
+  // re-hit the socket. Resolves to a { id: { hitting?, pitching? } } map
+  // (possibly empty), or null on transport failure (caller shows retry).
+  _fetchTeamSeasonStats(side) {
+    const s = side === "home" ? "home" : "away";
+    const team = this._lineupTeam(s);
+    if (!team || !this._hass || !this._hass.connection) return Promise.resolve(null);
+    const ids = [];
+    const seen = new Set();
+    for (const list of [team.hitters, team.pitchers]) {
+      if (!Array.isArray(list)) continue;
+      for (const p of list) {
+        const id = String((p && p.id) ?? "").trim();
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          ids.push(id);
+        }
+      }
+    }
+    const teamKey = String((team && team.team_id) ?? s);
+    this._luSeasonCache = this._luSeasonCache || new Map();
+    this._luSeasonInflight = this._luSeasonInflight || new Map();
+    if (this._luSeasonCache.has(teamKey)) {
+      return Promise.resolve(this._luSeasonCache.get(teamKey));
+    }
+    if (this._luSeasonInflight.has(teamKey)) return this._luSeasonInflight.get(teamKey);
+    if (!ids.length) {
+      const empty = {};
+      this._luSeasonCache.set(teamKey, empty);
+      return Promise.resolve(empty);
+    }
+    const req = this._hass.connection
+      .sendMessagePromise({
+        type: "mlb_live_scoreboard/team_season_stats",
+        athlete_ids: ids,
+      })
+      .then((res) => {
+        const map = (res && res.season_stats) || {};
+        this._luSeasonCache.set(teamKey, map);
+        return map;
+      })
+      .catch((err) => {
+        console.debug(`[${CARD_TAG}] team_season_stats fetch failed for ${teamKey}:`, err);
+        return null;
+      })
+      .finally(() => {
+        this._luSeasonInflight.delete(teamKey);
+      });
+    this._luSeasonInflight.set(teamKey, req);
+    return req;
+  }
+
   _lineupTeam(side) {
     const ent = this.config && this.config.entity;
     const st = ent && this._hass ? this._hass.states[ent] : null;
@@ -1497,11 +1553,12 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
   }
 
   // Render the body for the current side + view. Game is synchronous from
-  // the entity attribute. Season requires the WS fetch (wired in Chunk 5);
-  // until then, and as the fetch's empty/error fallback, it shows a note.
+  // the entity attribute; Season is delegated to _renderLineupSeason, which
+  // lazily batch-fetches via the team_season_stats WS command and caches.
   _renderLineupBody() {
     if (!this._luBody) return;
-    const team = this._lineupTeam(this._luSide);
+    const side = this._luSide;
+    const team = this._lineupTeam(side);
     const name = (team && (team.name || team.abbreviation)) || "Lineup";
     if (this._luTitle) this._luTitle.textContent = name;
     if (this._luLogo) {
@@ -1522,22 +1579,44 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
       return;
     }
     if (this._luView === "season") {
-      const ss = this._luSeasonStats;
-      if (!ss || (ss instanceof Map ? ss.size === 0 : !Object.keys(ss).length)) {
-        // Chunk 5 populates _luSeasonStats via the team_season_stats WS
-        // command and re-renders. Until then this is the honest state.
-        this._luBody.className = "mlb-lu-body mlb-lu-body--msg";
-        this._luBody.innerHTML =
-          `<div class="mlb-lu-msg">Season stats not loaded.</div>`;
-        return;
-      }
-      const map = ss instanceof Map ? Object.fromEntries(ss) : ss;
-      this._setLineupState("ready");
-      this._luBody.innerHTML = lineupTablesHtml(team, "season", map);
+      this._renderLineupSeason(side, team);
       return;
     }
     this._setLineupState("ready");
     this._luBody.innerHTML = lineupTablesHtml(team, "game", {});
+  }
+
+  // Season view: instant from the per-team cache when warm, otherwise show
+  // the loading state and lazily batch-fetch via _fetchTeamSeasonStats. The
+  // fetch is async, so re-validate side+view on resolve — the user may have
+  // closed the popup, switched teams, or flipped back to Game meanwhile.
+  // A failed fetch is not cached, so the Retry button (→ _renderLineupBody)
+  // and a later Season switch both naturally re-request.
+  _renderLineupSeason(side, team) {
+    const teamKey = String((team && team.team_id) ?? side);
+    const cached =
+      this._luSeasonCache instanceof Map ? this._luSeasonCache.get(teamKey) : undefined;
+    if (cached !== undefined) {
+      this._luSeasonStats = cached;
+      this._setLineupState("ready");
+      this._luBody.innerHTML = lineupTablesHtml(team, "season", cached);
+      return;
+    }
+    this._setLineupState("loading");
+    this._fetchTeamSeasonStats(side).then((map) => {
+      if (!this._isLineupPopupOpen(side) || this._luView !== "season") return;
+      if (map == null) {
+        this._setLineupState("error");
+        return;
+      }
+      this._luSeasonStats = map;
+      this._setLineupState("ready");
+      this._luBody.innerHTML = lineupTablesHtml(
+        this._lineupTeam(side) || team,
+        "season",
+        map
+      );
+    });
   }
 
   _setLineupView(view) {
