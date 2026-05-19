@@ -9,13 +9,210 @@ const THIRD_OUT_HOLD_SECONDS = 30;
 // just-completed third out, even without an explicit `third_out_play` attribute.
 const THIRD_OUT_RECENT_WINDOW_SECONDS = 8;
 
+const EDITOR_TAG = "mlb-live-game-card-editor";
+// Integration domain — used by the visual editor's entity picker to filter
+// the dropdown to this integration's sensors only (robust even if the user
+// renamed the entity_id away from the default `sensor.mlb_live_scoreboard_*`).
+const INTEGRATION_DOMAIN = "mlb_live_scoreboard";
+const DOCS_URL = "https://github.com/johnbr/mlb-live-scoreboard";
+
 window.customCards = window.customCards || [];
 if (!window.customCards.find((c) => c.type === CARD_TAG)) {
   window.customCards.push({
     type: CARD_TAG,
     name: "MLB Live Game Card",
     description: `MLB Live Scoreboard (${CARD_VERSION})`,
+    // Live preview tile + "Documentation" link in the dashboard card picker.
+    preview: true,
+    documentationURL: DOCS_URL,
   });
+}
+
+// Default card config. Shared by the card's setConfig() and the visual
+// editor so the editor's toggles reflect the real defaults (a value the
+// user never set still shows its true on/off state in the UI).
+const CARD_DEFAULTS = {
+  title: "",
+  show_batter: true,
+  show_records: true,
+  show_linescore: false,
+  show_pitches: true,
+  show_play_results: true,
+  show_on_deck: true,
+  show_base_occupancy: true,
+  show_diamond: true,
+  show_count: true,
+  show_win_probability: true,
+  // seconds, 0 = disabled (rely on hass state updates)
+  refresh_rate: 0,
+  // Clicking a (yellow) player name: "popup" opens the in-card career
+  // popup (default); "espn" opens ESPN's player page directly (the
+  // original Option A behavior). ESPN stays reachable either way — the
+  // popup footer always carries a "View on ESPN" link.
+  player_link_target: "popup",
+  // Clicking a team's side of the matchup (anywhere but the yellow
+  // player name) opens an in-card popup of that team's full lineup +
+  // everyone who appeared in the game, with a Game/Season toggle.
+  show_lineup_popup: true,
+  // Which view that popup defaults to: "auto" (Game while the game is
+  // live, Season otherwise) or a forced "game" / "season".
+  lineup_default_view: "auto",
+};
+
+// Locate this integration's sensor for getStubConfig(), so adding the card
+// from the picker lands on a working entity instead of an empty config.
+function findMlbEntity(hass) {
+  if (!hass || !hass.states) return "";
+  const ids = Object.keys(hass.states);
+  // Prefer the integration's conventional entity_id prefix.
+  const byPrefix = ids.find((id) => id.startsWith("sensor.mlb_live_scoreboard"));
+  if (byPrefix) return byPrefix;
+  // Fallback: match the sensor's distinctive attribute signature so a
+  // user-renamed entity_id is still discovered.
+  const bySignature = ids.find((id) => {
+    if (!id.startsWith("sensor.")) return false;
+    const a = hass.states[id].attributes || {};
+    return (
+      a.team_abbr !== undefined &&
+      a.display_event_id !== undefined &&
+      a.inning_context !== undefined
+    );
+  });
+  return bySignature || "";
+}
+
+// ha-form schema for the visual editor. `type: "grid"` blocks are layout
+// only (ha-form does not nest data for them), so every key stays flat in
+// the dashboard YAML — identical shape to a hand-written config.
+const EDITOR_SCHEMA = [
+  {
+    name: "entity",
+    required: true,
+    selector: { entity: { integration: INTEGRATION_DOMAIN, domain: "sensor" } },
+  },
+  { name: "title", selector: { text: {} } },
+  {
+    type: "grid",
+    schema: [
+      {
+        name: "refresh_rate",
+        selector: {
+          number: { min: 0, max: 300, step: 1, mode: "box", unit_of_measurement: "s" },
+        },
+      },
+      {
+        name: "player_link_target",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "popup", label: "In-card career popup" },
+              { value: "espn", label: "ESPN player page" },
+            ],
+          },
+        },
+      },
+      {
+        name: "lineup_default_view",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "auto", label: "Auto (Game while live, else Season)" },
+              { value: "game", label: "Game" },
+              { value: "season", label: "Season" },
+            ],
+          },
+        },
+      },
+      { name: "show_lineup_popup", selector: { boolean: {} } },
+    ],
+  },
+  {
+    type: "grid",
+    schema: [
+      { name: "show_batter", selector: { boolean: {} } },
+      { name: "show_records", selector: { boolean: {} } },
+      { name: "show_linescore", selector: { boolean: {} } },
+      { name: "show_pitches", selector: { boolean: {} } },
+      { name: "show_play_results", selector: { boolean: {} } },
+      { name: "show_on_deck", selector: { boolean: {} } },
+      { name: "show_base_occupancy", selector: { boolean: {} } },
+      { name: "show_diamond", selector: { boolean: {} } },
+      { name: "show_count", selector: { boolean: {} } },
+      { name: "show_win_probability", selector: { boolean: {} } },
+    ],
+  },
+];
+
+const EDITOR_LABELS = {
+  entity: "MLB Live Scoreboard entity",
+  title: "Card title (optional)",
+  refresh_rate: "Refresh rate (s, 0 = HA updates)",
+  player_link_target: "Player name click",
+  lineup_default_view: "Lineup popup default view",
+  show_lineup_popup: "Enable team lineup popup",
+  show_batter: "Batter",
+  show_records: "Team records",
+  show_linescore: "Linescore",
+  show_pitches: "Pitch sequence",
+  show_play_results: "Play results",
+  show_on_deck: "On-deck",
+  show_base_occupancy: "Base occupancy",
+  show_diamond: "Base diamond",
+  show_count: "Count",
+  show_win_probability: "Win probability",
+};
+
+const EDITOR_HELPERS = {
+  entity: "Pick the sensor created by the MLB Live Scoreboard integration.",
+  refresh_rate: "0 leaves refreshing to Home Assistant's own state updates.",
+};
+
+// Visual (no-YAML) config editor. Plain custom element wrapping HA's native
+// <ha-form> so it needs no build step or imports — ha-form is already
+// registered by Home Assistant in the Lovelace editor context.
+class MlbLiveGameCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this._form) this._form.hass = hass;
+  }
+
+  _render() {
+    if (!this._form) {
+      const wrap = document.createElement("div");
+      wrap.style.padding = "8px 0";
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (s) => EDITOR_LABELS[s.name] || s.name;
+      this._form.computeHelper = (s) => EDITOR_HELPERS[s.name] || "";
+      this._form.schema = EDITOR_SCHEMA;
+      this._form.addEventListener("value-changed", (ev) => {
+        ev.stopPropagation();
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: ev.detail.value },
+            bubbles: true,
+            composed: true,
+          })
+        );
+      });
+      wrap.appendChild(this._form);
+      this.appendChild(wrap);
+    }
+    if (this._hass) this._form.hass = this._hass;
+    // Seed with defaults so unset toggles show their true state; keep `type`
+    // (and any other passthrough keys) so the emitted config stays valid.
+    this._form.data = { ...CARD_DEFAULTS, ...(this._config || {}) };
+  }
+}
+
+if (!customElements.get(EDITOR_TAG)) {
+  customElements.define(EDITOR_TAG, MlbLiveGameCardEditor);
 }
 
 
@@ -843,37 +1040,24 @@ function renderRecentPlays(plays, currentPitches = [], situation = {}, config = 
     </div>`;
 }
 
-class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
-    if (!config?.entity) {
-      throw new Error("You need to define an entity");
-    }
-    this.config = {
-      title: "",
-      show_batter: true,
-      show_records: true,
-      show_linescore: false,
-      show_pitches: true,
-      show_play_results: true,
-      show_on_deck: true,
-      show_base_occupancy: true,
-      show_diamond: true,
-      show_count: true,
-      show_win_probability: true,
-      refresh_rate: 0, // seconds, 0 = disabled (rely on hass state updates)
-      // Clicking a (yellow) player name: "popup" opens the in-card career
-      // popup (default); "espn" opens ESPN's player page directly (the
-      // original Option A behavior). ESPN stays reachable either way — the
-      // popup footer always carries a "View on ESPN" link.
-      player_link_target: "popup",
-      // Clicking a team's side of the matchup (anywhere but the yellow
-      // player name) opens an in-card popup of that team's full lineup +
-      // everyone who appeared in the game, with a Game/Season toggle.
-      show_lineup_popup: true,
-      // Which view that popup defaults to: "auto" (Game while the game is
-      // live, Season otherwise) or a forced "game" / "season".
-      lineup_default_view: "auto",
-      ...config,
-    };
+class MlbLiveGameCard extends HTMLElement {
+  // Visual config editor — makes the "Edit card" dialog open the no-YAML
+  // form instead of falling back to the raw code editor.
+  static getConfigElement() {
+    return document.createElement(EDITOR_TAG);
+  }
+
+  // Default config when the card is added from the dashboard picker, so it
+  // lands on a working entity instead of erroring on an empty config.
+  static getStubConfig(hass) {
+    return { entity: findMlbEntity(hass) };
+  }
+
+  setConfig(config) {
+    // Intentionally no throw on a missing entity: the visual editor and the
+    // picker preview both rely on the card surviving an empty config and
+    // showing a friendly "configure me" placeholder (see render()).
+    this.config = { ...CARD_DEFAULTS, ...(config || {}) };
     // Clear any existing refresh timer when config changes
     this._clearRefreshTimer();
   }
@@ -1855,6 +2039,13 @@ class MlbLiveGameCard extends HTMLElement {  setConfig(config) {
 
   render() {
     if (!this._hass || !this.config) return;
+    if (!this.config.entity) {
+      if (this._lastFingerprint !== "__NO_ENTITY__") {
+        this._lastFingerprint = "__NO_ENTITY__";
+        this.content.innerHTML = `<div class="empty">Configure this card — choose an MLB Live Scoreboard entity.</div>${this.styles()}`;
+      }
+      return;
+    }
     const stateObj = this._hass.states[this.config.entity];
     if (!stateObj) {
       if (this._lastFingerprint !== "__NOT_FOUND__") {
