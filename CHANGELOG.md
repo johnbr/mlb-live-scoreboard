@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.11.0...v1.12.0) (2026-05-19)
+
+
+### Features
+
+* **lineup:** team lineup popup with Game/Season stats ([fdf309b](https://github.com/johnbr/mlb-live-scoreboard/commit/fdf309b127e76a05a749eaa13baf888725ac92c3))
+
 ## [1.11.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.10.0...v1.11.0) (2026-05-18)
 
 
