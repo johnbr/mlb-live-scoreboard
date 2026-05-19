@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.12.0...v1.13.0) (2026-05-19)
+
+
+### Features
+
+* **card:** visual editor and UI-only install/configure ([289a15e](https://github.com/johnbr/mlb-live-scoreboard/commit/289a15e85fb25810f237aa87410047f24a6058c9))
+
 ## [1.12.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.11.0...v1.12.0) (2026-05-19)
 
 
