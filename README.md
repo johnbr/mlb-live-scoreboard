@@ -56,13 +56,16 @@ If the auto-registration doesn't work, manually add the resource:
 2. Add URL: `/mlb_live_scoreboard/mlb-live-game-card.js`
 3. Type: **JavaScript Module**
 
-Add the card to your dashboard:
+Add the card to your dashboard — either way:
 
-```yaml
-type: custom:mlb-live-game-card
-entity: sensor.mlb_live_scoreboard_lad
-title: Dodgers
-```
+- **Visual (no YAML):** *Edit dashboard → Add card → search "MLB Live Game Card"*. The picker shows a live preview; the card lands pre-configured against the first MLB Live Scoreboard sensor it finds. Every option below is exposed as a form field — click **Edit** on the card and use the **Visual editor** tab.
+- **YAML** (equivalent):
+
+  ```yaml
+  type: custom:mlb-live-game-card
+  entity: sensor.mlb_live_scoreboard_lad
+  title: Dodgers
+  ```
 
 ## Card Configuration Options
 

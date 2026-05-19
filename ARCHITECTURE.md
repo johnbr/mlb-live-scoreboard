@@ -218,6 +218,18 @@ Top-level `extra_state_attributes` exposed on the sensor:
 
 All card options have safe defaults. Minimum required is `entity`.
 
+The card ships a no-YAML visual editor: `MlbLiveGameCard.getConfigElement()`
+returns a `<mlb-live-game-card-editor>` element (also defined in
+`mlb-live-game-card.js`) that wraps Home Assistant's native `<ha-form>`
+against an `EDITOR_SCHEMA` derived from the table below — entity selector
+filtered to `integration: mlb_live_scoreboard`, booleans for the `show_*`
+flags, dropdowns for `player_link_target` / `lineup_default_view`, a number
+field for `refresh_rate`. The picker entry sets `preview: true` and a
+`getStubConfig()` hook auto-selects the first MLB sensor it finds, so
+"Add card" lands on a working preview with no YAML edits. Defaults live
+in a single module-level `CARD_DEFAULTS` constant shared by `setConfig`
+and the editor so unset toggles still reflect their true on/off state.
+
 | Option | Default | Purpose |
 |---|---|---|
 | `entity` | (required) | the `sensor.mlb_live_scoreboard_*` entity |
