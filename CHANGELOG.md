@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.15.0...v1.15.1) (2026-05-20)
+
+
+### Bug Fixes
+
+* **docs:** add screenshots ([fa91867](https://github.com/johnbr/mlb-live-scoreboard/commit/fa91867570d19c9945141348b0762d6d8bedf841))
+
 ## [1.15.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.14.1...v1.15.0) (2026-05-20)
 
 
