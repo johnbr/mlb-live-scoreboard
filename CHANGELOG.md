@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.14.1...v1.15.0) (2026-05-20)
+
+
+### Features
+
+* **card:** responsive headshots + headshot_size option ([fb8031b](https://github.com/johnbr/mlb-live-scoreboard/commit/fb8031b0a9679bec98fd7f71fcf41118a9cab159))
+
 ## [1.14.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.14.0...v1.14.1) (2026-05-20)
 
 
