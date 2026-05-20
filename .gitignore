@@ -15,6 +15,11 @@ CLAUDE.md
 OPTION_B_HANDOFF.md
 LINEUP_POPUP_HANDOFF.md
 screenshot-atl-batters.png
+# Raw screenshot sources used to produce docs/screenshots/*.webp. The
+# cropped/optimized WebP versions go in docs/screenshots/ (committed); the
+# originals stay local to keep the repo small. Leading slash anchors the
+# pattern to repo root so docs/screenshots/ is *not* matched.
+/screenshots/
 
 # Local virtualenvs
 .venv/
