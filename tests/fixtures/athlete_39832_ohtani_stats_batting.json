@@ -1,0 +1,1304 @@
+{
+  "categories": [
+    {
+      "name": "career-batting",
+      "displayName": "Career Batting",
+      "labels": [
+        "GP",
+        "AB",
+        "R",
+        "H",
+        "2B",
+        "3B",
+        "HR",
+        "RBI",
+        "BB",
+        "HBP",
+        "SO",
+        "SB",
+        "CS",
+        "AVG",
+        "OBP",
+        "SLG",
+        "OPS",
+        "WAR"
+      ],
+      "names": [
+        "gamesPlayed",
+        "atBats",
+        "runs",
+        "hits",
+        "doubles",
+        "triples",
+        "homeRuns",
+        "RBIs",
+        "walks",
+        "hitByPitch",
+        "strikeouts",
+        "stolenBases",
+        "caughtStealing",
+        "avg",
+        "onBasePct",
+        "slugAvg",
+        "OPS",
+        "WARBR"
+      ],
+      "displayNames": [
+        "Games Played",
+        "At Bats",
+        "Runs",
+        "Hits",
+        "Doubles",
+        "Triples",
+        "Home Runs",
+        "Runs Batted In",
+        "Walks",
+        "Hit By Pitch",
+        "Strikeouts",
+        "Stolen Bases",
+        "Caught Stealing",
+        "Batting Average",
+        "On Base Percentage",
+        "Slugging Percentage",
+        "OBP Pct + SLG Pct",
+        "Wins Above Replacement"
+      ],
+      "descriptions": [
+        "Games Played",
+        "The number of times a batter comes up to bat not counting walks and sacrifices.",
+        "The number of runs scored.",
+        "The number of hits.",
+        "The number of times that a batter reaches second base as the result of a hit without an error being committed.",
+        "The number of hits that result in the batter reaching 3rd base without the aid of an error.",
+        "The number of hits that allowed the batter to round the bases and score without the aid of an error of the defense.",
+        "The number of runs scored by a batter's play.",
+        "The number of times a batter reaches base on four balls",
+        "The number of times a player has been by a pitch.",
+        "The number of times a player strikes out.",
+        "The number of bases stolen.",
+        "The number of times that a baserunner attempts to steal a base but is thrown out.",
+        "The average number of times the batter reached successfully on base due to a hit: hits / atBats",
+        "The ratio of the number of times the batter reached base per plate appearnce: (hits + walks + hbp / plateAppearances)",
+        "Slugging percentage is a metric that is meant to measuring how many bases the hitter safely advances to after making contact with the ball: (totalBases / atBats)",
+        "The average calculated by adding up on-base percentage and slugging percentage.",
+        "Wins Above Replacement."
+      ],
+      "statistics": [
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2018,
+            "displayName": "2018"
+          },
+          "stats": [
+            "104",
+            "326",
+            "59",
+            "93",
+            "21",
+            "2",
+            "22",
+            "61",
+            "37",
+            "2",
+            "102",
+            "10",
+            "4",
+            ".285",
+            ".361",
+            ".564",
+            ".925",
+            "2.7"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2019,
+            "displayName": "2019"
+          },
+          "stats": [
+            "106",
+            "384",
+            "51",
+            "110",
+            "20",
+            "5",
+            "18",
+            "62",
+            "33",
+            "2",
+            "110",
+            "12",
+            "3",
+            ".286",
+            ".343",
+            ".505",
+            ".848",
+            "2.5"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2020,
+            "displayName": "2020"
+          },
+          "stats": [
+            "44",
+            "153",
+            "23",
+            "29",
+            "6",
+            "0",
+            "7",
+            "24",
+            "22",
+            "0",
+            "50",
+            "7",
+            "1",
+            ".190",
+            ".291",
+            ".366",
+            ".657",
+            "-0.1"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2021,
+            "displayName": "2021"
+          },
+          "stats": [
+            "155",
+            "537",
+            "103",
+            "138",
+            "26",
+            "8",
+            "46",
+            "100",
+            "96",
+            "4",
+            "189",
+            "26",
+            "10",
+            ".257",
+            ".372",
+            ".592",
+            ".965",
+            "4.9"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2022,
+            "displayName": "2022"
+          },
+          "stats": [
+            "157",
+            "586",
+            "90",
+            "160",
+            "30",
+            "6",
+            "34",
+            "95",
+            "72",
+            "5",
+            "161",
+            "11",
+            "9",
+            ".273",
+            ".356",
+            ".519",
+            ".875",
+            "3.4"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2023,
+            "displayName": "2023"
+          },
+          "stats": [
+            "135",
+            "497",
+            "102",
+            "151",
+            "26",
+            "8",
+            "44",
+            "95",
+            "91",
+            "3",
+            "143",
+            "20",
+            "6",
+            ".304",
+            ".412",
+            ".654",
+            "1.066",
+            "6.0"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2024,
+            "displayName": "2024"
+          },
+          "stats": [
+            "159",
+            "636",
+            "134",
+            "197",
+            "38",
+            "7",
+            "54",
+            "130",
+            "81",
+            "6",
+            "162",
+            "59",
+            "4",
+            ".310",
+            ".390",
+            ".646",
+            "1.036",
+            "9.2"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2025,
+            "displayName": "2025"
+          },
+          "stats": [
+            "158",
+            "611",
+            "146",
+            "172",
+            "25",
+            "9",
+            "55",
+            "102",
+            "109",
+            "3",
+            "187",
+            "20",
+            "6",
+            ".282",
+            ".392",
+            ".622",
+            "1.014",
+            "6.6"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2026,
+            "displayName": "2026"
+          },
+          "stats": [
+            "44",
+            "169",
+            "31",
+            "46",
+            "11",
+            "1",
+            "7",
+            "25",
+            "33",
+            "4",
+            "48",
+            "6",
+            "1",
+            ".272",
+            ".399",
+            ".473",
+            ".872",
+            "1.5"
+          ],
+          "position": "SP"
+        }
+      ],
+      "totals": [
+        "1062",
+        "3899",
+        "739",
+        "1096",
+        "203",
+        "46",
+        "287",
+        "694",
+        "574",
+        "29",
+        "1152",
+        "171",
+        "44",
+        ".281",
+        ".376",
+        ".578",
+        ".953",
+        "--"
+      ],
+      "averages": [
+        "118",
+        "433",
+        "82",
+        "122",
+        "23",
+        "5",
+        "32",
+        "77",
+        "64",
+        "3",
+        "128",
+        "19",
+        "5",
+        ".281",
+        ".376",
+        ".578",
+        ".953",
+        "-"
+      ],
+      "sortKey": "career-batting"
+    },
+    {
+      "name": "postseason-batting",
+      "displayName": "Postseason Batting",
+      "labels": [
+        "GP",
+        "AB",
+        "R",
+        "H",
+        "2B",
+        "3B",
+        "HR",
+        "RBI",
+        "BB",
+        "HBP",
+        "K",
+        "SB",
+        "CS",
+        "AVG",
+        "OBP",
+        "SLG",
+        "OPS"
+      ],
+      "names": [
+        "gamesPlayed",
+        "atBats",
+        "runs",
+        "hits",
+        "doubles",
+        "triples",
+        "homeRuns",
+        "RBIs",
+        "walks",
+        "hitByPitch",
+        "strikeouts",
+        "stolenBases",
+        "caughtStealing",
+        "avg",
+        "onBasePct",
+        "slugAvg",
+        "OPS"
+      ],
+      "displayNames": [
+        "Games Played",
+        "At Bats",
+        "Runs",
+        "Hits",
+        "Doubles",
+        "Triples",
+        "Home Runs",
+        "Runs Batted In",
+        "Walks",
+        "Hit By Pitch",
+        "Strikeouts",
+        "Stolen Bases",
+        "Caught Stealing",
+        "Batting Average",
+        "On Base Percentage",
+        "Slugging Percentage",
+        "OBP Pct + SLG Pct"
+      ],
+      "descriptions": [
+        "Games Played",
+        "The number of times a batter comes up to bat not counting walks and sacrifices.",
+        "The number of runs scored.",
+        "The number of hits.",
+        "The number of times that a batter reaches second base as the result of a hit without an error being committed.",
+        "The number of hits that result in the batter reaching 3rd base without the aid of an error.",
+        "The number of hits that allowed the batter to round the bases and score without the aid of an error of the defense.",
+        "The number of runs scored by a batter's play.",
+        "The number of times a batter reaches base on four balls",
+        "The number of times a player has been by a pitch.",
+        "The number of times a player strikes out.",
+        "The number of bases stolen.",
+        "The number of times that a baserunner attempts to steal a base but is thrown out.",
+        "The average number of times the batter reached successfully on base due to a hit: hits / atBats",
+        "The ratio of the number of times the batter reached base per plate appearnce: (hits + walks + hbp / plateAppearances)",
+        "Slugging percentage is a metric that is meant to measuring how many bases the hitter safely advances to after making contact with the ball: (totalBases / atBats)",
+        "The average calculated by adding up on-base percentage and slugging percentage."
+      ],
+      "statistics": [
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2024,
+            "displayName": "2024"
+          },
+          "stats": [
+            "16",
+            "61",
+            "14",
+            "14",
+            "1",
+            "0",
+            "3",
+            "10",
+            "13",
+            "1",
+            "22",
+            "0",
+            "2",
+            ".230",
+            ".373",
+            ".393",
+            ".767"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2025,
+            "displayName": "2025"
+          },
+          "stats": [
+            "17",
+            "68",
+            "13",
+            "18",
+            "3",
+            "1",
+            "8",
+            "14",
+            "16",
+            "0",
+            "23",
+            "1",
+            "1",
+            ".265",
+            ".405",
+            ".691",
+            "1.096"
+          ],
+          "position": "SP"
+        }
+      ],
+      "totals": [
+        "33",
+        "129",
+        "27",
+        "32",
+        "4",
+        "1",
+        "11",
+        "24",
+        "29",
+        "1",
+        "45",
+        "1",
+        "3",
+        ".248",
+        ".390",
+        ".550",
+        ".940"
+      ],
+      "sortKey": "postseason-batting"
+    },
+    {
+      "name": "expanded-batting",
+      "displayName": "Expanded Batting",
+      "labels": [
+        "PA",
+        "P",
+        "P/PA",
+        "XBH",
+        "TB",
+        "IBB",
+        "HBP",
+        "GIDP",
+        "SH",
+        "SF",
+        "SB",
+        "CS",
+        "SB%"
+      ],
+      "names": [
+        "plateAppearances",
+        "pitches",
+        "pitchesPerPlateAppearance",
+        "extraBaseHits",
+        "totalBases",
+        "intentionalWalks",
+        "hitByPitch",
+        "GIDPs",
+        "sacHits",
+        "sacFlies",
+        "stolenBases",
+        "caughtStealing",
+        "stolenBasePct"
+      ],
+      "displayNames": [
+        "Plate Appearances",
+        "Pitches",
+        "Pitches Per Plate Appearance",
+        "Extra Base Hits",
+        "Total Bases",
+        "Intentional Walks",
+        "Hit By Pitch",
+        "Ground Into Double Play",
+        "Sacrifice Hit",
+        "Sacrifice Flies",
+        "Stolen Bases",
+        "Caught Stealing",
+        "Stolen Base Percentage"
+      ],
+      "descriptions": [
+        "The number of times a batter comes up to bat.",
+        "The number of pitches faced.",
+        "The average number of pitches a batter sees per plate appearance.",
+        "The number of hits that are greater than singles.",
+        "The number of bases calculated as 1 for a 1B, 2 for a 2B, 3 for a 3B and 4 for a HR.",
+        "The number of times that a batter is walked by four intentionally thrown balls by the pitcher.",
+        "The number of times a player has been by a pitch.",
+        "The number of times a batter grounds into a double play.",
+        "The number of sacrifice bunts that allow baserunners to advance",
+        "The number of times a batter advances a runner with a fly out.",
+        "The number of bases stolen.",
+        "The number of times that a baserunner attempts to steal a base but is thrown out.",
+        "The percentage of stolen bases successfully stolen by a baserunner."
+      ],
+      "statistics": [
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2018,
+            "displayName": "2018"
+          },
+          "stats": [
+            "367",
+            "1455",
+            "3.96",
+            "45",
+            "184",
+            "2",
+            "2",
+            "3",
+            "0",
+            "1",
+            "10",
+            "4",
+            "0.71"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2019,
+            "displayName": "2019"
+          },
+          "stats": [
+            "425",
+            "1683",
+            "3.96",
+            "43",
+            "194",
+            "1",
+            "2",
+            "6",
+            "0",
+            "4",
+            "12",
+            "3",
+            "0.80"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2020,
+            "displayName": "2020"
+          },
+          "stats": [
+            "175",
+            "739",
+            "4.22",
+            "13",
+            "56",
+            "0",
+            "0",
+            "3",
+            "0",
+            "0",
+            "7",
+            "1",
+            "0.88"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2021,
+            "displayName": "2021"
+          },
+          "stats": [
+            "639",
+            "2594",
+            "4.06",
+            "80",
+            "318",
+            "20",
+            "4",
+            "7",
+            "0",
+            "2",
+            "26",
+            "10",
+            "0.72"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2022,
+            "displayName": "2022"
+          },
+          "stats": [
+            "666",
+            "2546",
+            "3.82",
+            "70",
+            "304",
+            "14",
+            "5",
+            "6",
+            "0",
+            "3",
+            "11",
+            "9",
+            "0.55"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2023,
+            "displayName": "2023"
+          },
+          "stats": [
+            "599",
+            "2321",
+            "3.87",
+            "78",
+            "325",
+            "21",
+            "3",
+            "9",
+            "0",
+            "3",
+            "20",
+            "6",
+            "0.77"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2024,
+            "displayName": "2024"
+          },
+          "stats": [
+            "731",
+            "2838",
+            "3.88",
+            "99",
+            "411",
+            "10",
+            "6",
+            "7",
+            "0",
+            "5",
+            "59",
+            "4",
+            "0.94"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2025,
+            "displayName": "2025"
+          },
+          "stats": [
+            "727",
+            "2865",
+            "3.94",
+            "89",
+            "380",
+            "20",
+            "3",
+            "9",
+            "0",
+            "2",
+            "20",
+            "6",
+            "0.77"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2026,
+            "displayName": "2026"
+          },
+          "stats": [
+            "209",
+            "803",
+            "3.84",
+            "19",
+            "80",
+            "6",
+            "4",
+            "3",
+            "0",
+            "2",
+            "6",
+            "1",
+            "0.86"
+          ],
+          "position": "SP"
+        }
+      ],
+      "totals": [
+        "4538",
+        "17844",
+        "3.93",
+        "536",
+        "2252",
+        "94",
+        "29",
+        "53",
+        "0",
+        "22",
+        "171",
+        "44",
+        "0.80"
+      ],
+      "sortKey": "expanded-batting"
+    },
+    {
+      "name": "advanced-batting",
+      "displayName": "Advanced Batting",
+      "labels": [
+        "WAR",
+        "OWAR",
+        "RC",
+        "RC/27",
+        "ISOP",
+        "SECA",
+        "AB/HR",
+        "BB/PA",
+        "BB/K",
+        "GO",
+        "FO",
+        "GO/FO"
+      ],
+      "names": [
+        "WARBR",
+        "offWARBR",
+        "runsCreated",
+        "runsCreatedPer27Outs",
+        "isolatedPower",
+        "secondaryAvg",
+        "atBatsPerHomeRun",
+        "walksPerPlateAppearance",
+        "walkToStrikeoutRatio",
+        "groundBalls",
+        "flyBalls",
+        "groundToFlyRatio"
+      ],
+      "displayNames": [
+        "Wins Above Replacement",
+        "Offensive Wins Above Replacement",
+        "Runs Created",
+        "Runs Created Per 27 Outs",
+        "Isolated Power",
+        "Secondary Average",
+        "At Bats Per Home Run",
+        "Walks Per Plate Appearance",
+        "Walk To Strikeout Ratio",
+        "Ground Balls",
+        "Fly Balls",
+        "Ground To Fly Ball Ratio"
+      ],
+      "descriptions": [
+        "Wins Above Replacement.",
+        "Offensive Wins Above Replacement.",
+        "The estimate of how many runs a player has created.",
+        "The estimated number of runs created per 27 outs played.",
+        "The measure of a batter's ability to hit for extra bases, calculated by subtracting batting average from slugging percentage.",
+        "The average of extra bases gained via hits, walks and stolen bases versus at bats.",
+        "The ratio of at bats per home run hit.",
+        "The ratio of walks to plate appearances for a batter.",
+        "The number of walks to the number of strikeouts by a batter.",
+        "The number of ground outs made by a player or team.",
+        "The number of time a batter flies out.",
+        "The ratio of ground outs to fly outs."
+      ],
+      "statistics": [
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2018,
+            "displayName": "2018"
+          },
+          "stats": [
+            "2.7",
+            "2.7",
+            "65.4",
+            "7.3",
+            ".279",
+            ".411",
+            "14.8",
+            ".101",
+            "0.36",
+            "99",
+            "126",
+            "0.8"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2019,
+            "displayName": "2019"
+          },
+          "stats": [
+            "2.5",
+            "2.4",
+            "66.4",
+            "6.2",
+            ".219",
+            ".328",
+            "21.3",
+            ".078",
+            "0.30",
+            "138",
+            "140",
+            "1.0"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2020,
+            "displayName": "2020"
+          },
+          "stats": [
+            "-0.1",
+            "-0.1",
+            "17.4",
+            "3.7",
+            ".176",
+            ".359",
+            "21.9",
+            ".126",
+            "0.44",
+            "51",
+            "52",
+            "1.0"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2021,
+            "displayName": "2021"
+          },
+          "stats": [
+            "4.9",
+            "4.9",
+            "118.4",
+            "7.6",
+            ".335",
+            ".544",
+            "11.7",
+            ".150",
+            "0.51",
+            "139",
+            "211",
+            "0.7"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2022,
+            "displayName": "2022"
+          },
+          "stats": [
+            "3.4",
+            "3.5",
+            "107.0",
+            "6.5",
+            ".246",
+            ".372",
+            "17.2",
+            ".108",
+            "0.45",
+            "184",
+            "244",
+            "0.8"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "3",
+          "teamSlug": "los-angeles-angels",
+          "season": {
+            "year": 2023,
+            "displayName": "2023"
+          },
+          "stats": [
+            "6.0",
+            "6.0",
+            "128.6",
+            "9.5",
+            ".350",
+            ".561",
+            "11.3",
+            ".152",
+            "0.64",
+            "152",
+            "205",
+            "0.7"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2024,
+            "displayName": "2024"
+          },
+          "stats": [
+            "9.2",
+            "9.2",
+            "162.9",
+            "9.7",
+            ".336",
+            ".550",
+            "11.8",
+            ".111",
+            "0.50",
+            "174",
+            "305",
+            "0.6"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2025,
+            "displayName": "2025"
+          },
+          "stats": [
+            "6.6",
+            "6.6",
+            "145.7",
+            "8.6",
+            ".340",
+            ".542",
+            "11.1",
+            ".150",
+            "0.58",
+            "169",
+            "257",
+            "0.7"
+          ],
+          "position": "SP"
+        },
+        {
+          "teamId": "19",
+          "teamSlug": "los-angeles-dodgers",
+          "season": {
+            "year": 2026,
+            "displayName": "2026"
+          },
+          "stats": [
+            "1.5",
+            "1.5",
+            "34.3",
+            "7.2",
+            ".201",
+            ".426",
+            "24.1",
+            ".158",
+            "0.69",
+            "55",
+            "68",
+            "0.8"
+          ],
+          "position": "SP"
+        }
+      ],
+      "totals": [
+        "--",
+        "--",
+        "845.2",
+        "7.8",
+        ".296",
+        ".476",
+        "13.6",
+        ".126",
+        "0.50",
+        "1161",
+        "1608",
+        "0.7"
+      ],
+      "sortKey": "advanced-batting"
+    }
+  ],
+  "glossary": [
+    {
+      "abbreviation": "2B",
+      "displayName": "Doubles"
+    },
+    {
+      "abbreviation": "3B",
+      "displayName": "Triples"
+    },
+    {
+      "abbreviation": "AB",
+      "displayName": "At Bats"
+    },
+    {
+      "abbreviation": "AB/HR",
+      "displayName": "At Bats Per Home Run"
+    },
+    {
+      "abbreviation": "AVG",
+      "displayName": "Batting Average"
+    },
+    {
+      "abbreviation": "BB",
+      "displayName": "Walks"
+    },
+    {
+      "abbreviation": "BB/K",
+      "displayName": "Walk To Strikeout Ratio"
+    },
+    {
+      "abbreviation": "BB/PA",
+      "displayName": "Walks Per Plate Appearance"
+    },
+    {
+      "abbreviation": "CS",
+      "displayName": "Caught Stealing"
+    },
+    {
+      "abbreviation": "FO",
+      "displayName": "Fly Balls"
+    },
+    {
+      "abbreviation": "GIDP",
+      "displayName": "Ground Into Double Play"
+    },
+    {
+      "abbreviation": "GO",
+      "displayName": "Ground Balls"
+    },
+    {
+      "abbreviation": "GO/FO",
+      "displayName": "Ground To Fly Ball Ratio"
+    },
+    {
+      "abbreviation": "GP",
+      "displayName": "Games Played"
+    },
+    {
+      "abbreviation": "H",
+      "displayName": "Hits"
+    },
+    {
+      "abbreviation": "HBP",
+      "displayName": "Hit By Pitch"
+    },
+    {
+      "abbreviation": "HR",
+      "displayName": "Home Runs"
+    },
+    {
+      "abbreviation": "IBB",
+      "displayName": "Intentional Walks"
+    },
+    {
+      "abbreviation": "ISOP",
+      "displayName": "Isolated Power"
+    },
+    {
+      "abbreviation": "OBP",
+      "displayName": "On Base Percentage"
+    },
+    {
+      "abbreviation": "OPS",
+      "displayName": "OBP Pct + SLG Pct"
+    },
+    {
+      "abbreviation": "OWAR",
+      "displayName": "Offensive Wins Above Replacement"
+    },
+    {
+      "abbreviation": "P",
+      "displayName": "Pitches"
+    },
+    {
+      "abbreviation": "P/PA",
+      "displayName": "Pitches Per Plate Appearance"
+    },
+    {
+      "abbreviation": "PA",
+      "displayName": "Plate Appearances"
+    },
+    {
+      "abbreviation": "R",
+      "displayName": "Runs"
+    },
+    {
+      "abbreviation": "RBI",
+      "displayName": "Runs Batted In"
+    },
+    {
+      "abbreviation": "RC",
+      "displayName": "Runs Created"
+    },
+    {
+      "abbreviation": "RC/27",
+      "displayName": "Runs Created Per 27 Outs"
+    },
+    {
+      "abbreviation": "SB",
+      "displayName": "Stolen Bases"
+    },
+    {
+      "abbreviation": "SB%",
+      "displayName": "Stolen Base Percentage"
+    },
+    {
+      "abbreviation": "SECA",
+      "displayName": "Secondary Average"
+    },
+    {
+      "abbreviation": "SF",
+      "displayName": "Sacrifice Flies"
+    },
+    {
+      "abbreviation": "SH",
+      "displayName": "Sacrifice Hit"
+    },
+    {
+      "abbreviation": "SLG",
+      "displayName": "Slugging Percentage"
+    },
+    {
+      "abbreviation": "SO",
+      "displayName": "Strikeouts"
+    },
+    {
+      "abbreviation": "TB",
+      "displayName": "Total Bases"
+    },
+    {
+      "abbreviation": "WAR",
+      "displayName": "Wins Above Replacement"
+    },
+    {
+      "abbreviation": "XBH",
+      "displayName": "Extra Base Hits"
+    }
+  ],
+  "teams": {
+    "19": {
+      "id": "19",
+      "abbreviation": "LAD",
+      "displayName": "Los Angeles Dodgers",
+      "shortDisplayName": "Dodgers"
+    },
+    "3": {
+      "id": "3",
+      "abbreviation": "LAA",
+      "displayName": "Los Angeles Angels",
+      "shortDisplayName": "Angels"
+    }
+  }
+}

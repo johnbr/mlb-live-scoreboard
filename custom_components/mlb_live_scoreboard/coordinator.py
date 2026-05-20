@@ -1234,12 +1234,21 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return result
 
     async def _get_public_batter_stats(self, athlete_id: str) -> dict[str, Any]:
-        """Fetch an athlete's season stats payload, served from a TTL cache.
+        """Fetch an athlete's season *batting* stats payload, served from a TTL cache.
 
         Stats only change when the player completes an at-bat, so a short TTL
         eliminates the repeat ESPN calls that occur every 5 s while the same
         batter is at the plate. Falls back to a stale cache entry on fetch
         failure rather than blanking the season HR/RBI display.
+
+        The ``category=batting`` query parameter forces ESPN to return
+        ``career-batting`` (and friends) even for players whose *listed
+        position* is a pitcher — without it, a two-way player like Ohtani
+        (listed SP) yields only pitching categories plus ``opponent-batting``
+        (the hitting line batters have produced **against** him), which the
+        in-game display has no use for. Pure hitters and pure pitchers also
+        return ``career-batting`` under this query, so the same URL works
+        for every athlete the at-bat caller will ever pass in.
         """
         if not athlete_id:
             return {}
@@ -1247,7 +1256,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         now_ts = time.time()
         if cached is not None and (now_ts - cached[0]) < BATTER_SEASON_STATS_TTL_SECONDS:
             return cached[1]
-        url = f"https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{athlete_id}/stats?region=us&lang=en&contentorigin=espn"
+        url = (
+            "https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/"
+            f"athletes/{athlete_id}/stats?region=us&lang=en&contentorigin=espn&category=batting"
+        )
         try:
             payload = await self._get_json(url)
         except Exception as err:
@@ -1256,35 +1268,58 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         self._batter_stats_cache[athlete_id] = (now_ts, payload)
         return payload
 
-    @staticmethod
-    def _extract_current_season_batter_stats(stats_payload: dict[str, Any]) -> dict[str, Any]:
+    # Categories that actually represent the *player's own* hitting line.
+    # Excludes ``opponent-batting`` (a pitcher-allowed line that confusingly
+    # also carries ``homeRuns``/``RBIs`` keys) and any postseason / expanded
+    # / advanced variant. Order = preference; first non-empty match wins.
+    _BATTING_LINE_CATEGORIES: tuple[str, ...] = ("career-batting", "batting")
+
+    @classmethod
+    def _extract_current_season_batter_stats(cls, stats_payload: dict[str, Any]) -> dict[str, Any]:
+        """Pick the current-season hitting line (HR / RBI / AVG) from an ESPN
+        ``/athletes/{id}/stats?category=batting`` payload.
+
+        Only the player's own batting categories are considered — never
+        ``opponent-batting``, even though its key set overlaps. ESPN's
+        ``?category=batting`` response sometimes lists ``career-batting``
+        twice, so we walk in preference order and take the first occurrence
+        whose row count is non-empty.
+        """
         categories = stats_payload.get("categories") or []
         current_year = datetime.now().year
-        for category in categories:
-            names = [str(n or "") for n in (category.get("names") or [])]
-            if "homeRuns" not in names or "RBIs" not in names:
-                continue
-            hr_idx = names.index("homeRuns")
-            rbi_idx = names.index("RBIs")
-            avg_idx = names.index("avg") if "avg" in names else -1
-            season_rows = category.get("statistics") or []
-            row = next((r for r in season_rows if int((r.get("season") or {}).get("year") or 0) == current_year), None)
-            if row is None and season_rows:
-                row = season_rows[-1]
-            if not row:
-                continue
-            stats = row.get("stats") or []
+        for preferred in cls._BATTING_LINE_CATEGORIES:
+            for category in categories:
+                if category.get("name") != preferred:
+                    continue
+                season_rows = category.get("statistics") or []
+                if not season_rows:
+                    continue
+                names = [str(n or "") for n in (category.get("names") or [])]
+                if "homeRuns" not in names or "RBIs" not in names:
+                    continue
+                hr_idx = names.index("homeRuns")
+                rbi_idx = names.index("RBIs")
+                avg_idx = names.index("avg") if "avg" in names else -1
+                row = next(
+                    (r for r in season_rows if int((r.get("season") or {}).get("year") or 0) == current_year),
+                    None,
+                )
+                if row is None:
+                    row = season_rows[-1]
+                if not row:
+                    continue
+                stats = row.get("stats") or []
 
-            def get_idx(idx: int, _stats: list = stats) -> str:
-                if 0 <= idx < len(_stats) and _stats[idx] not in (None, ""):
-                    return str(_stats[idx])
-                return ""
+                def get_idx(idx: int, _stats: list = stats) -> str:
+                    if 0 <= idx < len(_stats) and _stats[idx] not in (None, ""):
+                        return str(_stats[idx])
+                    return ""
 
-            return {
-                "hr": get_idx(hr_idx),
-                "rbi": get_idx(rbi_idx),
-                "avg": get_idx(avg_idx),
-            }
+                return {
+                    "hr": get_idx(hr_idx),
+                    "rbi": get_idx(rbi_idx),
+                    "avg": get_idx(avg_idx),
+                }
         return {}
 
     @classmethod

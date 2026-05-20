@@ -63,10 +63,7 @@ def test_parse_iso_ts_returns_none_for_garbage():
 
 def test_format_batter_outcomes_orders_and_counts():
     # 2 HRs, single, walk, strikeout
-    assert (
-        Coord._format_batter_outcomes(["HR", "HR", "1B", "BB", "K"])
-        == "2HR, 1B, BB, K"
-    )
+    assert Coord._format_batter_outcomes(["HR", "HR", "1B", "BB", "K"]) == "2HR, 1B, BB, K"
 
 
 def test_format_batter_outcomes_excludes_routine_outs():
@@ -172,9 +169,7 @@ def test_normalize_inning_context_between_halves():
 
 
 def test_normalize_inning_context_end_of_inning():
-    ctx = Coord._normalize_inning_context(
-        {}, {"status": {"periodPrefix": "End", "period": 7}}
-    )
+    ctx = Coord._normalize_inning_context({}, {"status": {"periodPrefix": "End", "period": 7}})
     assert ctx["is_between_halves"] is True
 
 
@@ -258,10 +253,13 @@ def test_normalize_third_out_play_returns_empty_when_no_third_out():
     plays = [
         _make_play(period=1, half="top", text="Single.", outs=0, play_id="o1"),
     ]
-    assert Coord._normalize_third_out_play(
-        {"plays": plays},
-        {"period": 1, "period_prefix": "Top 1st", "is_between_halves": False},
-    ) == {}
+    assert (
+        Coord._normalize_third_out_play(
+            {"plays": plays},
+            {"period": 1, "period_prefix": "Top 1st", "is_between_halves": False},
+        )
+        == {}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -271,13 +269,7 @@ def test_normalize_third_out_play_returns_empty_when_no_third_out():
 
 def test_extract_batter_game_outcomes_matches_by_last_name():
     summary = {
-        "rosters": [
-            {
-                "roster": [
-                    {"athlete": {"id": "42", "displayName": "Mookie Betts", "lastName": "Betts"}}
-                ]
-            }
-        ],
+        "rosters": [{"roster": [{"athlete": {"id": "42", "displayName": "Mookie Betts", "lastName": "Betts"}}]}],
         "plays": [
             {"type": {"text": "play result"}, "text": "Betts singled to right."},
             {"type": {"text": "play result"}, "text": "Betts homered to left."},
@@ -302,14 +294,13 @@ def _ev(eid: str, *, date: str | None = None, state: str = "pre", name: str = "S
     return {
         "id": eid,
         "date": date,
-        "competitions": [
-            {"status": {"type": {"state": state, "name": name}}}
-        ],
+        "competitions": [{"status": {"type": {"state": state, "name": name}}}],
     }
 
 
 def test_select_event_picks_live_when_in_progress():
     import time as _time
+
     now = _time.time()
     from datetime import datetime, timezone
 
@@ -330,6 +321,7 @@ def test_select_event_picks_live_when_in_progress():
 def test_select_event_picks_next_when_no_live_no_prev():
     import time as _time
     from datetime import datetime, timezone
+
     future = datetime.fromtimestamp(_time.time() + 3600, tz=UTC).isoformat().replace("+00:00", "Z")
     events = [_ev("A", date=future)]
     _prev, next_id, live_id, display_id, _disp = Coord._select_event(None, events)
@@ -485,9 +477,7 @@ def test_detect_game_started():
 
 def test_detect_game_won():
     prev = _make_data(my_score=4, opp_score=2, state="in", completed=False)
-    curr = _make_data(
-        my_score=4, opp_score=2, is_live=False, state="post", completed=True
-    )
+    curr = _make_data(my_score=4, opp_score=2, is_live=False, state="post", completed=True)
     names = [n for n, _ in Coord._detect_game_events(prev, curr, 19)]
     assert EVENT_GAME_ENDED in names
     assert EVENT_GAME_WON in names
@@ -496,9 +486,7 @@ def test_detect_game_won():
 
 def test_detect_game_lost():
     prev = _make_data(my_score=2, opp_score=4, state="in", completed=False)
-    curr = _make_data(
-        my_score=2, opp_score=4, is_live=False, state="post", completed=True
-    )
+    curr = _make_data(my_score=2, opp_score=4, is_live=False, state="post", completed=True)
     names = [n for n, _ in Coord._detect_game_events(prev, curr, 19)]
     assert EVENT_GAME_ENDED in names
     assert EVENT_GAME_LOST in names
@@ -507,17 +495,13 @@ def test_detect_game_lost():
 
 def test_detect_tie_fires_only_game_ended():
     prev = _make_data(my_score=3, opp_score=3, state="in", completed=False)
-    curr = _make_data(
-        my_score=3, opp_score=3, is_live=False, state="post", completed=True
-    )
+    curr = _make_data(my_score=3, opp_score=3, is_live=False, state="post", completed=True)
     names = [n for n, _ in Coord._detect_game_events(prev, curr, 19)]
     assert names == [EVENT_GAME_ENDED]
 
 
 def test_detect_no_repeat_after_already_final():
-    final = _make_data(
-        my_score=4, opp_score=2, is_live=False, state="post", completed=True
-    )
+    final = _make_data(my_score=4, opp_score=2, is_live=False, state="post", completed=True)
     # Same final state again — nothing should fire
     assert Coord._detect_game_events(final, final, 19) == []
 
@@ -608,13 +592,13 @@ def test_dispatch_skips_action_for_unmatched_event():
 
 def test_dispatch_handles_multiple_events():
     coord, bus, _tasks = _make_coord_for_dispatch()
-    coord._dispatch_game_events([
-        (EVENT_TEAM_SCORED, {"team_abbr": "LAD"}),
-        (EVENT_GAME_WON, {"team_abbr": "LAD"}),
-    ])
+    coord._dispatch_game_events(
+        [
+            (EVENT_TEAM_SCORED, {"team_abbr": "LAD"}),
+            (EVENT_GAME_WON, {"team_abbr": "LAD"}),
+        ]
+    )
     assert bus.async_fire.call_count == 2
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -627,25 +611,29 @@ def test_normalize_probable_pitchers_extracts_record_and_headshot():
         "competitors": [
             {
                 "homeAway": "away",
-                "probables": [{
-                    "athlete": {
-                        "displayName": "Jane Doe",
-                        "shortName": "J. Doe",
-                        "headshot": {"href": "https://e.com/jane.png"},
-                    },
-                    "statistics": [
-                        {"name": "wins", "displayValue": "10"},
-                        {"name": "losses", "displayValue": "4"},
-                        {"abbreviation": "ERA", "displayValue": "2.85"},
-                    ],
-                }],
+                "probables": [
+                    {
+                        "athlete": {
+                            "displayName": "Jane Doe",
+                            "shortName": "J. Doe",
+                            "headshot": {"href": "https://e.com/jane.png"},
+                        },
+                        "statistics": [
+                            {"name": "wins", "displayValue": "10"},
+                            {"name": "losses", "displayValue": "4"},
+                            {"abbreviation": "ERA", "displayValue": "2.85"},
+                        ],
+                    }
+                ],
             },
             {
                 "homeAway": "home",
-                "probables": [{
-                    "athlete": {"displayName": "John Roe", "headshot": "https://e.com/john.png"},
-                    "statistics": [{"name": "ERA", "displayValue": "3.50"}],
-                }],
+                "probables": [
+                    {
+                        "athlete": {"displayName": "John Roe", "headshot": "https://e.com/john.png"},
+                        "statistics": [{"name": "ERA", "displayValue": "3.50"}],
+                    }
+                ],
             },
         ],
     }
@@ -672,24 +660,24 @@ def test_normalize_probable_pitchers_handles_summary_header_shape():
         "competitors": [
             {
                 "homeAway": "home",
-                "probables": [{
-                    "athlete": {
-                        "displayName": "Michael McGreevy",
-                        "shortName": "M. McGreevy",
-                        "headshot": {
-                            "href": "https://a.espncdn.com/i/headshots/mlb/players/full/4424141.png"
+                "probables": [
+                    {
+                        "athlete": {
+                            "displayName": "Michael McGreevy",
+                            "shortName": "M. McGreevy",
+                            "headshot": {"href": "https://a.espncdn.com/i/headshots/mlb/players/full/4424141.png"},
                         },
-                    },
-                    "statistics": {
-                        "splits": {
-                            "categories": [
-                                {"name": "wins", "abbreviation": "W", "displayValue": "1"},
-                                {"name": "losses", "abbreviation": "L", "displayValue": "2"},
-                                {"name": "ERA", "abbreviation": "ERA", "displayValue": "2.97"},
-                            ],
+                        "statistics": {
+                            "splits": {
+                                "categories": [
+                                    {"name": "wins", "abbreviation": "W", "displayValue": "1"},
+                                    {"name": "losses", "abbreviation": "L", "displayValue": "2"},
+                                    {"name": "ERA", "abbreviation": "ERA", "displayValue": "2.97"},
+                                ],
+                            },
                         },
-                    },
-                }],
+                    }
+                ],
             },
         ],
     }
@@ -893,6 +881,7 @@ def test_team_id_division_index_handles_empty():
 def test_team_id_division_index_against_real_fixture():
     import json
     import pathlib
+
     fixture = pathlib.Path(__file__).resolve().parents[1] / "espn-api" / "groups.json"
     if not fixture.exists():
         return
@@ -907,6 +896,7 @@ def test_normalize_standings_against_real_fixture():
     """Smoke-test with real captured ESPN payloads to lock down both schemas."""
     import json
     import pathlib
+
     base = pathlib.Path(__file__).resolve().parents[1] / "espn-api"
     standings_file = base / "standings.json"
     groups_file = base / "groups.json"
@@ -939,9 +929,7 @@ def _load_fixture(name: str) -> dict:
     import json
     import pathlib
 
-    return json.loads(
-        (pathlib.Path(__file__).resolve().parents[0] / "fixtures" / name).read_text()
-    )
+    return json.loads((pathlib.Path(__file__).resolve().parents[0] / "fixtures" / name).read_text())
 
 
 def test_parse_player_card_hitter_trout():
@@ -1169,7 +1157,16 @@ def test_normalize_lineups_positional_fallback_without_teams_map():
                     "statistics": [
                         {
                             "type": "pitching",
-                            "keys": ["fullInnings.partInnings", "hits", "runs", "earnedRuns", "walks", "strikeouts", "ERA", "pitches"],
+                            "keys": [
+                                "fullInnings.partInnings",
+                                "hits",
+                                "runs",
+                                "earnedRuns",
+                                "walks",
+                                "strikeouts",
+                                "ERA",
+                                "pitches",
+                            ],
                             "athletes": [
                                 {
                                     "starter": True,
@@ -1212,8 +1209,16 @@ def _hitting_payload(year: int, stats: list[str]) -> dict:
             {
                 "name": "career-batting",
                 "names": [
-                    "gamesPlayed", "atBats", "runs", "hits", "homeRuns",
-                    "RBIs", "walks", "strikeouts", "stolenBases", "avg",
+                    "gamesPlayed",
+                    "atBats",
+                    "runs",
+                    "hits",
+                    "homeRuns",
+                    "RBIs",
+                    "walks",
+                    "strikeouts",
+                    "stolenBases",
+                    "avg",
                 ],
                 "statistics": [
                     {"season": {"year": year}, "stats": stats},
@@ -1247,8 +1252,13 @@ def test_extract_season_line_pitcher_exact():
             {
                 "name": "pitching",
                 "names": [
-                    "gamesPlayed", "wins", "losses", "ERA", "WHIP",
-                    "innings", "strikeouts",
+                    "gamesPlayed",
+                    "wins",
+                    "losses",
+                    "ERA",
+                    "WHIP",
+                    "innings",
+                    "strikeouts",
                 ],
                 "statistics": [
                     {"season": {"year": _THIS_YEAR}, "stats": ["10", "8", "3", "2.85", "1.04", "92.1", "115"]},
@@ -1301,13 +1311,25 @@ def test_extract_season_line_returns_empty_without_primary_category():
     assert Coord._extract_season_line({}) == {}
     assert Coord._extract_season_line({"categories": []}) == {}
     # Only a non-primary category present (postseason) -> nothing usable.
-    assert Coord._extract_season_line(
-        {"categories": [{"name": "postseason-batting", "names": ["hits"], "statistics": [{"season": {"year": _THIS_YEAR}, "stats": ["3"]}]}]}
-    ) == {}
+    assert (
+        Coord._extract_season_line(
+            {
+                "categories": [
+                    {
+                        "name": "postseason-batting",
+                        "names": ["hits"],
+                        "statistics": [{"season": {"year": _THIS_YEAR}, "stats": ["3"]}],
+                    }
+                ]
+            }
+        )
+        == {}
+    )
     # Primary category present but no season rows -> {}.
-    assert Coord._extract_season_line(
-        {"categories": [{"name": "career-batting", "names": ["hits"], "statistics": []}]}
-    ) == {}
+    assert (
+        Coord._extract_season_line({"categories": [{"name": "career-batting", "names": ["hits"], "statistics": []}]})
+        == {}
+    )
 
 
 def test_extract_season_line_real_fixture_hitter_structure():
@@ -1339,3 +1361,63 @@ def test_extract_season_line_two_way_listed_pitcher_returns_pitching():
     stats = _load_fixture("athlete_39832_ohtani_stats.json")
     line = Coord._extract_season_line(stats)
     assert set(line) == {"pitching"}
+
+
+# ---------------------------------------------------------------------------
+# _extract_current_season_batter_stats
+#
+# The in-card at-bat display reads season HR / RBI / AVG from
+# ``/athletes/{id}/stats?category=batting``. The fixture for the two-way
+# bug-fix case (Ohtani) was captured against that URL; the legacy
+# default-URL fixture is reused to prove ``opponent-batting`` is no longer
+# mistakenly picked up.
+# ---------------------------------------------------------------------------
+
+
+def test_extract_current_season_batter_stats_uses_career_batting_for_two_way_player():
+    # Regression for the Ohtani-at-bat bug: with the ``?category=batting``
+    # endpoint, his real ``career-batting`` line is now available even though
+    # ESPN lists him as a pitcher. Asserted structurally (active-player
+    # current-season values churn between releases).
+    stats = _load_fixture("athlete_39832_ohtani_stats_batting.json")
+    out = Coord._extract_current_season_batter_stats(stats)
+    assert set(out) == {"hr", "rbi", "avg"}
+    assert all(isinstance(v, str) for v in out.values())
+    # career-batting always carries non-empty avg / hr / rbi for an active
+    # major-leaguer with any plate appearances.
+    assert out["hr"] != ""
+    assert out["rbi"] != ""
+    assert out["avg"] != ""
+
+
+def test_extract_current_season_batter_stats_ignores_opponent_batting_category():
+    # The legacy default ``/stats`` fixture for Ohtani contains only
+    # pitching-side categories — including ``opponent-batting``, which has
+    # ``homeRuns`` and ``RBIs`` in its key set (the HRs/RBIs opposing
+    # batters have produced *against* him). The old extractor mistook those
+    # for his hitting line; the new whitelist must return ``{}`` here.
+    stats = _load_fixture("athlete_39832_ohtani_stats.json")
+    assert Coord._extract_current_season_batter_stats(stats) == {}
+
+
+def test_extract_current_season_batter_stats_picks_first_nonempty_when_duplicated():
+    # ESPN's ``?category=batting`` response occasionally lists
+    # ``career-batting`` twice (the second copy can be empty / postseason-
+    # shaped). The extractor must take the first non-empty occurrence in
+    # preference order — never silently skip past a real line to a stub.
+    payload = {
+        "categories": [
+            {
+                "name": "career-batting",
+                "names": ["homeRuns", "RBIs", "avg"],
+                "statistics": [{"season": {"year": _THIS_YEAR}, "stats": ["12", "40", ".275"]}],
+            },
+            {
+                "name": "career-batting",
+                "names": ["homeRuns", "RBIs", "avg"],
+                "statistics": [],
+            },
+        ],
+    }
+    out = Coord._extract_current_season_batter_stats(payload)
+    assert out == {"hr": "12", "rbi": "40", "avg": ".275"}
