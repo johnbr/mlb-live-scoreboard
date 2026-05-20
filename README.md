@@ -21,25 +21,31 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 
 ## Screenshots
 
+<!-- Absolute raw.githubusercontent.com URLs (not relative paths) so the
+     images render on the HACS frontend as well as on GitHub — HACS doesn't
+     resolve relative paths or always preserve raw <img> HTML tags. Each
+     WebP is pre-sized to its intended display width so no width attribute
+     is needed. -->
+
 **Live game** — scoreline, live win probability, count + outs, pitcher/batter matchup with portraits, base runners, pitch sequence, and recent plays.
 
-<p align="center"><img src="docs/screenshots/01-live-game.webp" alt="Live game card showing Dodgers vs Padres with full live UI" width="500"></p>
+![Live game card showing Dodgers vs Padres with full live UI](https://raw.githubusercontent.com/johnbr/mlb-live-scoreboard/main/docs/screenshots/01-live-game.webp)
 
 **Final game with scoring summary** — click a completed game's card to expand it and see every scoring play of the game plus the current division standings.
 
-<p align="center"><img src="docs/screenshots/02-final-summary.webp" alt="Final-game expand panel listing scoring plays and division standings" width="450"></p>
+![Final-game expand panel listing scoring plays and division standings](https://raw.githubusercontent.com/johnbr/mlb-live-scoreboard/main/docs/screenshots/02-final-summary.webp)
 
 **Player career popup** — click any (yellow) player name to open an in-card popup with that player's bio and season-by-season career stats.
 
-<p align="center"><img src="docs/screenshots/03-career-popup.webp" alt="Player career popup showing Vladimir Guerrero Jr.'s career batting table" width="650"></p>
+![Player career popup showing Vladimir Guerrero Jr.'s career batting table](https://raw.githubusercontent.com/johnbr/mlb-live-scoreboard/main/docs/screenshots/03-career-popup.webp)
 
 **Between-innings due-up panel** — after the third out, the matchup row swaps to show the next three batters' portraits and stats until the half-inning ends.
 
-<p align="center"><img src="docs/screenshots/04-due-up.webp" alt="Due-up panel showing three on-deck batter portraits between innings" width="500"></p>
+![Due-up panel showing three on-deck batter portraits between innings](https://raw.githubusercontent.com/johnbr/mlb-live-scoreboard/main/docs/screenshots/04-due-up.webp)
 
 **Track multiple teams** — one card per team, each independently configurable, sharing the dashboard with the rest of your Home Assistant tiles.
 
-<p align="center"><img src="docs/screenshots/05-multiple-teams.webp" alt="Four MLB cards tiled on a tablet dashboard showing different game states" width="700"></p>
+![Four MLB cards tiled on a tablet dashboard showing different game states](https://raw.githubusercontent.com/johnbr/mlb-live-scoreboard/main/docs/screenshots/05-multiple-teams.webp)
 
 ## Installation
 
