@@ -12,7 +12,7 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Play-by-play** - Recent plays and pitch-by-pitch updates
 - **Pre-game info** - Scheduled game times and probable pitchers
 - **Post-game results** - Final scores and game leaders
-- **Division standings popup** - Click an upcoming or completed game card to expand probable starters (upcoming only) and current division standings
+- **Compact-card expand panel** - Click an upcoming or completed game card to expand it. Upcoming games show probable starters + current division standings; completed games show every scoring play of the game + game leaders (top hitters / pitchers per side) above the same standings block
 - **Player career popup** - Click any (yellow) player name to open an in-card popup with their bio and season-by-season career stats; configurable to open ESPN's player page instead (`player_link_target`)
 - **Team lineup popup** - Click a team's side of the pitcher/batter matchup (anywhere but the player name) to open an in-card popup with that team's full lineup and every player who appeared in the game, toggleable between **Game** (this game's box score) and **Season** stats for hitters and pitchers
 - **Configurable game-event actions** - Fire Home Assistant events (or invoke services directly from the integration options) on team scored, opponent scored, game won, game lost, and game started, so you can drive lights, TTS, notifications, or any other automation. See [Game Event Actions](#game-event-actions) below.
@@ -52,13 +52,14 @@ This creates a sensor entity like `sensor.mlb_live_scoreboard_lad`.
 The card resource is automatically registered at `/mlb_live_scoreboard/mlb-live-game-card.js`.
 
 If the auto-registration doesn't work, manually add the resource:
+
 1. Go to **Settings → Dashboards → ⋮ → Resources**
 2. Add URL: `/mlb_live_scoreboard/mlb-live-game-card.js`
 3. Type: **JavaScript Module**
 
 Add the card to your dashboard — either way:
 
-- **Visual (no YAML):** *Edit dashboard → Add card → search "MLB Live Game Card"*. The picker shows a live preview; the card lands pre-configured against the first MLB Live Scoreboard sensor it finds. Every option below is exposed as a form field — click **Edit** on the card and use the **Visual editor** tab.
+- **Visual (no YAML):** _Edit dashboard → Add card → search "MLB Live Game Card"_. The picker shows a live preview; the card lands pre-configured against the first MLB Live Scoreboard sensor it finds. Every option below is exposed as a form field — click **Edit** on the card and use the **Visual editor** tab.
 - **YAML** (equivalent):
 
   ```yaml
@@ -69,24 +70,24 @@ Add the card to your dashboard — either way:
 
 ## Card Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `entity` | string | **required** | The MLB scoreboard sensor entity |
-| `title` | string | Team name | Card title |
-| `refresh_rate` | number | `0` | Auto-refresh interval in seconds (0 = disabled) |
-| `show_batter` | boolean | `true` | Show pitcher/batter matchup panel |
-| `show_records` | boolean | `true` | Show team win/loss records |
-| `show_linescore` | boolean | `false` | Show detailed inning-by-inning linescore |
-| `show_pitches` | boolean | `true` | Show pitch-by-pitch display |
-| `show_play_results` | boolean | `true` | Show play-by-play results |
-| `show_on_deck` | boolean | `true` | Show on-deck batter |
-| `show_base_occupancy` | boolean | `true` | Show base runner names |
-| `show_diamond` | boolean | `true` | Show base diamond graphic |
-| `show_count` | boolean | `true` | Show balls/strikes/outs dots |
-| `show_win_probability` | boolean | `true` | Show live win-probability bar between the score rows and the balls/strikes/outs row (hidden pre-game when ESPN doesn't yet publish a probability series) |
-| `player_link_target` | string | `popup` | What clicking a (yellow) player name does: `popup` opens an in-card career-stats popup; `espn` opens ESPN's player page directly. The popup always includes a "View on ESPN" link, so ESPN stays reachable either way |
-| `show_lineup_popup` | boolean | `true` | Allow clicking a team's side of the matchup to open the team-lineup popup. Set `false` to make the matchup sides inert (player-name links still work) |
-| `lineup_default_view` | string | `auto` | Which view the lineup popup opens to: `auto` (Game while the game is live, Season otherwise), or force `game` / `season` |
+| Option                 | Type    | Default      | Description                                                                                                                                                                                                           |
+| ---------------------- | ------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entity`               | string  | **required** | The MLB scoreboard sensor entity                                                                                                                                                                                      |
+| `title`                | string  | Team name    | Card title                                                                                                                                                                                                            |
+| `refresh_rate`         | number  | `0`          | Auto-refresh interval in seconds (0 = disabled)                                                                                                                                                                       |
+| `show_batter`          | boolean | `true`       | Show pitcher/batter matchup panel                                                                                                                                                                                     |
+| `show_records`         | boolean | `true`       | Show team win/loss records                                                                                                                                                                                            |
+| `show_linescore`       | boolean | `false`      | Show detailed inning-by-inning linescore                                                                                                                                                                              |
+| `show_pitches`         | boolean | `true`       | Show pitch-by-pitch display                                                                                                                                                                                           |
+| `show_play_results`    | boolean | `true`       | Show play-by-play results                                                                                                                                                                                             |
+| `show_on_deck`         | boolean | `true`       | Show on-deck batter                                                                                                                                                                                                   |
+| `show_base_occupancy`  | boolean | `true`       | Show base runner names                                                                                                                                                                                                |
+| `show_diamond`         | boolean | `true`       | Show base diamond graphic                                                                                                                                                                                             |
+| `show_count`           | boolean | `true`       | Show balls/strikes/outs dots                                                                                                                                                                                          |
+| `show_win_probability` | boolean | `true`       | Show live win-probability bar between the score rows and the balls/strikes/outs row (hidden pre-game when ESPN doesn't yet publish a probability series)                                                              |
+| `player_link_target`   | string  | `popup`      | What clicking a (yellow) player name does: `popup` opens an in-card career-stats popup; `espn` opens ESPN's player page directly. The popup always includes a "View on ESPN" link, so ESPN stays reachable either way |
+| `show_lineup_popup`    | boolean | `true`       | Allow clicking a team's side of the matchup to open the team-lineup popup. Set `false` to make the matchup sides inert (player-name links still work)                                                                 |
+| `lineup_default_view`  | string  | `auto`       | Which view the lineup popup opens to: `auto` (Game while the game is live, Season otherwise), or force `game` / `season`                                                                                              |
 
 ### Example with all options
 
@@ -117,7 +118,7 @@ in-game things happen for the team you've configured. You can react to
 these in two ways:
 
 1. **Built-in options flow** — quick & visual: Settings → Devices & Services →
-   *MLB Live Scoreboard* → **Configure**. Each event has a field that accepts
+   _MLB Live Scoreboard_ → **Configure**. Each event has a field that accepts
    any sequence of Home Assistant actions (call services, run scripts, fire
    notifications, activate scenes, etc.).
 2. **Automations against the event bus** — more flexible: write your own
@@ -130,14 +131,14 @@ not instead of, any automations you have listening for the same events.
 
 ### Events fired
 
-| Event type | When it fires |
-|---|---|
-| `mlb_live_scoreboard_team_scored` | Your team's score increased since the last poll |
-| `mlb_live_scoreboard_opponent_scored` | The opposing team's score increased |
-| `mlb_live_scoreboard_game_started` | The game transitioned from scheduled to live |
-| `mlb_live_scoreboard_game_ended` | The game transitioned to final (any result) |
-| `mlb_live_scoreboard_game_won` | Game ended and your team won |
-| `mlb_live_scoreboard_game_lost` | Game ended and your team lost |
+| Event type                            | When it fires                                   |
+| ------------------------------------- | ----------------------------------------------- |
+| `mlb_live_scoreboard_team_scored`     | Your team's score increased since the last poll |
+| `mlb_live_scoreboard_opponent_scored` | The opposing team's score increased             |
+| `mlb_live_scoreboard_game_started`    | The game transitioned from scheduled to live    |
+| `mlb_live_scoreboard_game_ended`      | The game transitioned to final (any result)     |
+| `mlb_live_scoreboard_game_won`        | Game ended and your team won                    |
+| `mlb_live_scoreboard_game_lost`       | Game ended and your team lost                   |
 
 A tie/suspension fires `game_ended` but neither `game_won` nor `game_lost`.
 
@@ -146,20 +147,20 @@ A tie/suspension fires `game_ended` but neither `game_won` nor `game_lost`.
 Every event includes the same base payload, with two extra fields on
 score-change events:
 
-| Field | Type | Description |
-|---|---|---|
-| `team_abbr` | string | Your configured team's abbreviation, e.g. `"LAD"` |
-| `team_name` | string | Your configured team's display name |
-| `team_score` | int | Your team's score *after* this event |
-| `opponent_abbr` | string | Opposing team's abbreviation |
-| `opponent_name` | string | Opposing team's display name |
-| `opponent_score` | int | Opponent's score *after* this event |
-| `is_home` | bool | True if your team is the home side |
-| `inning` | int | Current inning number (0 if not started) |
-| `inning_half` | string | `"top"`, `"bottom"`, or `""` |
-| `event_id` | string | ESPN event ID for the game |
-| `status_detail` | string | Human-readable status text, e.g. `"Bot 7th"` |
-| `score_delta` | int | (`*_scored` only) How many runs scored on this play |
+| Field               | Type   | Description                                             |
+| ------------------- | ------ | ------------------------------------------------------- |
+| `team_abbr`         | string | Your configured team's abbreviation, e.g. `"LAD"`       |
+| `team_name`         | string | Your configured team's display name                     |
+| `team_score`        | int    | Your team's score _after_ this event                    |
+| `opponent_abbr`     | string | Opposing team's abbreviation                            |
+| `opponent_name`     | string | Opposing team's display name                            |
+| `opponent_score`    | int    | Opponent's score _after_ this event                     |
+| `is_home`           | bool   | True if your team is the home side                      |
+| `inning`            | int    | Current inning number (0 if not started)                |
+| `inning_half`       | string | `"top"`, `"bottom"`, or `""`                            |
+| `event_id`          | string | ESPN event ID for the game                              |
+| `status_detail`     | string | Human-readable status text, e.g. `"Bot 7th"`            |
+| `score_delta`       | int    | (`*_scored` only) How many runs scored on this play     |
 | `scoring_play_text` | string | (`*_scored` only) ESPN play description, when available |
 
 ### Detection rules
@@ -173,7 +174,7 @@ score-change events:
 - `team_scored` / `opponent_scored` only fire on positive score deltas, and
   are suppressed while the game is delayed (since ESPN occasionally
   corrects scores during a delay).
-- `game_ended` / `game_won` / `game_lost` only fire on the *transition*
+- `game_ended` / `game_won` / `game_lost` only fire on the _transition_
   into the final state — they will not re-fire on subsequent refreshes
   while the game remains final.
 
@@ -223,39 +224,39 @@ automations they're nested under `trigger.event.data` (e.g.
 
 ## Supported Teams
 
-| Abbreviation | Team |
-|--------------|------|
-| ARI | Arizona Diamondbacks |
-| ATH | Athletics |
-| ATL | Atlanta Braves |
-| BAL | Baltimore Orioles |
-| BOS | Boston Red Sox |
-| CHC | Chicago Cubs |
-| CIN | Cincinnati Reds |
-| CLE | Cleveland Guardians |
-| COL | Colorado Rockies |
-| CWS | Chicago White Sox |
-| DET | Detroit Tigers |
-| HOU | Houston Astros |
-| KC | Kansas City Royals |
-| LAA | Los Angeles Angels |
-| LAD | Los Angeles Dodgers |
-| MIA | Miami Marlins |
-| MIL | Milwaukee Brewers |
-| MIN | Minnesota Twins |
-| NYM | New York Mets |
-| NYY | New York Yankees |
-| OAK | Oakland Athletics |
-| PHI | Philadelphia Phillies |
-| PIT | Pittsburgh Pirates |
-| SD | San Diego Padres |
-| SEA | Seattle Mariners |
-| SF | San Francisco Giants |
-| STL | St. Louis Cardinals |
-| TB | Tampa Bay Rays |
-| TEX | Texas Rangers |
-| TOR | Toronto Blue Jays |
-| WSH | Washington Nationals |
+| Abbreviation | Team                  |
+| ------------ | --------------------- |
+| ARI          | Arizona Diamondbacks  |
+| ATH          | Athletics             |
+| ATL          | Atlanta Braves        |
+| BAL          | Baltimore Orioles     |
+| BOS          | Boston Red Sox        |
+| CHC          | Chicago Cubs          |
+| CIN          | Cincinnati Reds       |
+| CLE          | Cleveland Guardians   |
+| COL          | Colorado Rockies      |
+| CWS          | Chicago White Sox     |
+| DET          | Detroit Tigers        |
+| HOU          | Houston Astros        |
+| KC           | Kansas City Royals    |
+| LAA          | Los Angeles Angels    |
+| LAD          | Los Angeles Dodgers   |
+| MIA          | Miami Marlins         |
+| MIL          | Milwaukee Brewers     |
+| MIN          | Minnesota Twins       |
+| NYM          | New York Mets         |
+| NYY          | New York Yankees      |
+| OAK          | Oakland Athletics     |
+| PHI          | Philadelphia Phillies |
+| PIT          | Pittsburgh Pirates    |
+| SD           | San Diego Padres      |
+| SEA          | Seattle Mariners      |
+| SF           | San Francisco Giants  |
+| STL          | St. Louis Cardinals   |
+| TB           | Tampa Bay Rays        |
+| TEX          | Texas Rangers         |
+| TOR          | Toronto Blue Jays     |
+| WSH          | Washington Nationals  |
 
 ## Data Source
 

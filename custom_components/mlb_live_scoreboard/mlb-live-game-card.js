@@ -65,7 +65,9 @@ function findMlbEntity(hass) {
   if (!hass || !hass.states) return "";
   const ids = Object.keys(hass.states);
   // Prefer the integration's conventional entity_id prefix.
-  const byPrefix = ids.find((id) => id.startsWith("sensor.mlb_live_scoreboard"));
+  const byPrefix = ids.find((id) =>
+    id.startsWith("sensor.mlb_live_scoreboard"),
+  );
   if (byPrefix) return byPrefix;
   // Fallback: match the sensor's distinctive attribute signature so a
   // user-renamed entity_id is still discovered.
@@ -97,7 +99,13 @@ const EDITOR_SCHEMA = [
       {
         name: "refresh_rate",
         selector: {
-          number: { min: 0, max: 300, step: 1, mode: "box", unit_of_measurement: "s" },
+          number: {
+            min: 0,
+            max: 300,
+            step: 1,
+            mode: "box",
+            unit_of_measurement: "s",
+          },
         },
       },
       {
@@ -198,7 +206,7 @@ class MlbLiveGameCardEditor extends HTMLElement {
             detail: { config: ev.detail.value },
             bubbles: true,
             composed: true,
-          })
+          }),
         );
       });
       wrap.appendChild(this._form);
@@ -214,7 +222,6 @@ class MlbLiveGameCardEditor extends HTMLElement {
 if (!customElements.get(EDITOR_TAG)) {
   customElements.define(EDITOR_TAG, MlbLiveGameCardEditor);
 }
-
 
 // Image cache shared across all card instances on the page.
 //
@@ -307,7 +314,9 @@ function get(obj, path, fallback = undefined) {
 
 function parseScore(scoreObj) {
   if (scoreObj && typeof scoreObj === "object") {
-    const text = scoreObj.displayValue ?? (scoreObj.value != null ? String(scoreObj.value) : "");
+    const text =
+      scoreObj.displayValue ??
+      (scoreObj.value != null ? String(scoreObj.value) : "");
     const num = scoreObj.value != null ? Number(scoreObj.value) : null;
     return { text, num: Number.isFinite(num) ? num : null };
   }
@@ -320,7 +329,9 @@ function competitorRecord(competitor, teamPayload) {
   if (competitor?.recordSummary) return String(competitor.recordSummary);
   const records = competitor?.records;
   if (Array.isArray(records) && records.length) {
-    const overall = records.find((r) => String(r?.type || "").toLowerCase() === "total") || records[0];
+    const overall =
+      records.find((r) => String(r?.type || "").toLowerCase() === "total") ||
+      records[0];
     if (overall?.summary) return String(overall.summary);
   }
   if (teamPayload?.record_summary) return String(teamPayload.record_summary);
@@ -328,7 +339,11 @@ function competitorRecord(competitor, teamPayload) {
 }
 
 function currentBatterName(attrs) {
-  return attrs?.current_batter?.display_name || attrs?.current_batter?.short_name || "";
+  return (
+    attrs?.current_batter?.display_name ||
+    attrs?.current_batter?.short_name ||
+    ""
+  );
 }
 
 // Which lineup side ("away"|"home") a matchup half belongs to:
@@ -369,14 +384,24 @@ function formatEventDate(dateRaw) {
   const dt = new Date(dateRaw);
   if (Number.isNaN(dt.getTime())) return "";
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
   const startOfTarget = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
   const dayDiff = Math.round((startOfTarget - startOfToday) / 86400000);
-  const timeText = dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const timeText = dt.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
   if (dayDiff === 0) return `Today ${timeText}`;
   if (dayDiff === 1) return `Tomorrow ${timeText}`;
   if (dayDiff === -1) return `Yesterday ${timeText}`;
-  const dateText = dt.toLocaleDateString([], { month: "numeric", day: "numeric" });
+  const dateText = dt.toLocaleDateString([], {
+    month: "numeric",
+    day: "numeric",
+  });
   return `${dateText} ${timeText}`;
 }
 
@@ -388,14 +413,32 @@ function deriveGameState(attrs) {
   const state = String(type?.state || "").toLowerCase();
   const name = String(type?.name || "").toUpperCase();
   const detail = String(
-    type?.detail || type?.shortDetail || type?.statusPrimary || type?.description || attrs.status_text || ""
+    type?.detail ||
+      type?.shortDetail ||
+      type?.statusPrimary ||
+      type?.description ||
+      attrs.status_text ||
+      "",
   ).trim();
   const eventDate = get(competition, ["date"], "");
   const scheduledText = formatEventDate(eventDate);
-  const isDelayed = attrs.is_delayed === true || name === "STATUS_DELAYED" || detail.toLowerCase().includes("delayed");
-  const isLive = attrs.is_live === true || state === "in" || state === "live" || name === "STATUS_IN_PROGRESS" || isDelayed;
-  const isFinal = state === "post" || type?.completed === true || name === "STATUS_FINAL" || detail.toLowerCase().startsWith("final");
-  const isPregame = state === "pre" || name === "STATUS_SCHEDULED" || mode === "next";
+  const isDelayed =
+    attrs.is_delayed === true ||
+    name === "STATUS_DELAYED" ||
+    detail.toLowerCase().includes("delayed");
+  const isLive =
+    attrs.is_live === true ||
+    state === "in" ||
+    state === "live" ||
+    name === "STATUS_IN_PROGRESS" ||
+    isDelayed;
+  const isFinal =
+    state === "post" ||
+    type?.completed === true ||
+    name === "STATUS_FINAL" ||
+    detail.toLowerCase().startsWith("final");
+  const isPregame =
+    state === "pre" || name === "STATUS_SCHEDULED" || mode === "next";
 
   if (isDelayed) {
     return {
@@ -445,7 +488,10 @@ function buildCountText(situation) {
 }
 
 function renderDots(count, total, klass) {
-  return Array.from({ length: total }, (_, i) => `<span class="dot ${klass} ${i < count ? "on" : ""}"></span>`).join("");
+  return Array.from(
+    { length: total },
+    (_, i) => `<span class="dot ${klass} ${i < count ? "on" : ""}"></span>`,
+  ).join("");
 }
 
 function buildBasesText(situation) {
@@ -462,7 +508,8 @@ function renderBaseOccupancyRow(situation) {
   const first = situation?.first_last_name || "Empty";
   const second = situation?.second_last_name || "Empty";
   const third = situation?.third_last_name || "Empty";
-  const val = (v) => `<span class="base-value ${v === "Empty" ? "empty-value" : "occupied-value"}">${v}</span>`;
+  const val = (v) =>
+    `<span class="base-value ${v === "Empty" ? "empty-value" : "occupied-value"}">${v}</span>`;
   return `
     <div class="bases-occupancy-row">
       <div class="base-slot"><span class="base-label">1B:</span> ${val(first)}</div>
@@ -485,8 +532,10 @@ function renderOnDeckRow(onDeck) {
 }
 
 function renderCountDotsRow(situation, currentPitches = []) {
-  const activePitches = Array.isArray(currentPitches) ? currentPitches.filter(Boolean) : [];
-  
+  const activePitches = Array.isArray(currentPitches)
+    ? currentPitches.filter(Boolean)
+    : [];
+
   // Derive balls/strikes from the pitches array when available for consistency
   // with the pitch-by-pitch display, otherwise fall back to situation
   let balls = 0;
@@ -494,9 +543,14 @@ function renderCountDotsRow(situation, currentPitches = []) {
   if (activePitches.length) {
     for (const pitch of activePitches) {
       const p = String(pitch).toLowerCase();
-      if (p.includes('ball') && !p.includes('foul')) {
+      if (p.includes("ball") && !p.includes("foul")) {
         balls++;
-      } else if (p.includes('strike') || p.includes('foul') || p.includes('swinging') || p === 'in play') {
+      } else if (
+        p.includes("strike") ||
+        p.includes("foul") ||
+        p.includes("swinging") ||
+        p === "in play"
+      ) {
         // Foul with 2 strikes doesn't add a strike, but we cap at 2 anyway
         strikes++;
       }
@@ -514,7 +568,12 @@ function renderCountDotsRow(situation, currentPitches = []) {
     </div>`;
 }
 
-function renderWinProbabilityRow(winProb, ownerSide, ownerLabel, opponentLabel) {
+function renderWinProbabilityRow(
+  winProb,
+  ownerSide,
+  ownerLabel,
+  opponentLabel,
+) {
   if (!winProb || typeof winProb !== "object") return "";
   const ownerKey = ownerSide === "home" ? "home" : "away";
   const opponentKey = ownerKey === "home" ? "away" : "home";
@@ -570,7 +629,9 @@ function renderPitcherLinePrimary(stats) {
 }
 
 function renderPitcherLineSecondary(stats) {
-  const inningsPitched = String(stats?.innings_pitched ?? stats?.ip ?? "").trim();
+  const inningsPitched = String(
+    stats?.innings_pitched ?? stats?.ip ?? "",
+  ).trim();
   const era = String(stats?.era ?? "").trim();
   const parts = [];
   if (inningsPitched) parts.push(`IP: ${inningsPitched}`);
@@ -594,22 +655,39 @@ function deriveInningState(attrs) {
   const competition = attrs.competition || {};
   const status = competition?.status || {};
   const type = status?.type || {};
-  const period = Number(status?.period ?? type?.period ?? competition?.status?.period ?? 0) || 0;
+  const period =
+    Number(
+      status?.period ?? type?.period ?? competition?.status?.period ?? 0,
+    ) || 0;
   const prefixText = String(
-    status?.periodPrefix || type?.periodPrefix || type?.detail || type?.shortDetail || type?.statusPrimary || ""
+    status?.periodPrefix ||
+      type?.periodPrefix ||
+      type?.detail ||
+      type?.shortDetail ||
+      type?.statusPrimary ||
+      "",
   ).trim();
   const lower = prefixText.toLowerCase();
-  const away = (competition?.competitors || []).find((c) => c?.homeAway === "away") || {};
-  const home = (competition?.competitors || []).find((c) => c?.homeAway === "home") || {};
+  const away =
+    (competition?.competitors || []).find((c) => c?.homeAway === "away") || {};
+  const home =
+    (competition?.competitors || []).find((c) => c?.homeAway === "home") || {};
   const awayScore = parseScore(away?.score).num;
   const homeScore = parseScore(home?.score).num;
-  const tied = awayScore != null && homeScore != null && awayScore === homeScore;
-  const homeLeading = awayScore != null && homeScore != null && homeScore > awayScore;
-  const pseudoFinal = attrs.is_live === true && period >= 9 && !tied && (
-    lower.startsWith("end") || (lower.startsWith("mid") && homeLeading)
-  );
+  const tied =
+    awayScore != null && homeScore != null && awayScore === homeScore;
+  const homeLeading =
+    awayScore != null && homeScore != null && homeScore > awayScore;
+  const pseudoFinal =
+    attrs.is_live === true &&
+    period >= 9 &&
+    !tied &&
+    (lower.startsWith("end") || (lower.startsWith("mid") && homeLeading));
   const isTop = lower.startsWith("top") || lower.startsWith("t ");
-  const isBottom = lower.startsWith("bottom") || lower.startsWith("bot") || lower.startsWith("b ");
+  const isBottom =
+    lower.startsWith("bottom") ||
+    lower.startsWith("bot") ||
+    lower.startsWith("b ");
   const isMid = lower.startsWith("mid") || lower.startsWith("end");
   return { period, prefixText, lower, pseudoFinal, isTop, isBottom, isMid };
 }
@@ -623,9 +701,15 @@ function formatCountDots(situation) {
 }
 
 function teamTotals(competitor) {
-  const lines = Array.isArray(competitor?.linescores) ? competitor.linescores : [];
-  const hits = competitor?.hits ?? lines.reduce((sum, line) => sum + (Number(line?.hits) || 0), 0);
-  const errors = competitor?.errors ?? lines.reduce((sum, line) => sum + (Number(line?.errors) || 0), 0);
+  const lines = Array.isArray(competitor?.linescores)
+    ? competitor.linescores
+    : [];
+  const hits =
+    competitor?.hits ??
+    lines.reduce((sum, line) => sum + (Number(line?.hits) || 0), 0);
+  const errors =
+    competitor?.errors ??
+    lines.reduce((sum, line) => sum + (Number(line?.errors) || 0), 0);
   return {
     hits: Number.isFinite(Number(hits)) ? String(hits) : "—",
     errors: Number.isFinite(Number(errors)) ? String(errors) : "—",
@@ -669,7 +753,10 @@ function renderPlayerHeadshot(card, url, alt = "") {
 function escapeHtml(value) {
   return String(value == null ? "" : value).replace(
     /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
   );
 }
 
@@ -746,7 +833,9 @@ function playerCardBodyHtml(card, headshotSrc) {
       .join("");
     const totalRow = totals.length
       ? `<tr class="mlb-pc-total"><th scope="row">Career</th><td class="mlb-pc-team"></td>` +
-        columns.map((_, i) => `<td>${escapeHtml(totals[i] ?? "")}</td>`).join("") +
+        columns
+          .map((_, i) => `<td>${escapeHtml(totals[i] ?? "")}</td>`)
+          .join("") +
         `</tr>`
       : "";
     const kind = career.kind === "pitching" ? "Pitching" : "Batting";
@@ -789,7 +878,8 @@ function lineupTablesHtml(team, view, seasonStats) {
   const isSeason = view === "season";
   const DASH = "—";
 
-  const cell = (v) => `<td>${escapeHtml(v == null || v === "" ? DASH : v)}</td>`;
+  const cell = (v) =>
+    `<td>${escapeHtml(v == null || v === "" ? DASH : v)}</td>`;
   const pair = (a, b) => {
     const x = a == null || a === "" ? "" : String(a);
     const y = b == null || b === "" ? "" : String(b);
@@ -818,7 +908,7 @@ function lineupTablesHtml(team, view, seasonStats) {
         `<th scope="row" class="mlb-lu-num">${escapeHtml(ord)}</th>` +
         `<td class="mlb-lu-pos">${escapeHtml(h.position || "")}</td>` +
         `<td class="mlb-lu-name">${escapeHtml(
-          shortPersonName(h.name || h.short_name || DASH)
+          shortPersonName(h.name || h.short_name || DASH),
         )}</td>` +
         cells +
         `</tr>`
@@ -845,7 +935,7 @@ function lineupTablesHtml(team, view, seasonStats) {
       return (
         `<tr${cls}>` +
         `<th scope="row" class="mlb-lu-name">${escapeHtml(
-          shortPersonName(p.name || p.short_name || DASH)
+          shortPersonName(p.name || p.short_name || DASH),
         )}</th>` +
         cells +
         `</tr>`
@@ -871,17 +961,30 @@ function lineupTablesHtml(team, view, seasonStats) {
 function renderDueUpCards(card, dueUp, inningDescription = "") {
   const list = Array.isArray(dueUp) ? dueUp.filter(Boolean).slice(0, 3) : [];
   if (!list.length) return "";
-  const desc = String(inningDescription || (Array.isArray(dueUp) && dueUp.length ? (((dueUp[0] && dueUp[0].inning_desc) || [dueUp[0]?.period_prefix, dueUp[0]?.display_period].filter(Boolean).join(" ")) || "") : "")).trim();
+  const desc = String(
+    inningDescription ||
+      (Array.isArray(dueUp) && dueUp.length
+        ? (dueUp[0] && dueUp[0].inning_desc) ||
+          [dueUp[0]?.period_prefix, dueUp[0]?.display_period]
+            .filter(Boolean)
+            .join(" ") ||
+          ""
+        : ""),
+  ).trim();
   return `
     <div class="dueup-panel">
-      <div class="dueup-title">${desc ? `${desc}&nbsp;&nbsp;Due up` : 'Due up'}</div>
+      <div class="dueup-title">${desc ? `${desc}&nbsp;&nbsp;Due up` : "Due up"}</div>
       <div class="dueup-grid">
-        ${list.map((item) => `
+        ${list
+          .map(
+            (item) => `
           <div class="dueup-card">
             ${renderPlayerHeadshot(card, item.headshot || "", item.short_name || item.display_name || "")}
             <div class="dueup-name">${playerNameMarkup(shortPersonName(item.short_name || item.display_name || "—"), item.id)}</div>
             <div class="dueup-stat">${[item.avg, item.hits_ab].filter(Boolean).join(" • ") || "—"}</div>
-          </div>`).join("")}
+          </div>`,
+          )
+          .join("")}
       </div>
     </div>`;
 }
@@ -896,26 +999,38 @@ function renderCompactStatLine(stats, pairs) {
   return out.join(" • ");
 }
 
-function renderBasesDiamond(situation) { return ""; }
+function renderBasesDiamond(situation) {
+  return "";
+}
 
 function renderLeaderList(items) {
   const list = Array.isArray(items) ? items.filter(Boolean).slice(0, 3) : [];
   if (!list.length) return "";
-  return list.map((item) => `<div class="leader-item"><span class="leader-cat">${item.category || ""}</span><span class="leader-name">${playerNameMarkup(shortPersonName(item.name || ""), item.id)}</span><span class="leader-val">${item.value || ""}</span></div>`).join("");
+  return list
+    .map(
+      (item) =>
+        `<div class="leader-item"><span class="leader-cat">${item.category || ""}</span><span class="leader-name">${playerNameMarkup(shortPersonName(item.name || ""), item.id)}</span><span class="leader-val">${item.value || ""}</span></div>`,
+    )
+    .join("");
 }
 
-
-function renderUpcomingPitcherSide(card, pitcher, fallbackLogo, alignRight = false) {
+function renderUpcomingPitcherSide(
+  card,
+  pitcher,
+  fallbackLogo,
+  alignRight = false,
+) {
   const safe = pitcher || {};
   const name = String(safe.short_name || safe.name || "").trim();
   const displayName = name ? shortPersonName(name) : "TBD";
   const headshot = safe.headshot ? requestCachedLogo(card, safe.headshot) : "";
-  const logo = !headshot && fallbackLogo ? requestCachedLogo(card, fallbackLogo) : "";
+  const logo =
+    !headshot && fallbackLogo ? requestCachedLogo(card, fallbackLogo) : "";
   const portrait = headshot
     ? `<img class="upcoming-pitcher-img" src="${headshot}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
-    : (logo
+    : logo
       ? `<img class="upcoming-pitcher-img logo-fallback" src="${logo}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
-      : `<div class="upcoming-pitcher-img placeholder"></div>`);
+      : `<div class="upcoming-pitcher-img placeholder"></div>`;
   const record = String(safe.record || "").trim();
   const era = String(safe.era || "").trim();
   const recordLine = record ? `${record}` : "";
@@ -929,33 +1044,179 @@ function renderUpcomingPitcherSide(card, pitcher, fallbackLogo, alignRight = fal
     </div>`;
 }
 
-function renderUpcomingDetails(card, attrs, awayMeta, homeMeta, awayLogo, homeLogo, options = {}) {
-  const includePitchers = options.includePitchers !== false;
+// Compact label for a scoring play's inning, e.g. "T3" / "B9". ESPN's
+// `period_type` is typically "Top"/"Bottom" — we keep the first character
+// and append the inning number. Falls back to just the number when ESPN
+// omits the half-inning label.
+function formatScoringPlayPeriod(periodType, periodNumber) {
+  const half = String(periodType || "")
+    .trim()
+    .toUpperCase();
+  const num = Number(periodNumber);
+  if (!Number.isFinite(num) || num <= 0) return half ? half[0] : "";
+  const letter = half ? half[0] : "";
+  return letter ? `${letter}${num}` : `${num}`;
+}
+
+// Build the per-game "Scoring Plays" sub-panel for the final-game expand
+// view. Reads `attrs.scoring_plays` (whole-game, chronological — distinct
+// from `recent_plays` which is half-inning-bounded). Each row is a compact
+// `inning · scorer · play text · score-after` line; we mark the scoring
+// team by comparing each play's score to its predecessor's.
+function renderScoringPlaysPanel(attrs, awayMeta, homeMeta) {
+  const plays = Array.isArray(attrs?.scoring_plays) ? attrs.scoring_plays : [];
+  if (!plays.length) return "";
+  const awayId = String(awayMeta?.id || "");
+  const homeId = String(homeMeta?.id || "");
+  const awayAbbr = String(
+    awayMeta?.abbreviation || awayMeta?.short_name || "AWAY",
+  ).toUpperCase();
+  const homeAbbr = String(
+    homeMeta?.abbreviation || homeMeta?.short_name || "HOME",
+  ).toUpperCase();
+  let prevAway = null;
+  let prevHome = null;
+  const rows = plays
+    .map((play) => {
+      const period = formatScoringPlayPeriod(
+        play?.period_type,
+        play?.period_number,
+      );
+      const away = play?.away_score;
+      const home = play?.home_score;
+      // Identify the scoring side: prefer ESPN's team_id (most reliable;
+      // present on home runs and most scoring plays); fall back to the score
+      // delta vs. the previous scoring play so we still tag the side when
+      // team_id is missing.
+      let scorerAbbr = "";
+      const teamId = String(play?.team_id || "");
+      if (teamId && teamId === awayId) scorerAbbr = awayAbbr;
+      else if (teamId && teamId === homeId) scorerAbbr = homeAbbr;
+      else if (away != null && home != null) {
+        if (prevAway != null && Number(away) > Number(prevAway))
+          scorerAbbr = awayAbbr;
+        else if (prevHome != null && Number(home) > Number(prevHome))
+          scorerAbbr = homeAbbr;
+      }
+      if (away != null && away !== "") prevAway = away;
+      if (home != null && home !== "") prevHome = home;
+      const scoreAfter = away != null && home != null ? `${away}-${home}` : "";
+      const text = escapeHtml(String(play?.text || "").trim());
+      return `
+        <div class="scoring-play-row">
+          <span class="scoring-play-period">${period || "—"}</span>
+          <span class="scoring-play-team">${scorerAbbr || ""}</span>
+          <span class="scoring-play-text">${text}</span>
+          <span class="scoring-play-score">${scoreAfter}</span>
+        </div>`;
+    })
+    .join("");
+  return `
+      <div class="scoring-plays-panel">
+        <div class="panel-heading">Scoring Plays</div>
+        ${rows}
+      </div>`;
+}
+
+// Build the "Game Leaders" sub-panel — two columns (away / home), each a
+// short list of top-N stat-category leaders. Reads `attrs.leaders`, which
+// the coordinator normalizes from ESPN's per-team leaders block. Player
+// names route through `playerNameMarkup` so they open the career popup.
+function renderGameLeadersPanel(attrs, awayMeta, homeMeta) {
+  const leaders = attrs?.leaders || {};
+  const awayList = Array.isArray(leaders.away)
+    ? leaders.away.filter(Boolean)
+    : [];
+  const homeList = Array.isArray(leaders.home)
+    ? leaders.home.filter(Boolean)
+    : [];
+  if (!awayList.length && !homeList.length) return "";
+  const awayAbbr = String(
+    awayMeta?.abbreviation || awayMeta?.short_name || "AWAY",
+  ).toUpperCase();
+  const homeAbbr = String(
+    homeMeta?.abbreviation || homeMeta?.short_name || "HOME",
+  ).toUpperCase();
+  const buildColumn = (items, abbr) => {
+    const rows = items
+      .map(
+        (item) => `
+            <div class="leader-item">
+              <span class="leader-cat">${escapeHtml(item.category || "")}</span>
+              <span class="leader-name">${playerNameMarkup(shortPersonName(item.name || ""), item.id)}</span>
+              <span class="leader-val">${escapeHtml(item.value || "")}</span>
+            </div>`,
+      )
+      .join("");
+    return `
+        <div class="leaders-col">
+          <div class="leaders-head">${escapeHtml(abbr)}</div>
+          ${rows || `<div class="leader-item leader-empty">—</div>`}
+        </div>`;
+  };
+  return `
+      <div class="leaders-panel">
+        <div class="panel-heading">Game Leaders</div>
+        <div class="leaders-grid">
+          ${buildColumn(awayList, awayAbbr)}
+          ${buildColumn(homeList, homeAbbr)}
+        </div>
+      </div>`;
+}
+
+function renderUpcomingDetails(
+  card,
+  attrs,
+  awayMeta,
+  homeMeta,
+  awayLogo,
+  homeLogo,
+  options = {},
+) {
+  // `kind` selects the layout. The historical default is the upcoming-game
+  // panel (probable pitchers + standings). When called with kind: "final",
+  // we additionally render scoring plays + game leaders above the standings.
+  // `includePitchers` is retained for back-compat with older call sites.
+  const kind =
+    options.kind || (options.includePitchers === false ? "final" : "upcoming");
+  const includePitchers = kind === "upcoming";
   const probables = attrs?.probable_pitchers || {};
   const standings = attrs?.division_standings || {};
   const teamId = String(attrs?.team_id || "");
   const entries = Array.isArray(standings.entries) ? standings.entries : [];
-  const pitchersHtml = includePitchers ? `
+  const pitchersHtml = includePitchers
+    ? `
     <div class="upcoming-pitchers-grid">
       ${renderUpcomingPitcherSide(card, probables.away, awayLogo || awayMeta?.logo || "", false)}
       <div class="upcoming-pitchers-vs">vs</div>
       ${renderUpcomingPitcherSide(card, probables.home, homeLogo || homeMeta?.logo || "", true)}
-    </div>` : "";
+    </div>`
+    : "";
+  const scoringPlaysHtml =
+    kind === "final" ? renderScoringPlaysPanel(attrs, awayMeta, homeMeta) : "";
+  const leadersHtml =
+    kind === "final" ? renderGameLeadersPanel(attrs, awayMeta, homeMeta) : "";
   let standingsHtml = "";
   if (entries.length) {
-    const rows = entries.map((entry) => {
-      const isMyTeam = String(entry.team_id || "") === teamId && teamId !== "";
-      const wl = `${entry.wins || "—"}-${entry.losses || "—"}`;
-      const gb = String(entry.games_back || "").trim() || "—";
-      const name = String(entry.team_short_name || entry.team_name || "").trim() || "—";
-      return `
+    const rows = entries
+      .map((entry) => {
+        const isMyTeam =
+          String(entry.team_id || "") === teamId && teamId !== "";
+        const wl = `${entry.wins || "—"}-${entry.losses || "—"}`;
+        const gb = String(entry.games_back || "").trim() || "—";
+        const name =
+          String(entry.team_short_name || entry.team_name || "").trim() || "—";
+        return `
         <div class="standings-row ${isMyTeam ? "my-team" : ""}">
           <span class="standings-name">${name}</span>
           <span class="standings-wl">${wl}</span>
           <span class="standings-gb">${gb}</span>
         </div>`;
-    }).join("");
-    const heading = standings.division_name ? `<div class="standings-heading">${standings.division_name}</div>` : "";
+      })
+      .join("");
+    const heading = standings.division_name
+      ? `<div class="standings-heading">${standings.division_name}</div>`
+      : "";
     standingsHtml = `
       <div class="upcoming-standings">
         ${heading}
@@ -970,14 +1231,17 @@ function renderUpcomingDetails(card, attrs, awayMeta, homeMeta, awayLogo, homeLo
   return `
     <div class="upcoming-details-panel">
       ${pitchersHtml}
+      ${scoringPlaysHtml}
+      ${leadersHtml}
       ${standingsHtml}
     </div>`;
 }
 
-
 function renderPlayIndicator(play, previousContext = {}) {
   const playText = String(play?.text || "").toLowerCase();
-  const altType = String(play?.alternative_type || play?.alternativeType || "").toLowerCase();
+  const altType = String(
+    play?.alternative_type || play?.alternativeType || "",
+  ).toLowerCase();
   const typeText = String(play?.type || play?.play_type || "").toLowerCase();
 
   const away = play?.away_score;
@@ -987,54 +1251,94 @@ function renderPlayIndicator(play, previousContext = {}) {
   const prevOuts = previousContext?.outs;
 
   const scoreValue = Number(play?.score_value ?? play?.scoreValue ?? 0);
-  const scoringFlag = play?.scoring_play === true || play?.scoringPlay === true || scoreValue > 0;
-  const looksLikePitchingChange = playText.includes(" relieved ") || playText.includes(" replaces ") || playText.includes(" comes in for ") || altType.includes("lineup-change") || typeText.includes("lineup-change");
+  const scoringFlag =
+    play?.scoring_play === true || play?.scoringPlay === true || scoreValue > 0;
+  const looksLikePitchingChange =
+    playText.includes(" relieved ") ||
+    playText.includes(" replaces ") ||
+    playText.includes(" comes in for ") ||
+    altType.includes("lineup-change") ||
+    typeText.includes("lineup-change");
 
-  if (!looksLikePitchingChange && away != null && home != null && away !== "" && home !== "") {
-    const changedVsPrevious = prevAway != null && prevHome != null && (String(away) !== String(prevAway) || String(home) !== String(prevHome));
+  if (
+    !looksLikePitchingChange &&
+    away != null &&
+    home != null &&
+    away !== "" &&
+    home !== ""
+  ) {
+    const changedVsPrevious =
+      prevAway != null &&
+      prevHome != null &&
+      (String(away) !== String(prevAway) || String(home) !== String(prevHome));
     if (scoringFlag || changedVsPrevious) return `${away}-${home}`;
   }
 
   const outs = Number(play?.outs);
   if (Number.isFinite(outs)) {
-    const previousKnownOuts = Number.isFinite(Number(prevOuts)) ? Number(prevOuts) : null;
-    if (outs > 0 && previousKnownOuts != null && outs > previousKnownOuts) return `${"•".repeat(Math.max(outs,1))} Outs`;
+    const previousKnownOuts = Number.isFinite(Number(prevOuts))
+      ? Number(prevOuts)
+      : null;
+    if (outs > 0 && previousKnownOuts != null && outs > previousKnownOuts)
+      return `${"•".repeat(Math.max(outs, 1))} Outs`;
     if (outs === 3 && previousKnownOuts == null) return `${"•".repeat(3)} Outs`;
   }
   return "";
 }
 
-function renderRecentPlays(plays, currentPitches = [], situation = {}, config = {}) {
+function renderRecentPlays(
+  plays,
+  currentPitches = [],
+  situation = {},
+  config = {},
+) {
   const showPitches = config.show_pitches !== false;
   const showPlayResults = config.show_play_results !== false;
-  const chronological = Array.isArray(plays) ? plays.filter((p) => p && p.text) : [];
+  const chronological = Array.isArray(plays)
+    ? plays.filter((p) => p && p.text)
+    : [];
   const list = showPlayResults ? [...chronological] : [];
-  const pitches = showPitches && Array.isArray(currentPitches) ? currentPitches.filter(Boolean).map((p) => String(p).trim()).filter(Boolean).reverse() : [];
+  const pitches =
+    showPitches && Array.isArray(currentPitches)
+      ? currentPitches
+          .filter(Boolean)
+          .map((p) => String(p).trim())
+          .filter(Boolean)
+          .reverse()
+      : [];
   if (!list.length && !pitches.length) return "";
-  const pitchHtml = pitches.map((pitch) => `
+  const pitchHtml = pitches
+    .map(
+      (pitch) => `
         <div class="play-row pitch-row">
           <div class="play-text">${pitch}</div>
           <div class="play-indicator"></div>
-        </div>`).join("");
+        </div>`,
+    )
+    .join("");
   let previousKnownOuts = null;
   let previousKnownAway = null;
   let previousKnownHome = null;
-  const playHtml = list.map((play) => {
-    const indicator = renderPlayIndicator(play, {
-      outs: previousKnownOuts,
-      away_score: previousKnownAway,
-      home_score: previousKnownHome,
-    });
-    const outs = Number(play?.outs);
-    if (Number.isFinite(outs)) previousKnownOuts = outs;
-    if (play?.away_score != null && play?.away_score !== "") previousKnownAway = play.away_score;
-    if (play?.home_score != null && play?.home_score !== "") previousKnownHome = play.home_score;
-    return `
+  const playHtml = list
+    .map((play) => {
+      const indicator = renderPlayIndicator(play, {
+        outs: previousKnownOuts,
+        away_score: previousKnownAway,
+        home_score: previousKnownHome,
+      });
+      const outs = Number(play?.outs);
+      if (Number.isFinite(outs)) previousKnownOuts = outs;
+      if (play?.away_score != null && play?.away_score !== "")
+        previousKnownAway = play.away_score;
+      if (play?.home_score != null && play?.home_score !== "")
+        previousKnownHome = play.home_score;
+      return `
         <div class="play-row">
           <div class="play-text">${play.text}</div>
           <div class="play-indicator">${indicator}</div>
         </div>`;
-  }).join("");
+    })
+    .join("");
   return `
     <div class="plays-panel">${pitchHtml}${playHtml}
     </div>`;
@@ -1099,15 +1403,31 @@ class MlbLiveGameCard extends HTMLElement {
 
   _upcomingDetailsFingerprint(attrs) {
     // Compact fingerprint of details that affect the expanded panel, so the
-    // compact card re-renders when probable pitchers or standings change.
+    // compact card re-renders when probable pitchers, standings, scoring
+    // plays, or game leaders change. The final-game panel pulls scoring
+    // plays + leaders; the upcoming-game panel ignores those fields and
+    // they remain empty, so adding them is cheap on both paths.
     const probables = attrs?.probable_pitchers || {};
     const a = probables.away || {};
     const h = probables.home || {};
     const standings = attrs?.division_standings || {};
     const entries = Array.isArray(standings.entries) ? standings.entries : [];
     const standingsFp = entries
-      .map((e) => `${e.team_id || ""}:${e.wins || ""}-${e.losses || ""}:${e.games_back || ""}`)
+      .map(
+        (e) =>
+          `${e.team_id || ""}:${e.wins || ""}-${e.losses || ""}:${e.games_back || ""}`,
+      )
       .join(",");
+    const scoring = Array.isArray(attrs?.scoring_plays)
+      ? attrs.scoring_plays
+      : [];
+    const lastScoring = scoring.length ? scoring[scoring.length - 1] : null;
+    const leaders = attrs?.leaders || {};
+    const al = Array.isArray(leaders.away) ? leaders.away : [];
+    const hl = Array.isArray(leaders.home) ? leaders.home : [];
+    const leadersFp =
+      `${al.length}/${al.map((x) => `${x.id || ""}:${x.value || ""}`).join(",")}|` +
+      `${hl.length}/${hl.map((x) => `${x.id || ""}:${x.value || ""}`).join(",")}`;
     return [
       a.name || "",
       a.record || "",
@@ -1117,6 +1437,11 @@ class MlbLiveGameCard extends HTMLElement {
       h.era || "",
       standings.division_name || "",
       standingsFp,
+      scoring.length,
+      lastScoring?.id || "",
+      lastScoring?.away_score ?? "",
+      lastScoring?.home_score ?? "",
+      leadersFp,
     ].join("|");
   }
 
@@ -1129,7 +1454,9 @@ class MlbLiveGameCard extends HTMLElement {
       // restores Option A's direct-to-ESPN behavior; either way ESPN stays
       // reachable (the popup footer always links out). Both click and
       // keyboard activation funnel through here, so parity is automatic.
-      const target = String(this.config?.player_link_target || "popup").toLowerCase();
+      const target = String(
+        this.config?.player_link_target || "popup",
+      ).toLowerCase();
       if (target === "espn") {
         window.open(espnPlayerUrl(id), "_blank", "noopener");
       } else {
@@ -1161,13 +1488,19 @@ class MlbLiveGameCard extends HTMLElement {
   // the card object, or null on any failure (caller renders an error state).
   _fetchPlayerCard(athleteId) {
     const id = String(athleteId == null ? "" : athleteId).trim();
-    if (!id || !this._hass || !this._hass.connection) return Promise.resolve(null);
+    if (!id || !this._hass || !this._hass.connection)
+      return Promise.resolve(null);
     this._playerCardCache = this._playerCardCache || new Map();
     this._playerCardInflight = this._playerCardInflight || new Map();
-    if (this._playerCardCache.has(id)) return Promise.resolve(this._playerCardCache.get(id));
-    if (this._playerCardInflight.has(id)) return this._playerCardInflight.get(id);
+    if (this._playerCardCache.has(id))
+      return Promise.resolve(this._playerCardCache.get(id));
+    if (this._playerCardInflight.has(id))
+      return this._playerCardInflight.get(id);
     const req = this._hass.connection
-      .sendMessagePromise({ type: "mlb_live_scoreboard/player_card", athlete_id: id })
+      .sendMessagePromise({
+        type: "mlb_live_scoreboard/player_card",
+        athlete_id: id,
+      })
       .then((res) => {
         const card = (res && res.player_card) || null;
         if (card) this._playerCardCache.set(id, card);
@@ -1358,7 +1691,7 @@ class MlbLiveGameCard extends HTMLElement {
     }
     if (ev.key !== "Tab") return;
     const focusables = this._pcDialog.querySelectorAll(
-      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
     );
     if (!focusables.length) {
       ev.preventDefault();
@@ -1382,15 +1715,17 @@ class MlbLiveGameCard extends HTMLElement {
     // Tell assistive tech the dialog is fetching; flipping it back to
     // "false" is what makes the polite live region announce the result.
     if (this._pcDialog) {
-      this._pcDialog.setAttribute("aria-busy", state === "loading" ? "true" : "false");
+      this._pcDialog.setAttribute(
+        "aria-busy",
+        state === "loading" ? "true" : "false",
+      );
     }
     // The "ready" body is a left-aligned scrolling layout; the message
     // states stay centered (default .mlb-pc-body flexbox).
     this._pcBody.className =
       state === "ready" ? "mlb-pc-body mlb-pc-body--ready" : "mlb-pc-body";
     if (state === "loading") {
-      this._pcBody.innerHTML =
-        `<div><div class="mlb-pc-spinner"></div><div class="mlb-pc-msg">Loading player…</div></div>`;
+      this._pcBody.innerHTML = `<div><div class="mlb-pc-spinner"></div><div class="mlb-pc-msg">Loading player…</div></div>`;
     } else if (state === "error") {
       this._pcBody.innerHTML =
         `<div><div class="mlb-pc-msg">Couldn't load this player.</div>` +
@@ -1402,7 +1737,10 @@ class MlbLiveGameCard extends HTMLElement {
       // shared image cache (returns the remote URL synchronously on a miss,
       // so the <img> always loads even before the blob resolves).
       const safe = card || {};
-      const shot = requestCachedLogo(this, (safe.bio && safe.bio.headshot) || "");
+      const shot = requestCachedLogo(
+        this,
+        (safe.bio && safe.bio.headshot) || "",
+      );
       this._pcBody.innerHTML = playerCardBodyHtml(safe, shot);
     }
   }
@@ -1414,7 +1752,9 @@ class MlbLiveGameCard extends HTMLElement {
     this._pcAthleteId = id;
     if (this._pcOverlay.hidden) {
       this._pcReturnFocus =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
       this._pcPrevBodyOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       this._pcOverlay.hidden = false;
@@ -1475,7 +1815,8 @@ class MlbLiveGameCard extends HTMLElement {
   _fetchTeamSeasonStats(side) {
     const s = side === "home" ? "home" : "away";
     const team = this._lineupTeam(s);
-    if (!team || !this._hass || !this._hass.connection) return Promise.resolve(null);
+    if (!team || !this._hass || !this._hass.connection)
+      return Promise.resolve(null);
     const ids = [];
     const seen = new Set();
     for (const list of [team.hitters, team.pitchers]) {
@@ -1494,7 +1835,8 @@ class MlbLiveGameCard extends HTMLElement {
     if (this._luSeasonCache.has(teamKey)) {
       return Promise.resolve(this._luSeasonCache.get(teamKey));
     }
-    if (this._luSeasonInflight.has(teamKey)) return this._luSeasonInflight.get(teamKey);
+    if (this._luSeasonInflight.has(teamKey))
+      return this._luSeasonInflight.get(teamKey);
     if (!ids.length) {
       const empty = {};
       this._luSeasonCache.set(teamKey, empty);
@@ -1511,7 +1853,10 @@ class MlbLiveGameCard extends HTMLElement {
         return map;
       })
       .catch((err) => {
-        console.debug(`[${CARD_TAG}] team_season_stats fetch failed for ${teamKey}:`, err);
+        console.debug(
+          `[${CARD_TAG}] team_season_stats fetch failed for ${teamKey}:`,
+          err,
+        );
         return null;
       })
       .finally(() => {
@@ -1705,7 +2050,7 @@ class MlbLiveGameCard extends HTMLElement {
     if (ev.key !== "Tab") return;
     // `input` included so the Game/Season radios stay inside the trap.
     const focusables = this._luDialog.querySelectorAll(
-      'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
     );
     if (!focusables.length) {
       ev.preventDefault();
@@ -1727,13 +2072,15 @@ class MlbLiveGameCard extends HTMLElement {
   _setLineupState(state) {
     if (!this._luBody) return;
     if (this._luDialog) {
-      this._luDialog.setAttribute("aria-busy", state === "loading" ? "true" : "false");
+      this._luDialog.setAttribute(
+        "aria-busy",
+        state === "loading" ? "true" : "false",
+      );
     }
     this._luBody.className =
       state === "ready" ? "mlb-lu-body" : "mlb-lu-body mlb-lu-body--msg";
     if (state === "loading") {
-      this._luBody.innerHTML =
-        `<div><div class="mlb-lu-spinner"></div><div class="mlb-lu-msg">Loading season stats…</div></div>`;
+      this._luBody.innerHTML = `<div><div class="mlb-lu-spinner"></div><div class="mlb-lu-msg">Loading season stats…</div></div>`;
     } else if (state === "error") {
       this._luBody.innerHTML =
         `<div><div class="mlb-lu-msg">Couldn't load season stats.</div>` +
@@ -1786,7 +2133,9 @@ class MlbLiveGameCard extends HTMLElement {
   _renderLineupSeason(side, team) {
     const teamKey = String((team && team.team_id) ?? side);
     const cached =
-      this._luSeasonCache instanceof Map ? this._luSeasonCache.get(teamKey) : undefined;
+      this._luSeasonCache instanceof Map
+        ? this._luSeasonCache.get(teamKey)
+        : undefined;
     if (cached !== undefined) {
       this._luSeasonStats = cached;
       this._setLineupState("ready");
@@ -1805,7 +2154,7 @@ class MlbLiveGameCard extends HTMLElement {
       this._luBody.innerHTML = lineupTablesHtml(
         this._lineupTeam(side) || team,
         "season",
-        map
+        map,
       );
     });
   }
@@ -1824,7 +2173,9 @@ class MlbLiveGameCard extends HTMLElement {
     this._luSide = s;
     // Default view: an explicit lineup_default_view ("game"/"season") wins;
     // "auto" (default) → Game while the game is live, Season otherwise.
-    const pref = String(this.config.lineup_default_view || "auto").toLowerCase();
+    const pref = String(
+      this.config.lineup_default_view || "auto",
+    ).toLowerCase();
     if (pref === "game" || pref === "season") {
       this._luView = pref;
     } else {
@@ -1839,7 +2190,9 @@ class MlbLiveGameCard extends HTMLElement {
     });
     if (this._luOverlay.hidden) {
       this._luReturnFocus =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
       this._luPrevBodyOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       this._luOverlay.hidden = false;
@@ -1878,7 +2231,10 @@ class MlbLiveGameCard extends HTMLElement {
   _onContentClick(ev) {
     if (this._openPlayerProfile(ev.target)) return;
     if (this._toggleLineupFromMatchup(ev.target)) return;
-    const target = ev.target instanceof Element ? ev.target.closest(".upcoming-expandable") : null;
+    const target =
+      ev.target instanceof Element
+        ? ev.target.closest(".upcoming-expandable")
+        : null;
     if (!target || !this.content.contains(target)) return;
     this._upcomingExpanded = !this._upcomingExpanded;
     // Force a re-render even if the upstream fingerprint is otherwise unchanged.
@@ -1889,20 +2245,28 @@ class MlbLiveGameCard extends HTMLElement {
 
   _onContentKeydown(ev) {
     if (ev.key !== "Enter" && ev.key !== " ") return;
-    const playerLink = ev.target instanceof Element ? ev.target.closest(".player-link") : null;
+    const playerLink =
+      ev.target instanceof Element ? ev.target.closest(".player-link") : null;
     if (playerLink && this.content.contains(playerLink)) {
       ev.preventDefault();
       this._openPlayerProfile(playerLink);
       return;
     }
-    const luSide = ev.target instanceof Element ? ev.target.closest(".matchup-side") : null;
-    if (luSide && this.content.contains(luSide) &&
-        ["away", "home"].includes(luSide.getAttribute("data-team-popup"))) {
+    const luSide =
+      ev.target instanceof Element ? ev.target.closest(".matchup-side") : null;
+    if (
+      luSide &&
+      this.content.contains(luSide) &&
+      ["away", "home"].includes(luSide.getAttribute("data-team-popup"))
+    ) {
       ev.preventDefault();
       this._toggleLineupFromMatchup(luSide);
       return;
     }
-    const target = ev.target instanceof Element ? ev.target.closest(".upcoming-expandable") : null;
+    const target =
+      ev.target instanceof Element
+        ? ev.target.closest(".upcoming-expandable")
+        : null;
     if (!target || !this.content.contains(target)) return;
     ev.preventDefault();
     this._upcomingExpanded = !this._upcomingExpanded;
@@ -1943,7 +2307,9 @@ class MlbLiveGameCard extends HTMLElement {
       this.card.appendChild(this.content);
       this.appendChild(this.card);
       this.content.addEventListener("click", (ev) => this._onContentClick(ev));
-      this.content.addEventListener("keydown", (ev) => this._onContentKeydown(ev));
+      this.content.addEventListener("keydown", (ev) =>
+        this._onContentKeydown(ev),
+      );
     }
     this.render();
     // Setup refresh timer on first load
@@ -1969,9 +2335,20 @@ class MlbLiveGameCard extends HTMLElement {
     const homeLines = Array.isArray(home?.linescores) ? home.linescores : [];
     const innings = Math.max(awayLines.length, homeLines.length);
     if (!innings) return "";
-    const headers = Array.from({ length: innings }, (_, i) => `<div class="inning-head">${i + 1}</div>`).join("");
-    const awayCells = Array.from({ length: innings }, (_, i) => `<div class="inning-cell">${awayLines[i]?.displayValue ?? awayLines[i]?.value ?? ""}</div>`).join("");
-    const homeCells = Array.from({ length: innings }, (_, i) => `<div class="inning-cell">${homeLines[i]?.displayValue ?? homeLines[i]?.value ?? ""}</div>`).join("");
+    const headers = Array.from(
+      { length: innings },
+      (_, i) => `<div class="inning-head">${i + 1}</div>`,
+    ).join("");
+    const awayCells = Array.from(
+      { length: innings },
+      (_, i) =>
+        `<div class="inning-cell">${awayLines[i]?.displayValue ?? awayLines[i]?.value ?? ""}</div>`,
+    ).join("");
+    const homeCells = Array.from(
+      { length: innings },
+      (_, i) =>
+        `<div class="inning-cell">${homeLines[i]?.displayValue ?? homeLines[i]?.value ?? ""}</div>`,
+    ).join("");
     // Compute grid-template-columns inline: team-abbr | N inning cells | R total.
     // Using `repeat(auto-fit, minmax(X, max-content))` is invalid per CSS Grid
     // spec and causes browsers to collapse to a single column, which stacks
@@ -1997,8 +2374,8 @@ class MlbLiveGameCard extends HTMLElement {
     const comp = attrs.competition || {};
     const status = comp.status || {};
     const competitors = Array.isArray(comp.competitors) ? comp.competitors : [];
-    const away = competitors.find(c => c?.homeAway === "away") || {};
-    const home = competitors.find(c => c?.homeAway === "home") || {};
+    const away = competitors.find((c) => c?.homeAway === "away") || {};
+    const home = competitors.find((c) => c?.homeAway === "home") || {};
     const sit = attrs.situation || {};
     const bs = attrs.batter_stats || {};
     const ps = attrs.pitcher_stats || {};
@@ -2007,27 +2384,48 @@ class MlbLiveGameCard extends HTMLElement {
     // Server-anchored hold deadline: include the bucket (active vs expired)
     // so the card re-renders when the hold flips.
     const holdUntil = Number(attrs.third_out_hold_until);
-    const holdActiveFp = Number.isFinite(holdUntil) && holdUntil > Date.now() / 1000
-      ? `hold:${holdUntil}`
-      : "";
+    const holdActiveFp =
+      Number.isFinite(holdUntil) && holdUntil > Date.now() / 1000
+        ? `hold:${holdUntil}`
+        : "";
     return [
       stateObj?.state,
       attrs.mode,
       attrs.game_state,
       // Visible scoreboard inputs
-      away.score, away.recordSummary,
-      home.score, home.recordSummary,
-      status.type?.state, status.type?.name, status.period, status.displayClock,
+      away.score,
+      away.recordSummary,
+      home.score,
+      home.recordSummary,
+      status.type?.state,
+      status.type?.name,
+      status.period,
+      status.displayClock,
       // Matchup
       attrs.current_batter?.display_name,
       attrs.current_pitcher?.display_name,
-      bs.avg, bs.hits_ab, bs.hr, bs.rbi, bs.game_outcomes_display,
-      ps.era, ps.ip, ps.pitches_strikes, ps.strikeouts,
+      bs.avg,
+      bs.hits_ab,
+      bs.hr,
+      bs.rbi,
+      bs.game_outcomes_display,
+      ps.era,
+      ps.ip,
+      ps.pitches_strikes,
+      ps.strikeouts,
       // Count + bases
-      sit.balls, sit.strikes, sit.outs,
-      sit.onFirst, sit.onSecond, sit.onThird,
+      sit.balls,
+      sit.strikes,
+      sit.outs,
+      sit.onFirst,
+      sit.onSecond,
+      sit.onThird,
       // Recent plays — only the tail-most play affects rendering thresholds
-      plays.length, lastPlay?.id, lastPlay?.outs, lastPlay?.away_score, lastPlay?.home_score,
+      plays.length,
+      lastPlay?.id,
+      lastPlay?.outs,
+      lastPlay?.away_score,
+      lastPlay?.home_score,
       // Inning + third-out hold (server-anchored)
       attrs.inning_context?.is_between_halves,
       holdActiveFp,
@@ -2074,19 +2472,46 @@ class MlbLiveGameCard extends HTMLElement {
     const homeScore = parseScore(home?.score);
     const stateInfo = deriveGameState(attrs);
     const inningState = deriveInningState(attrs);
-    const title = this.config.title || attrs.team_name || attrs.team_abbr || "MLB Live";
+    const title =
+      this.config.title || attrs.team_name || attrs.team_abbr || "MLB Live";
     const batter = currentBatterName(attrs);
-    const pitcher = attrs.current_pitcher?.display_name || attrs.current_pitcher?.short_name || "";
+    const pitcher =
+      attrs.current_pitcher?.display_name ||
+      attrs.current_pitcher?.short_name ||
+      "";
     const batterStats = renderBatterLineSecondary(attrs.batter_stats);
-    const batterHitsAb = attrs.batter_stats?.hits_ab || renderCompactStatLine(attrs.batter_stats, [["AB", "ab"], ["H", "h"]]);
-    const batterOutcomes = (attrs.batter_stats?.game_outcomes_display || "").trim();
-    const batterPrimaryLine = batterOutcomes ? `${batterHitsAb} • ${batterOutcomes}` : batterHitsAb;
+    const batterHitsAb =
+      attrs.batter_stats?.hits_ab ||
+      renderCompactStatLine(attrs.batter_stats, [
+        ["AB", "ab"],
+        ["H", "h"],
+      ]);
+    const batterOutcomes = (
+      attrs.batter_stats?.game_outcomes_display || ""
+    ).trim();
+    const batterPrimaryLine = batterOutcomes
+      ? `${batterHitsAb} • ${batterOutcomes}`
+      : batterHitsAb;
     const pitcherPrimaryLine = renderPitcherLinePrimary(attrs.pitcher_stats);
-    const pitcherSecondaryLine = renderPitcherLineSecondary(attrs.pitcher_stats);
-    const awayRecord = this.config.show_records ? competitorRecord(away, awayMeta) : "";
-    const homeRecord = this.config.show_records ? competitorRecord(home, homeMeta) : "";
-    const awayWon = stateInfo.pillClass === "final" && awayScore.num != null && homeScore.num != null && awayScore.num > homeScore.num;
-    const homeWon = stateInfo.pillClass === "final" && awayScore.num != null && homeScore.num != null && homeScore.num > awayScore.num;
+    const pitcherSecondaryLine = renderPitcherLineSecondary(
+      attrs.pitcher_stats,
+    );
+    const awayRecord = this.config.show_records
+      ? competitorRecord(away, awayMeta)
+      : "";
+    const homeRecord = this.config.show_records
+      ? competitorRecord(home, homeMeta)
+      : "";
+    const awayWon =
+      stateInfo.pillClass === "final" &&
+      awayScore.num != null &&
+      homeScore.num != null &&
+      awayScore.num > homeScore.num;
+    const homeWon =
+      stateInfo.pillClass === "final" &&
+      awayScore.num != null &&
+      homeScore.num != null &&
+      homeScore.num > awayScore.num;
     const marker = this.renderInningMarker(stateInfo, inningState);
     const awayTotals = teamTotals(away);
     const homeTotals = teamTotals(home);
@@ -2097,8 +2522,12 @@ class MlbLiveGameCard extends HTMLElement {
     const periodLower = String(inningState.lower || "");
     const inningContext = attrs.inning_context || {};
     const ownerAbbr = String(attrs.team_abbr || "").toUpperCase();
-    const awayAbbr = String(awayMeta?.abbreviation || awayTeam?.abbreviation || "").toUpperCase();
-    const homeAbbr = String(homeMeta?.abbreviation || homeTeam?.abbreviation || "").toUpperCase();
+    const awayAbbr = String(
+      awayMeta?.abbreviation || awayTeam?.abbreviation || "",
+    ).toUpperCase();
+    const homeAbbr = String(
+      homeMeta?.abbreviation || homeTeam?.abbreviation || "",
+    ).toUpperCase();
     const ownerTeamId = String(attrs.team_id ?? "");
     const awayTeamId = String(awayTeam?.id ?? "");
     const homeTeamId = String(homeTeam?.id ?? "");
@@ -2106,24 +2535,37 @@ class MlbLiveGameCard extends HTMLElement {
     // "away" only when we genuinely can't identify the owner — that puts the
     // configured team on the left in the common case and degrades gracefully.
     let ownerSide = "away";
-    if (ownerTeamId && (ownerTeamId === homeTeamId)) ownerSide = "home";
-    else if (ownerTeamId && (ownerTeamId === awayTeamId)) ownerSide = "away";
+    if (ownerTeamId && ownerTeamId === homeTeamId) ownerSide = "home";
+    else if (ownerTeamId && ownerTeamId === awayTeamId) ownerSide = "away";
     else if (ownerAbbr && ownerAbbr === homeAbbr) ownerSide = "home";
     else if (ownerAbbr && ownerAbbr === awayAbbr) ownerSide = "away";
     const ownerLabel = ownerSide === "home" ? homeAbbr : awayAbbr;
     const opponentLabel = ownerSide === "home" ? awayAbbr : homeAbbr;
-    const winProbabilityPanel = (this.config.show_win_probability !== false && stateInfo.pillClass === "live")
-      ? renderWinProbabilityRow(
-          attrs.win_probability || {},
-          ownerSide,
-          ownerLabel,
-          opponentLabel,
-        )
-      : "";
-    const recentPlaysPanel = renderRecentPlays(attrs.recent_plays || [], attrs.current_pitches || [], attrs.situation || {}, this.config);
-    const latestRecentPlay = Array.isArray(attrs.recent_plays) && attrs.recent_plays.length ? attrs.recent_plays[attrs.recent_plays.length - 1] : null;
+    const winProbabilityPanel =
+      this.config.show_win_probability !== false &&
+      stateInfo.pillClass === "live"
+        ? renderWinProbabilityRow(
+            attrs.win_probability || {},
+            ownerSide,
+            ownerLabel,
+            opponentLabel,
+          )
+        : "";
+    const recentPlaysPanel = renderRecentPlays(
+      attrs.recent_plays || [],
+      attrs.current_pitches || [],
+      attrs.situation || {},
+      this.config,
+    );
+    const latestRecentPlay =
+      Array.isArray(attrs.recent_plays) && attrs.recent_plays.length
+        ? attrs.recent_plays[attrs.recent_plays.length - 1]
+        : null;
     const explicitThirdOutPlay = attrs.third_out_play || null;
-    const betweenHalves = (periodLower.startsWith("mid") || periodLower.startsWith("end") || inningContext.is_between_halves);
+    const betweenHalves =
+      periodLower.startsWith("mid") ||
+      periodLower.startsWith("end") ||
+      inningContext.is_between_halves;
     const nowTs = Date.now() / 1000;
     // The coordinator publishes a wallclock-anchored deadline so every card
     // (including ones rendered after the hold has already begun) flips from
@@ -2133,31 +2575,69 @@ class MlbLiveGameCard extends HTMLElement {
     const explicitThirdOutTs = Number(explicitThirdOutPlay?.wallclock_ts);
     const explicitHoldActive = Number.isFinite(serverHoldUntil)
       ? serverHoldUntil > nowTs
-      : (!!explicitThirdOutPlay
-          && Number.isFinite(explicitThirdOutTs)
-          && Number(explicitThirdOutPlay?.outs) === 3
-          && (nowTs - explicitThirdOutTs) < THIRD_OUT_HOLD_SECONDS);
+      : !!explicitThirdOutPlay &&
+        Number.isFinite(explicitThirdOutTs) &&
+        Number(explicitThirdOutPlay?.outs) === 3 &&
+        nowTs - explicitThirdOutTs < THIRD_OUT_HOLD_SECONDS;
     // Short grace window: a 3rd out just landed in recent_plays but the
     // coordinator hasn't promoted it to `third_out_play` yet.
-    const recentFallbackThirdOut = (!explicitThirdOutPlay && latestRecentPlay && Number(latestRecentPlay?.outs) === 3 && String(latestRecentPlay?.text || "").trim() && Number.isFinite(Number(latestRecentPlay?.wallclock_ts)) && ((nowTs - Number(latestRecentPlay.wallclock_ts)) < THIRD_OUT_RECENT_WINDOW_SECONDS))
-      ? latestRecentPlay
-      : null;
-    const dueUpDesc = [String(inningContext.period_prefix || "").trim(), String(inningContext.display_period || attrs.competition?.status?.displayPeriod || "").trim()].filter(Boolean).join(" ").trim();
-    const dueUpList = Array.isArray(attrs.due_up) ? attrs.due_up.filter(Boolean) : [];
+    const recentFallbackThirdOut =
+      !explicitThirdOutPlay &&
+      latestRecentPlay &&
+      Number(latestRecentPlay?.outs) === 3 &&
+      String(latestRecentPlay?.text || "").trim() &&
+      Number.isFinite(Number(latestRecentPlay?.wallclock_ts)) &&
+      nowTs - Number(latestRecentPlay.wallclock_ts) <
+        THIRD_OUT_RECENT_WINDOW_SECONDS
+        ? latestRecentPlay
+        : null;
+    const dueUpDesc = [
+      String(inningContext.period_prefix || "").trim(),
+      String(
+        inningContext.display_period ||
+          attrs.competition?.status?.displayPeriod ||
+          "",
+      ).trim(),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const dueUpList = Array.isArray(attrs.due_up)
+      ? attrs.due_up.filter(Boolean)
+      : [];
     const dueUpReady = betweenHalves && dueUpList.length > 0;
-    const holdThirdOut = betweenHalves && (explicitHoldActive || (!dueUpReady && !!recentFallbackThirdOut));
+    const holdThirdOut =
+      betweenHalves &&
+      (explicitHoldActive || (!dueUpReady && !!recentFallbackThirdOut));
     // Schedule a re-render at the exact moment the server-side hold expires so
     // the card flips to Due Up without waiting for the next HA state update.
-    if (holdThirdOut && Number.isFinite(serverHoldUntil) && serverHoldUntil > nowTs) {
+    if (
+      holdThirdOut &&
+      Number.isFinite(serverHoldUntil) &&
+      serverHoldUntil > nowTs
+    ) {
       this._scheduleHoldExpiryRender(serverHoldUntil);
     }
-    const dueUpPanel = (betweenHalves && !holdThirdOut && !inningState.pseudoFinal)
-      ? renderDueUpCards(this, dueUpList, dueUpDesc)
-      : "";
-    const countDotsPanel = (this.config.show_count !== false && stateInfo.pillClass === "live" && !betweenHalves && !holdThirdOut) ? renderCountDotsRow(attrs.situation || {}, attrs.current_pitches || []) : "";
+    const dueUpPanel =
+      betweenHalves && !holdThirdOut && !inningState.pseudoFinal
+        ? renderDueUpCards(this, dueUpList, dueUpDesc)
+        : "";
+    const countDotsPanel =
+      this.config.show_count !== false &&
+      stateInfo.pillClass === "live" &&
+      !betweenHalves &&
+      !holdThirdOut
+        ? renderCountDotsRow(attrs.situation || {}, attrs.current_pitches || [])
+        : "";
     // Special count dots showing 3 outs during the hold period
-    const thirdOutCountDotsPanel = (this.config.show_count !== false && holdThirdOut) ? renderCountDotsRow({ balls: 0, strikes: 0, outs: 3 }, []) : "";
-    const diamondHtml = this.config.show_diamond !== false ? renderBaseDiamond(attrs.situation || {}) : "";
+    const thirdOutCountDotsPanel =
+      this.config.show_count !== false && holdThirdOut
+        ? renderCountDotsRow({ balls: 0, strikes: 0, outs: 3 }, [])
+        : "";
+    const diamondHtml =
+      this.config.show_diamond !== false
+        ? renderBaseDiamond(attrs.situation || {})
+        : "";
     // Clicking a matchup half (anywhere but the player-name link) opens that
     // team's lineup popup: pitcher half -> fielding team, batter half ->
     // batting team. Resolve + bake the side into the markup so the delegated
@@ -2169,11 +2649,14 @@ class MlbLiveGameCard extends HTMLElement {
       if (side !== "away" && side !== "home") return "";
       const t = (attrs.lineups && attrs.lineups[side]) || {};
       const nm = escapeHtml(t.name || t.abbreviation || "team");
-      return ` data-team-popup="${side}" role="button" tabindex="0"` +
-        ` aria-label="Show ${nm} lineup" title="Show ${nm} lineup"`;
+      return (
+        ` data-team-popup="${side}" role="button" tabindex="0"` +
+        ` aria-label="Show ${nm} lineup" title="Show ${nm} lineup"`
+      );
     };
-    const matchupPanel = this.config.show_batter ? `
-            <div class="matchup-block ${(batter || pitcher) ? "" : "muted-block"}">
+    const matchupPanel = this.config.show_batter
+      ? `
+            <div class="matchup-block ${batter || pitcher ? "" : "muted-block"}">
               <div class="matchup-grid enhanced productionish ${this.config.show_diamond !== false ? "with-diamond" : ""}">
                 <div class="matchup-side with-headshot stacked centered-half"${luSideAttrs(luPitcherSide)}>
                   ${renderPlayerHeadshot(this, attrs.current_pitcher?.headshot || "", pitcher || "Pitcher")}
@@ -2193,27 +2676,41 @@ class MlbLiveGameCard extends HTMLElement {
                   </div>
                 </div>
               </div>
-            </div>` : "";
-    const onDeckHtml = this.config.show_on_deck !== false ? renderOnDeckRow(attrs.on_deck || {}) : "";
-    const baseOccupancyHtml = this.config.show_base_occupancy !== false ? renderBaseOccupancyRow(attrs.situation || {}) : "";
-    const liveExtras = stateInfo.pillClass === "live"
-      ? `
+            </div>`
+      : "";
+    const onDeckHtml =
+      this.config.show_on_deck !== false
+        ? renderOnDeckRow(attrs.on_deck || {})
+        : "";
+    const baseOccupancyHtml =
+      this.config.show_base_occupancy !== false
+        ? renderBaseOccupancyRow(attrs.situation || {})
+        : "";
+    const liveExtras =
+      stateInfo.pillClass === "live"
+        ? `
         <div class="live-panel productionish">
-          ${holdThirdOut
-            ? `${thirdOutCountDotsPanel}${matchupPanel}${recentPlaysPanel}`
-            : (dueUpPanel || `${countDotsPanel}${matchupPanel}${onDeckHtml}${baseOccupancyHtml}${recentPlaysPanel}`)}
+          ${
+            holdThirdOut
+              ? `${thirdOutCountDotsPanel}${matchupPanel}${recentPlaysPanel}`
+              : dueUpPanel ||
+                `${countDotsPanel}${matchupPanel}${onDeckHtml}${baseOccupancyHtml}${recentPlaysPanel}`
+          }
         </div>`
-      : "";
-    const delayedExtras = stateInfo.pillClass === "delayed"
-      ? `<div class="state-panel delayed-panel"><span class="mini-state warning">DLY</span><span>Game delayed</span>${stateInfo.statusText ? `<span class="muted">${stateInfo.statusText}</span>` : ""}</div>`
-      : "";
-    const finalExtras = stateInfo.pillClass === "final" && marker === "F"
-      ? `<div class="state-panel final-panel"><span class="mini-state">F</span><span>Final</span><span class="totals-inline">Away H/E ${awayTotals.hits}/${awayTotals.errors} • Home H/E ${homeTotals.hits}/${homeTotals.errors}</span></div>`
-      : "";
+        : "";
+    const delayedExtras =
+      stateInfo.pillClass === "delayed"
+        ? `<div class="state-panel delayed-panel"><span class="mini-state warning">DLY</span><span>Game delayed</span>${stateInfo.statusText ? `<span class="muted">${stateInfo.statusText}</span>` : ""}</div>`
+        : "";
+    const finalExtras =
+      stateInfo.pillClass === "final" && marker === "F"
+        ? `<div class="state-panel final-panel"><span class="mini-state">F</span><span>Final</span><span class="totals-inline">Away H/E ${awayTotals.hits}/${awayTotals.errors} • Home H/E ${homeTotals.hits}/${homeTotals.errors}</span></div>`
+        : "";
     if (stateInfo.pillClass === "next" || stateInfo.pillClass === "final") {
       // Reset expanded state when the displayed game changes (different opponent / date).
       const gameKeyForExpand = String(
-        competition?.id || `${awayTeam?.abbreviation || awayMeta?.abbreviation || "A"}-${homeTeam?.abbreviation || homeMeta?.abbreviation || "H"}-${competition?.date || ""}`
+        competition?.id ||
+          `${awayTeam?.abbreviation || awayMeta?.abbreviation || "A"}-${homeTeam?.abbreviation || homeMeta?.abbreviation || "H"}-${competition?.date || ""}`,
       );
       if (this._upcomingExpandedGameKey !== gameKeyForExpand) {
         this._upcomingExpandedGameKey = gameKeyForExpand;
@@ -2238,7 +2735,20 @@ class MlbLiveGameCard extends HTMLElement {
       ].join("|");
       if (compactFp !== this._lastCompactFp) {
         // Fingerprint changed, need to re-render
-        this.content.innerHTML = this.renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore, attrs, expanded);
+        this.content.innerHTML = this.renderCompactNonLive(
+          stateInfo,
+          competition,
+          awayTeam,
+          awayMeta,
+          awayRecord,
+          awayScore,
+          homeTeam,
+          homeMeta,
+          homeRecord,
+          homeScore,
+          attrs,
+          expanded,
+        );
       }
       // else: fingerprint unchanged, skip DOM update entirely
       return;
@@ -2270,27 +2780,45 @@ class MlbLiveGameCard extends HTMLElement {
     }
   }
 
-
   formatCompactDateTime(dateValue) {
     const d = dateValue ? new Date(dateValue) : null;
-    if (!d || Number.isNaN(d.getTime())) return { date: "", time: "", isToday: false };
+    if (!d || Number.isNaN(d.getTime()))
+      return { date: "", time: "", isToday: false };
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
     const startOfTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const isToday = startOfTarget.getTime() === startOfToday.getTime();
     const dayDiff = Math.round((startOfTarget - startOfToday) / 86400000);
     const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const dateText = (dayDiff > 0 && dayDiff <= 7)
-      ? DAY_ABBR[d.getDay()]
-      : `${d.getMonth() + 1}/${d.getDate()}`;
+    const dateText =
+      dayDiff > 0 && dayDiff <= 7
+        ? DAY_ABBR[d.getDay()]
+        : `${d.getMonth() + 1}/${d.getDate()}`;
     return {
       date: dateText,
       time: d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-      isToday
+      isToday,
     };
   }
 
-  renderCompactNonLive(stateInfo, competition, awayTeam, awayMeta, awayRecord, awayScore, homeTeam, homeMeta, homeRecord, homeScore, attrs = {}, expanded = false) {
+  renderCompactNonLive(
+    stateInfo,
+    competition,
+    awayTeam,
+    awayMeta,
+    awayRecord,
+    awayScore,
+    homeTeam,
+    homeMeta,
+    homeRecord,
+    homeScore,
+    attrs = {},
+    expanded = false,
+  ) {
     // Compute a compact-specific fingerprint to avoid unnecessary DOM updates
     const isUpcoming = stateInfo.pillClass === "next";
     const isFinalCompact = stateInfo.pillClass === "final";
@@ -2313,13 +2841,47 @@ class MlbLiveGameCard extends HTMLElement {
     this._lastCompactFp = compactFp;
 
     const when = this.formatCompactDateTime(competition?.date);
-    const awayLogo = requestCachedLogo(this, awayTeam?.logo || get(awayTeam, ["logos", 0, "href"], "") || awayMeta?.logo || "");
-    const homeLogo = requestCachedLogo(this, homeTeam?.logo || get(homeTeam, ["logos", 0, "href"], "") || homeMeta?.logo || "");
-    const awayName = awayTeam?.name || awayTeam?.displayName || awayTeam?.shortDisplayName || awayMeta?.name || awayMeta?.short_name || awayTeam?.abbreviation || "—";
-    const homeName = homeTeam?.name || homeTeam?.displayName || homeTeam?.shortDisplayName || homeMeta?.name || homeMeta?.short_name || homeTeam?.abbreviation || "—";
+    const awayLogo = requestCachedLogo(
+      this,
+      awayTeam?.logo ||
+        get(awayTeam, ["logos", 0, "href"], "") ||
+        awayMeta?.logo ||
+        "",
+    );
+    const homeLogo = requestCachedLogo(
+      this,
+      homeTeam?.logo ||
+        get(homeTeam, ["logos", 0, "href"], "") ||
+        homeMeta?.logo ||
+        "",
+    );
+    const awayName =
+      awayTeam?.name ||
+      awayTeam?.displayName ||
+      awayTeam?.shortDisplayName ||
+      awayMeta?.name ||
+      awayMeta?.short_name ||
+      awayTeam?.abbreviation ||
+      "—";
+    const homeName =
+      homeTeam?.name ||
+      homeTeam?.displayName ||
+      homeTeam?.shortDisplayName ||
+      homeMeta?.name ||
+      homeMeta?.short_name ||
+      homeTeam?.abbreviation ||
+      "—";
     const isFinal = stateInfo.pillClass === "final";
-    const awayWon = isFinal && awayScore.num != null && homeScore.num != null && awayScore.num > homeScore.num;
-    const homeWon = isFinal && awayScore.num != null && homeScore.num != null && homeScore.num > awayScore.num;
+    const awayWon =
+      isFinal &&
+      awayScore.num != null &&
+      homeScore.num != null &&
+      awayScore.num > homeScore.num;
+    const homeWon =
+      isFinal &&
+      awayScore.num != null &&
+      homeScore.num != null &&
+      homeScore.num > awayScore.num;
     const finalMarker = `<div class="compact-final-marker"><div class="compact-pill compact-pill-final">F</div></div>`;
     const nextRight = when.isToday
       ? `<div class="compact-next-wrap today-only">
@@ -2331,15 +2893,28 @@ class MlbLiveGameCard extends HTMLElement {
         </div>`;
     const rightHtml = isFinal ? finalMarker : nextRight;
     const expandable = isUpcoming || isFinalCompact;
-    const detailsPanel = (expandable && expanded)
-      ? renderUpcomingDetails(this, attrs, awayMeta, homeMeta, awayLogo, homeLogo, { includePitchers: isUpcoming })
-      : "";
+    const detailsPanel =
+      expandable && expanded
+        ? renderUpcomingDetails(
+            this,
+            attrs,
+            awayMeta,
+            homeMeta,
+            awayLogo,
+            homeLogo,
+            { kind: isUpcoming ? "upcoming" : "final" },
+          )
+        : "";
     const chevronHtml = expandable
       ? `<div class="upcoming-chevron" aria-hidden="true">${expanded ? "▴" : "▾"}</div>`
       : "";
     const expandTitle = isUpcoming
-      ? (expanded ? "Hide details" : "Show pitchers & standings")
-      : (expanded ? "Hide standings" : "Show standings");
+      ? expanded
+        ? "Hide details"
+        : "Show pitchers & standings"
+      : expanded
+        ? "Hide game summary"
+        : "Show game summary";
     const wrapperClasses = ["wrapper", "compact-mode"];
     if (expandable) wrapperClasses.push("upcoming-expandable");
     if (expanded) wrapperClasses.push("expanded");
@@ -2387,20 +2962,42 @@ class MlbLiveGameCard extends HTMLElement {
   }
 
   renderInningMarker(stateInfo, inningState) {
-    if (stateInfo.pillClass === "delayed") return `<div class="marker-text">DLY</div>`;
-    if (stateInfo.pillClass === "final" || inningState.pseudoFinal) return `<div class="marker-text">F</div>`;
+    if (stateInfo.pillClass === "delayed")
+      return `<div class="marker-text">DLY</div>`;
+    if (stateInfo.pillClass === "final" || inningState.pseudoFinal)
+      return `<div class="marker-text">F</div>`;
     if (stateInfo.pillClass !== "live") return "";
     const period = inningState.period || "";
-    if (inningState.isTop) return `<div class="inning-stack up"><div class="arrow">▲</div><div class="num">${period}</div></div>`;
-    if (inningState.isBottom) return `<div class="inning-stack down"><div class="num">${period}</div><div class="arrow">▼</div></div>`;
-    if (inningState.isMid) return `<div class="inning-stack mid"><div class="num">${period}</div></div>`;
+    if (inningState.isTop)
+      return `<div class="inning-stack up"><div class="arrow">▲</div><div class="num">${period}</div></div>`;
+    if (inningState.isBottom)
+      return `<div class="inning-stack down"><div class="num">${period}</div><div class="arrow">▼</div></div>`;
+    if (inningState.isMid)
+      return `<div class="inning-stack mid"><div class="num">${period}</div></div>`;
     return `<div class="marker-text">LIVE</div>`;
   }
 
-  teamRow(team, teamMeta, record, score, winner = false, isHome = false, competitor = {}, totals = { hits: "—", errors: "—" }) {
-    const logoRaw = team?.logo || get(team, ["logos", 0, "href"], "") || teamMeta?.logo || "";
+  teamRow(
+    team,
+    teamMeta,
+    record,
+    score,
+    winner = false,
+    isHome = false,
+    competitor = {},
+    totals = { hits: "—", errors: "—" },
+  ) {
+    const logoRaw =
+      team?.logo || get(team, ["logos", 0, "href"], "") || teamMeta?.logo || "";
     const logo = requestCachedLogo(this, logoRaw);
-    const displayName = team?.name || team?.displayName || team?.shortDisplayName || teamMeta?.name || teamMeta?.short_name || team?.abbreviation || "—";
+    const displayName =
+      team?.name ||
+      team?.displayName ||
+      team?.shortDisplayName ||
+      teamMeta?.name ||
+      teamMeta?.short_name ||
+      team?.abbreviation ||
+      "—";
     return `
       <div class="team-row ${winner ? "winner" : ""} ${isHome ? "home" : "away"}">
         <div class="team-left">
@@ -2579,7 +3176,7 @@ color: var(--primary-text-color);
           font-size: 1.05em;
           font-weight: 500;
         }
-        
+
 .scoreboard-main {
           display:grid;
           grid-template-columns:minmax(0,1fr) auto;
@@ -3323,6 +3920,52 @@ white-space: nowrap;
           font-size: 0.8em;
           opacity: 0.6;
           font-style: italic;
+        }
+        .panel-heading {
+          font-size: 0.78em;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          opacity: 0.7;
+          margin-bottom: 4px;
+        }
+        .scoring-plays-panel {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .scoring-play-row {
+          display: grid;
+          grid-template-columns: 28px 38px 1fr max-content;
+          gap: 6px;
+          align-items: baseline;
+          padding: 2px 4px;
+          font-size: 0.86em;
+          line-height: 1.3;
+        }
+        .scoring-play-period {
+          color: var(--secondary-text-color);
+          font-variant-numeric: tabular-nums;
+          font-weight: 600;
+        }
+        .scoring-play-team {
+          color: var(--secondary-text-color);
+          font-weight: 600;
+          letter-spacing: 0.02em;
+        }
+        .scoring-play-text {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .scoring-play-score {
+          font-variant-numeric: tabular-nums;
+          color: var(--secondary-text-color);
+        }
+        .leader-empty {
+          color: var(--secondary-text-color);
+          opacity: 0.6;
         }
         .upcoming-standings {
           display: flex;

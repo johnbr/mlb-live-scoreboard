@@ -43,22 +43,24 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
         data = self.coordinator.data
         # Strip plays to only the fields actually needed by the JS card
         recent_plays = []
-        for play in (data.recent_plays or []):
-            recent_plays.append({
-                "id": play.get("id"),
-                "text": play.get("text"),
-                "outs": play.get("outs"),
-                "away_score": play.get("away_score"),
-                "home_score": play.get("home_score"),
-                "wallclock_ts": play.get("wallclock_ts"),
-                # Needed by the card to flag scoring plays in the play-result
-                # indicator column even when the score didn't change relative
-                # to the immediately-prior play in the (newest-first) list.
-                "scoring_play": play.get("scoring_play"),
-                "score_value": play.get("score_value"),
-                "play_type": play.get("play_type"),
-                "alternative_type": play.get("alternative_type"),
-            })
+        for play in data.recent_plays or []:
+            recent_plays.append(
+                {
+                    "id": play.get("id"),
+                    "text": play.get("text"),
+                    "outs": play.get("outs"),
+                    "away_score": play.get("away_score"),
+                    "home_score": play.get("home_score"),
+                    "wallclock_ts": play.get("wallclock_ts"),
+                    # Needed by the card to flag scoring plays in the play-result
+                    # indicator column even when the score didn't change relative
+                    # to the immediately-prior play in the (newest-first) list.
+                    "scoring_play": play.get("scoring_play"),
+                    "score_value": play.get("score_value"),
+                    "play_type": play.get("play_type"),
+                    "alternative_type": play.get("alternative_type"),
+                }
+            )
         return {
             "team_abbr": data.team_abbr,
             "team_id": data.team_id,
@@ -74,6 +76,7 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
             "competition": data.selected_competition or {},
             "inning_context": data.inning_context,
             "recent_plays": recent_plays,
+            "scoring_plays": data.scoring_plays or [],
             "current_pitches": data.current_pitches or [],
             "away_team": data.away_team,
             "home_team": data.home_team,

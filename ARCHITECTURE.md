@@ -41,6 +41,7 @@ the dashboard.
 ## Components
 
 ### `__init__.py`
+
 - Registers a static path (`/mlb_live_scoreboard/...`) so HA serves the JS card
   bundled with the integration, and registers it as a Lovelace resource.
 - Declares `CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)` (this is
@@ -49,10 +50,12 @@ the dashboard.
   `sensor` platform.
 
 ### `const.py`
+
 All static configuration: domain, scan interval, ESPN status names, normalize
 limits, cache TTLs, and the `MLB_TEAM_MAP` (abbreviation → ESPN team id).
 
 ### `coordinator.py`
+
 The bulk of the integration. Responsibilities:
 
 1. **Schedule fetch** — pulls the team's schedule, picks the most relevant
@@ -71,6 +74,7 @@ The bulk of the integration. Responsibilities:
    the `MlbLiveScoreboardData` dataclass consumed by the sensor.
 
 Key patterns:
+
 - `_async_update_data` is an orchestrator. It calls helpers
   (`_resolve_display_comp`, `_resolve_competitor_ids`, `_fetch_team_payload`,
   `_resolve_batter_pitcher_ids`, `_resolve_status_info`) and produces the
@@ -80,6 +84,7 @@ Key patterns:
 - All HTTP calls use the shared aiohttp `ClientSession` (`async_get_clientsession`).
 
 ### `sensor.py`
+
 A single `MlbLiveScoreboardSensor` per config entry.
 
 - `unique_id`: `<entry_id>_scoreboard`
@@ -92,6 +97,7 @@ A single `MlbLiveScoreboardSensor` per config entry.
 to keep the HA state object small.
 
 ### `mlb-live-game-card.js`
+
 A plain ES module custom element (not Lit). It:
 
 - Subscribes to `hass.states[config.entity]` and reads
@@ -102,6 +108,13 @@ A plain ES module custom element (not Lit). It:
   (encapsulated in `this._thirdOutHold`).
 - Renders one of three layouts based on `stateInfo.pillClass`:
   `live`, `final`, or `next` (compact pre-game layout).
+- The compact `next` and `final` layouts share one inline expand panel
+  (`renderUpcomingDetails`) toggled by clicking the card. For `next` it
+  shows probable pitchers + division standings; for `final` it shows
+  scoring plays (from the `scoring_plays` attribute) and game leaders
+  (from the existing `leaders` attribute) above the same standings block.
+  Leader names route through the player-link path, so they open the
+  career popup like every other yellow name.
 
 ## Player career popup (on-demand path)
 
@@ -137,7 +150,7 @@ arbitrary athlete id:
   region. ESPN's player page stays reachable via the popup footer link, or
   directly when `player_link_target: espn`.
 - Two-way players: ESPN's `/stats` returns categories for the player's
-  *listed* position only, so a single side renders (documented limitation).
+  _listed_ position only, so a single side renders (documented limitation).
 
 ## Team lineup popup (Game = push, Season = on-demand)
 
@@ -183,32 +196,33 @@ toggle. The two views use deliberately opposite data routes:
 
 Top-level `extra_state_attributes` exposed on the sensor:
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `team_abbr` | str | e.g. `"LAD"` |
-| `team_id` | int | ESPN team id |
-| `team_name` | str | full team name |
-| `mode` | str | `"live"` / `"next"` / `"final"` / `"idle"` |
-| `is_live` | bool | game state is in-progress |
-| `is_delayed` | bool | ESPN status `STATUS_DELAYED` |
-| `status_text` | str | human-readable status |
-| `display_event_id` | str | event id the card should render |
-| `live_event_id` | str \| None | active game id, if any |
-| `previous_event_id` | str \| None | last completed game id |
-| `next_event_id` | str \| None | upcoming game id |
-| `competition` | dict | ESPN competition object (subset, see below) |
-| `inning_context` | dict | period prefix, half, between-halves flag |
-| `recent_plays` | list[dict] | trimmed to: `id`, `text`, `outs`, `away_score`, `home_score`, `wallclock_ts` |
-| `current_pitches` | list[dict] | per-pitch results for current AB |
-| `away_team` / `home_team` | dict | normalized team metadata (logo, record, name) |
-| `current_batter` / `current_pitcher` | dict | `display_name`, `short_name`, `headshot` |
-| `batter_stats` | dict | `avg`, `hits_ab`, `hr`, `rbi`, `game_outcomes_display`, … |
-| `pitcher_stats` | dict | `era`, `ip`, `pitches_strikes`, `strikeouts`, … |
-| `situation` | dict | `balls`, `strikes`, `outs`, `onFirst/Second/Third` |
-| `due_up` | list[dict] | up to `DUE_UP_LIMIT` next batters |
-| `third_out_play` | dict \| None | the play that produced the 3rd out (when ESPN flags it) |
-| `on_deck` | dict | next batter info |
-| `lineups` | dict | `{away, home}`, each: team meta + `is_batting`, `hitters[]` (Game box-score line), `pitchers[]`; drives the team lineup popup's Game view |
+| Attribute                            | Type         | Notes                                                                                                                                                                                                                                           |
+| ------------------------------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `team_abbr`                          | str          | e.g. `"LAD"`                                                                                                                                                                                                                                    |
+| `team_id`                            | int          | ESPN team id                                                                                                                                                                                                                                    |
+| `team_name`                          | str          | full team name                                                                                                                                                                                                                                  |
+| `mode`                               | str          | `"live"` / `"next"` / `"final"` / `"idle"`                                                                                                                                                                                                      |
+| `is_live`                            | bool         | game state is in-progress                                                                                                                                                                                                                       |
+| `is_delayed`                         | bool         | ESPN status `STATUS_DELAYED`                                                                                                                                                                                                                    |
+| `status_text`                        | str          | human-readable status                                                                                                                                                                                                                           |
+| `display_event_id`                   | str          | event id the card should render                                                                                                                                                                                                                 |
+| `live_event_id`                      | str \| None  | active game id, if any                                                                                                                                                                                                                          |
+| `previous_event_id`                  | str \| None  | last completed game id                                                                                                                                                                                                                          |
+| `next_event_id`                      | str \| None  | upcoming game id                                                                                                                                                                                                                                |
+| `competition`                        | dict         | ESPN competition object (subset, see below)                                                                                                                                                                                                     |
+| `inning_context`                     | dict         | period prefix, half, between-halves flag                                                                                                                                                                                                        |
+| `recent_plays`                       | list[dict]   | trimmed to: `id`, `text`, `outs`, `away_score`, `home_score`, `wallclock_ts`                                                                                                                                                                    |
+| `scoring_plays`                      | list[dict]   | every scoring play of the game, chronological, with `period_type`/`period_number`/`team_id`/`score_value` (whole-game scope — distinct from the half-inning-bounded `recent_plays`). Drives the final-game expand panel's "Scoring Plays" block |
+| `current_pitches`                    | list[dict]   | per-pitch results for current AB                                                                                                                                                                                                                |
+| `away_team` / `home_team`            | dict         | normalized team metadata (logo, record, name)                                                                                                                                                                                                   |
+| `current_batter` / `current_pitcher` | dict         | `display_name`, `short_name`, `headshot`                                                                                                                                                                                                        |
+| `batter_stats`                       | dict         | `avg`, `hits_ab`, `hr`, `rbi`, `game_outcomes_display`, …                                                                                                                                                                                       |
+| `pitcher_stats`                      | dict         | `era`, `ip`, `pitches_strikes`, `strikeouts`, …                                                                                                                                                                                                 |
+| `situation`                          | dict         | `balls`, `strikes`, `outs`, `onFirst/Second/Third`                                                                                                                                                                                              |
+| `due_up`                             | list[dict]   | up to `DUE_UP_LIMIT` next batters                                                                                                                                                                                                               |
+| `third_out_play`                     | dict \| None | the play that produced the 3rd out (when ESPN flags it)                                                                                                                                                                                         |
+| `on_deck`                            | dict         | next batter info                                                                                                                                                                                                                                |
+| `lineups`                            | dict         | `{away, home}`, each: team meta + `is_batting`, `hitters[]` (Game box-score line), `pitchers[]`; drives the team lineup popup's Game view                                                                                                       |
 
 `competition` contains the fields the card reads:
 `competitors[]` (each with `team`, `score`, `homeAway`, `linescores`, totals),
@@ -230,35 +244,35 @@ field for `refresh_rate`. The picker entry sets `preview: true` and a
 in a single module-level `CARD_DEFAULTS` constant shared by `setConfig`
 and the editor so unset toggles still reflect their true on/off state.
 
-| Option | Default | Purpose |
-|---|---|---|
-| `entity` | (required) | the `sensor.mlb_live_scoreboard_*` entity |
-| `title` | `""` | optional display title |
-| `show_batter` | `true` | show the batter / pitcher matchup panel |
-| `show_records` | `true` | show team `(W-L)` next to names |
-| `show_linescore` | `false` | show inning-by-inning grid below the score |
-| `show_pitches` | `true` | show per-pitch sequence in the play feed |
-| `show_play_results` | `true` | show recent play results |
-| `show_on_deck` | `true` | show on-deck batter line |
-| `show_base_occupancy` | `true` | show occupied-bases summary row |
-| `show_diamond` | `true` | show the bases diamond graphic |
-| `show_count` | `true` | show ball/strike/out count dots |
-| `show_win_probability` | `true` | show the live win-probability bar |
-| `player_link_target` | `popup` | clicking a player name: `popup` (in-card career popup) or `espn` (open ESPN's player page) |
-| `show_lineup_popup` | `true` | allow the matchup sides to open the team lineup popup (`false` = inert) |
-| `lineup_default_view` | `auto` | lineup popup default view: `auto` (Game while live, else Season) / `game` / `season` |
-| `refresh_rate` | `0` | seconds; `0` disables (rely on HA state updates) |
+| Option                 | Default    | Purpose                                                                                    |
+| ---------------------- | ---------- | ------------------------------------------------------------------------------------------ |
+| `entity`               | (required) | the `sensor.mlb_live_scoreboard_*` entity                                                  |
+| `title`                | `""`       | optional display title                                                                     |
+| `show_batter`          | `true`     | show the batter / pitcher matchup panel                                                    |
+| `show_records`         | `true`     | show team `(W-L)` next to names                                                            |
+| `show_linescore`       | `false`    | show inning-by-inning grid below the score                                                 |
+| `show_pitches`         | `true`     | show per-pitch sequence in the play feed                                                   |
+| `show_play_results`    | `true`     | show recent play results                                                                   |
+| `show_on_deck`         | `true`     | show on-deck batter line                                                                   |
+| `show_base_occupancy`  | `true`     | show occupied-bases summary row                                                            |
+| `show_diamond`         | `true`     | show the bases diamond graphic                                                             |
+| `show_count`           | `true`     | show ball/strike/out count dots                                                            |
+| `show_win_probability` | `true`     | show the live win-probability bar                                                          |
+| `player_link_target`   | `popup`    | clicking a player name: `popup` (in-card career popup) or `espn` (open ESPN's player page) |
+| `show_lineup_popup`    | `true`     | allow the matchup sides to open the team lineup popup (`false` = inert)                    |
+| `lineup_default_view`  | `auto`     | lineup popup default view: `auto` (Game while live, else Season) / `game` / `season`       |
+| `refresh_rate`         | `0`        | seconds; `0` disables (rely on HA state updates)                                           |
 
 ## ESPN endpoints used
 
-| Endpoint | Purpose | Cache |
-|---|---|---|
-| `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/<abbr>/schedule` | team schedule | per refresh + 5 min stale fallback |
-| `site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=<id>` | live game state | per refresh |
-| `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/<id>` | team logo / record | 1 hour (`TEAM_METADATA_TTL_SECONDS`) |
+| Endpoint                                                                       | Purpose                                  | Cache                                                                                  |
+| ------------------------------------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/<abbr>/schedule`     | team schedule                            | per refresh + 5 min stale fallback                                                     |
+| `site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=<id>`        | live game state                          | per refresh                                                                            |
+| `site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/<id>`                | team logo / record                       | 1 hour (`TEAM_METADATA_TTL_SECONDS`)                                                   |
 | `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>/stats` | batter season stats / popup career table | 60 s batter (`BATTER_SEASON_STATS_TTL_SECONDS`); 6 h popup (`PLAYER_CARD_TTL_SECONDS`) |
-| `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>` | player bio (popup header) | 6 h (`PLAYER_CARD_TTL_SECONDS`) + 24 h stale fallback |
-| `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>/stats` | lineup popup Season view (batch, lazy) | 6 h (`TEAM_SEASON_STATS_TTL_SECONDS`) + 24 h stale fallback |
+| `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>`       | player bio (popup header)                | 6 h (`PLAYER_CARD_TTL_SECONDS`) + 24 h stale fallback                                  |
+| `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>/stats` | lineup popup Season view (batch, lazy)   | 6 h (`TEAM_SEASON_STATS_TTL_SECONDS`) + 24 h stale fallback                            |
 
 These are unauthenticated public endpoints. Calls share a single aiohttp
 session and are awaited concurrently where independent.

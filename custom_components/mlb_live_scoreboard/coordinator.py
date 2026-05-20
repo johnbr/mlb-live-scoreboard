@@ -63,6 +63,7 @@ from .types import (
     PlayerCard,
     ProbablePitchers,
     RecentPlay,
+    ScoringPlay,
     Situation,
     Standings,
     TeamMetadata,
@@ -75,10 +76,25 @@ _LOGGER = logging.getLogger(__name__)
 # Play-text keywords that signal the end of an at-bat. Used by
 # `_normalize_current_pitches` to know when to stop scanning back through plays.
 _AT_BAT_END_KEYWORDS: tuple[str, ...] = (
-    "singled", "doubled", "tripled", "homered", "walked", "struck out", "flied out",
-    "grounded out", "lined out", "popped out", "reached on", "hit by pitch",
-    "fouled out", "sacrifice", "sacrificed", "intentionally walked", "out at",
-    "reached first", "fielder's choice",
+    "singled",
+    "doubled",
+    "tripled",
+    "homered",
+    "walked",
+    "struck out",
+    "flied out",
+    "grounded out",
+    "lined out",
+    "popped out",
+    "reached on",
+    "hit by pitch",
+    "fouled out",
+    "sacrifice",
+    "sacrificed",
+    "intentionally walked",
+    "out at",
+    "reached first",
+    "fielder's choice",
 )
 
 # Ordered list of (play-text keyword, abbreviation) used when classifying a
@@ -154,9 +170,7 @@ def _competitor_for_side(comp: dict[str, Any], side: str) -> dict[str, Any]:
     return {}
 
 
-def _resolve_my_side(
-    comp: dict[str, Any], team_id: int
-) -> tuple[str | None, str | None]:
+def _resolve_my_side(comp: dict[str, Any], team_id: int) -> tuple[str | None, str | None]:
     """Identify which side (``home``/``away``) the configured team is on by
     matching team_id. Returns ``(my_side, opponent_side)`` or ``(None, None)``
     when the configured team is not in this competition.
@@ -172,9 +186,7 @@ def _resolve_my_side(
     return None, None
 
 
-def _scores_for_sides(
-    comp: dict[str, Any], my_side: str, opp_side: str
-) -> tuple[int, int]:
+def _scores_for_sides(comp: dict[str, Any], my_side: str, opp_side: str) -> tuple[int, int]:
     """Return ``(my_score, opp_score)`` for the named sides, parsed as ints."""
     return (
         _safe_int(_competitor_for_side(comp, my_side).get("score")),
@@ -221,6 +233,7 @@ class MlbLiveScoreboardData:
     selected_competition: Competition | None
     inning_context: InningContext
     recent_plays: list[RecentPlay]
+    scoring_plays: list[ScoringPlay]
     current_pitches: list[str]
     away_team: TeamMetadata
     home_team: TeamMetadata
@@ -318,7 +331,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             ts = _parse_iso_ts(ev.get("date"))
 
             comp = ((ev.get("competitions") or [{}])[0]) if ev.get("competitions") else {}
-            status = ((comp.get("status") or {}).get("type") or (ev.get("status") or {}).get("type") or {})
+            status = (comp.get("status") or {}).get("type") or (ev.get("status") or {}).get("type") or {}
             state = str(status.get("state", "")).lower()
             name = str(status.get("name", "")).upper()
 
@@ -341,7 +354,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         display_event = prev or next_ev
         if prev is not None and next_ev is not None:
             comp = ((prev.get("competitions") or [{}])[0]) if prev.get("competitions") else {}
-            prev_status = ((comp.get("status") or {}).get("type") or (prev.get("status") or {}).get("type") or {})
+            prev_status = (comp.get("status") or {}).get("type") or (prev.get("status") or {}).get("type") or {}
             prev_state = str(prev_status.get("state", "")).lower()
             prev_complete = prev_state == "post" or prev_status.get("completed") is True
 
@@ -357,7 +370,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             display_event,
         )
 
-
     @staticmethod
     def _compact_competition(display_comp: dict[str, Any] | None) -> dict[str, Any] | None:
         if not display_comp:
@@ -370,30 +382,35 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             logos = team.get("logos") or []
             compact_lines = []
             for line in (competitor.get("linescores") or [])[:MAX_LINESCORES]:
-                compact_lines.append({
-                    "value": line.get("value"),
-                    "displayValue": line.get("displayValue"),
-                    "hits": line.get("hits"),
-                    "errors": line.get("errors"),
-                })
-            compact_competitors.append({
-                "homeAway": competitor.get("homeAway"),
-                "score": competitor.get("score"),
-                "hits": competitor.get("hits"),
-                "errors": competitor.get("errors"),
-                "recordSummary": competitor.get("recordSummary"),
-                "records": competitor.get("records") or [],
-                "probables": competitor.get("probables") or [],
-                "linescores": compact_lines,
-                "team": {
-                    "id": team.get("id"),
-                    "abbreviation": team.get("abbreviation"),
-                    "name": team.get("name") or team.get("displayName"),
-                    "displayName": team.get("displayName") or team.get("name"),
-                    "shortDisplayName": team.get("shortDisplayName") or team.get("abbreviation"),
-                    "logo": team.get("logo") or (logos[0].get("href") if logos and isinstance(logos[0], dict) else ""),
-                },
-            })
+                compact_lines.append(
+                    {
+                        "value": line.get("value"),
+                        "displayValue": line.get("displayValue"),
+                        "hits": line.get("hits"),
+                        "errors": line.get("errors"),
+                    }
+                )
+            compact_competitors.append(
+                {
+                    "homeAway": competitor.get("homeAway"),
+                    "score": competitor.get("score"),
+                    "hits": competitor.get("hits"),
+                    "errors": competitor.get("errors"),
+                    "recordSummary": competitor.get("recordSummary"),
+                    "records": competitor.get("records") or [],
+                    "probables": competitor.get("probables") or [],
+                    "linescores": compact_lines,
+                    "team": {
+                        "id": team.get("id"),
+                        "abbreviation": team.get("abbreviation"),
+                        "name": team.get("name") or team.get("displayName"),
+                        "displayName": team.get("displayName") or team.get("name"),
+                        "shortDisplayName": team.get("shortDisplayName") or team.get("abbreviation"),
+                        "logo": team.get("logo")
+                        or (logos[0].get("href") if logos and isinstance(logos[0], dict) else ""),
+                    },
+                }
+            )
         return {
             "id": display_comp.get("id"),
             "date": display_comp.get("date"),
@@ -431,7 +448,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             "is_between_halves": prefix.lower().startswith(("mid", "end")),
             "has_due_up": bool(due_up),
         }
-
 
     @staticmethod
     def _normalize_current_pitches(summary: dict[str, Any], inning_context: dict[str, Any]) -> list[str]:
@@ -519,24 +535,73 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 continue
             if target_half and play_half != target_half:
                 continue
-            if play_type not in {"play result", "play-result", "end batter/pitcher", "end batter pitcher", "pitching change", "lineup change"}:
+            if play_type not in {
+                "play result",
+                "play-result",
+                "end batter/pitcher",
+                "end batter pitcher",
+                "pitching change",
+                "lineup change",
+            }:
                 continue
             outs = play.get("outs") or ((play.get("result") or {}).get("outs"))
             away_score = play.get("awayScore")
             home_score = play.get("homeScore")
             wallclock_ts = _parse_iso_ts(play.get("wallclock"))
-            results.append({
-                "id": str(play.get("id") or ""),
-                "text": txt,
-                "outs": int(outs) if outs not in (None, "") else None,
-                "away_score": away_score,
-                "home_score": home_score,
-                "wallclock_ts": wallclock_ts,
-                "scoring_play": play.get("scoringPlay") is True,
-                "score_value": int(play.get("scoreValue") or 0),
-                "play_type": play_type,
-                "alternative_type": str((play.get("alternativeType") or {}).get("type") or (play.get("alternativeType") or {}).get("text") or "").lower(),
-            })
+            results.append(
+                {
+                    "id": str(play.get("id") or ""),
+                    "text": txt,
+                    "outs": int(outs) if outs not in (None, "") else None,
+                    "away_score": away_score,
+                    "home_score": home_score,
+                    "wallclock_ts": wallclock_ts,
+                    "scoring_play": play.get("scoringPlay") is True,
+                    "score_value": int(play.get("scoreValue") or 0),
+                    "play_type": play_type,
+                    "alternative_type": str(
+                        (play.get("alternativeType") or {}).get("type")
+                        or (play.get("alternativeType") or {}).get("text")
+                        or ""
+                    ).lower(),
+                }
+            )
+        return results
+
+    @staticmethod
+    def _normalize_scoring_plays(summary: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return every scoring play of the game in chronological order.
+
+        Distinct from :meth:`_normalize_recent_plays`, which is bounded to the
+        *current* half-inning. ESPN exposes ``summary.scoringPlays`` as a
+        purpose-built top-level array; we fall back to scanning
+        ``summary.plays`` for ``scoringPlay is True`` when ESPN omits it
+        (occasionally happens early in a game).
+        """
+        scoring = summary.get("scoringPlays")
+        if not isinstance(scoring, list) or not scoring:
+            scoring = [p for p in (summary.get("plays") or []) if isinstance(p, dict) and p.get("scoringPlay") is True]
+        results: list[dict[str, Any]] = []
+        for play in scoring:
+            if not isinstance(play, dict):
+                continue
+            txt = str(play.get("text") or "").strip()
+            if not txt:
+                continue
+            period = play.get("period") or {}
+            team = play.get("team") or {}
+            results.append(
+                {
+                    "id": str(play.get("id") or ""),
+                    "text": txt,
+                    "period_type": str(period.get("type") or "").strip(),
+                    "period_number": int(period.get("number") or 0),
+                    "away_score": play.get("awayScore"),
+                    "home_score": play.get("homeScore"),
+                    "score_value": int(play.get("scoreValue") or 0),
+                    "team_id": str(team.get("id") or ""),
+                }
+            )
         return results
 
     @staticmethod
@@ -550,9 +615,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return {}
 
     @staticmethod
-    def _compute_third_out_hold_until(
-        summary: dict[str, Any], inning_context: dict[str, Any]
-    ) -> float | None:
+    def _compute_third_out_hold_until(summary: dict[str, Any], inning_context: dict[str, Any]) -> float | None:
         """Return the wallclock-anchored deadline for the third-out hold UI.
 
         Anchoring the deadline to the play's wallclock (rather than first
@@ -564,7 +627,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if not play:
             return None
         wallclock_ts = play.get("wallclock_ts")
-        if not isinstance(wallclock_ts, (int, float)):
+        if not isinstance(wallclock_ts, int | float):
             return None
         return float(wallclock_ts) + float(THIRD_OUT_HOLD_SECONDS)
 
@@ -695,9 +758,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             for division in divisions:
                 if not isinstance(division, dict):
                     continue
-                division_name = str(
-                    division.get("name") or division.get("abbreviation") or ""
-                )
+                division_name = str(division.get("name") or division.get("abbreviation") or "")
                 if not division_name:
                     continue
                 teams = division.get("teams")
@@ -760,8 +821,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         # Filter to division peers using the index.
         division_entries = [
-            e for e in league_entries
-            if division_index.get(str((e.get("team") or {}).get("id") or "")) == my_division
+            e for e in league_entries if division_index.get(str((e.get("team") or {}).get("id") or "")) == my_division
         ]
 
         def _stat_value(entry: dict[str, Any], names: set[str], abbrs: set[str]) -> str:
@@ -796,22 +856,21 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             losses = _stat_value(entry, {"losses"}, {"l"})
             # Prefer divisionGamesBehind (DGB) since we're filtered to a
             # single division; fall back to gamesBehind only if DGB is absent.
-            games_back = _stat_value(
-                entry, {"divisiongamesbehind"}, {"dgb"}
-            ) or _stat_value(entry, {"gamesbehind"}, {"gb"})
-            normalized.append({
-                "team_id": str(team.get("id") or ""),
-                "team_name": str(team.get("displayName") or team.get("name") or ""),
-                "team_short_name": str(
-                    team.get("shortDisplayName")
-                    or team.get("name")
-                    or team.get("abbreviation")
-                    or ""
-                ),
-                "wins": wins,
-                "losses": losses,
-                "games_back": games_back,
-            })
+            games_back = _stat_value(entry, {"divisiongamesbehind"}, {"dgb"}) or _stat_value(
+                entry, {"gamesbehind"}, {"gb"}
+            )
+            normalized.append(
+                {
+                    "team_id": str(team.get("id") or ""),
+                    "team_name": str(team.get("displayName") or team.get("name") or ""),
+                    "team_short_name": str(
+                        team.get("shortDisplayName") or team.get("name") or team.get("abbreviation") or ""
+                    ),
+                    "wins": wins,
+                    "losses": losses,
+                    "games_back": games_back,
+                }
+            )
         return {"division_name": my_division, "entries": normalized}
 
     @staticmethod
@@ -829,12 +888,14 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     continue
                 leader = leaders[0] or {}
                 athlete = leader.get("athlete") or {}
-                compact.append({
-                    "category": str(category.get("displayName") or category.get("name") or ""),
-                    "value": str(leader.get("displayValue") or leader.get("value") or ""),
-                    "name": athlete.get("shortName") or athlete.get("displayName") or "",
-                    "id": str(athlete.get("id") or ""),
-                })
+                compact.append(
+                    {
+                        "category": str(category.get("displayName") or category.get("name") or ""),
+                        "value": str(leader.get("displayValue") or leader.get("value") or ""),
+                        "name": athlete.get("shortName") or athlete.get("displayName") or "",
+                        "id": str(athlete.get("id") or ""),
+                    }
+                )
                 if len(compact) >= LEADER_LIMIT:
                     break
             result[side] = compact
@@ -1051,7 +1112,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return ", ".join(parts)
 
     @classmethod
-    def _normalize_batter_stats(cls, summary: dict[str, Any], batter_id: str, season_stats: dict[str, Any] | None = None, is_live: bool = False) -> dict[str, Any]:
+    def _normalize_batter_stats(
+        cls, summary: dict[str, Any], batter_id: str, season_stats: dict[str, Any] | None = None, is_live: bool = False
+    ) -> dict[str, Any]:
         entry, keys = cls._find_boxscore_athlete(summary, batter_id, preferred_keys=["avg", "atBats"])
         avg = cls._stat_from_entry(entry, keys, "avg", "battingAverage")
         ab = cls._stat_from_entry(entry, keys, "ab", "atBats")
@@ -1124,9 +1187,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                         athlete = athlete_entry.get("athlete") or {}
                         if str(athlete.get("id") or "") != pitcher_id:
                             continue
-                        innings_pitched = innings_pitched or cls._stat_from_entry(athlete_entry, block_keys, "ip", "inningsPitched", "IP")
+                        innings_pitched = innings_pitched or cls._stat_from_entry(
+                            athlete_entry, block_keys, "ip", "inningsPitched", "IP"
+                        )
                         era = era or cls._stat_from_entry(athlete_entry, block_keys, "era", "earnedRunAverage", "ERA")
-                        strikeouts = strikeouts or cls._stat_from_entry(athlete_entry, block_keys, "so", "strikeouts", "SO")
+                        strikeouts = strikeouts or cls._stat_from_entry(
+                            athlete_entry, block_keys, "so", "strikeouts", "SO"
+                        )
                         pitches = pitches or cls._stat_from_entry(athlete_entry, block_keys, "pitches")
                         strikes = strikes or cls._stat_from_entry(athlete_entry, block_keys, "strikes")
 
@@ -1137,7 +1204,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             "pitches_strikes": f"{pitches}-{strikes}" if pitches and strikes else (pitches or ""),
             "strikeouts": strikeouts,
         }
-
 
     @classmethod
     def _normalize_due_up(cls, summary: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1152,14 +1218,19 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             avg = cls._stat_from_entry(entry, keys, "avg", "battingAverage")
             ab = cls._stat_from_entry(entry, keys, "ab", "atBats")
             h = cls._stat_from_entry(entry, keys, "h", "hits")
-            result.append({
-                "id": player_id,
-                "display_name": item.get("displayName") or athlete.get("displayName") or athlete.get("shortName") or "",
-                "short_name": item.get("shortName") or athlete.get("shortName") or athlete.get("displayName") or "",
-                "headshot": ((athlete.get("headshot") or {}).get("href") or ""),
-                "avg": avg,
-                "hits_ab": f"{h}-{ab}" if h and ab else "",
-            })
+            result.append(
+                {
+                    "id": player_id,
+                    "display_name": item.get("displayName")
+                    or athlete.get("displayName")
+                    or athlete.get("shortName")
+                    or "",
+                    "short_name": item.get("shortName") or athlete.get("shortName") or athlete.get("displayName") or "",
+                    "headshot": ((athlete.get("headshot") or {}).get("href") or ""),
+                    "avg": avg,
+                    "hits_ab": f"{h}-{ab}" if h and ab else "",
+                }
+            )
         return result
 
     async def _get_public_batter_stats(self, athlete_id: str) -> dict[str, Any]:
@@ -1203,10 +1274,12 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             if not row:
                 continue
             stats = row.get("stats") or []
+
             def get_idx(idx: int, _stats: list = stats) -> str:
                 if 0 <= idx < len(_stats) and _stats[idx] not in (None, ""):
                     return str(_stats[idx])
                 return ""
+
             return {
                 "hr": get_idx(hr_idx),
                 "rbi": get_idx(rbi_idx),
@@ -1230,9 +1303,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         the current season for that player yet.
         """
         categories = {
-            str(c.get("name") or ""): c
-            for c in (stats_payload.get("categories") or [])
-            if isinstance(c, dict)
+            str(c.get("name") or ""): c for c in (stats_payload.get("categories") or []) if isinstance(c, dict)
         }
         primary = next((n for n in cls._PRIMARY_STAT_CATEGORIES if n in categories), "")
         if not primary:
@@ -1328,16 +1399,16 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 return cached[1]
             _LOGGER.debug(
                 "Unable to fetch player card for %s: bio=%s stats=%s",
-                athlete_id, bio_res, stats_res,
+                athlete_id,
+                bio_res,
+                stats_res,
             )
             return {}
         card = self._parse_player_card(athlete_id, bio_payload, stats_payload)
         self._player_card_cache[athlete_id] = (now_ts, card)
         return card
 
-    async def async_get_team_season_stats(
-        self, athlete_ids: list[str]
-    ) -> dict[str, dict[str, Any]]:
+    async def async_get_team_season_stats(self, athlete_ids: list[str]) -> dict[str, dict[str, Any]]:
         """Public entrypoint for the team-season-stats WebSocket command.
 
         Thin boundary over :meth:`_get_team_season_stats` so the
@@ -1346,9 +1417,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         """
         return await self._get_team_season_stats(athlete_ids)
 
-    async def _get_team_season_stats(
-        self, athlete_ids: list[str]
-    ) -> dict[str, dict[str, Any]]:
+    async def _get_team_season_stats(self, athlete_ids: list[str]) -> dict[str, dict[str, Any]]:
         """Fetch current-season lines for many athletes at once.
 
         Backs the lineup popup's Season view: opened interactively, so a
@@ -1359,11 +1428,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         Returns ``{athlete_id: {"hitting"|"pitching": {...}}}``, omitting
         ids with no usable line.
         """
-        ids = [
-            s
-            for s in dict.fromkeys(str(a or "").strip() for a in (athlete_ids or []))
-            if s
-        ]
+        ids = [s for s in dict.fromkeys(str(a or "").strip() for a in (athlete_ids or [])) if s]
         if not ids:
             return {}
         results = await asyncio.gather(
@@ -1393,10 +1458,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             payload = await self._get_json(url)
         except Exception as err:
             _LOGGER.debug("Unable to fetch season stats for %s: %s", athlete_id, err)
-            if (
-                cached is not None
-                and (now_ts - cached[0]) < TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS
-            ):
+            if cached is not None and (now_ts - cached[0]) < TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS:
                 return cached[1]
             return {}
         line = self._extract_season_line(payload)
@@ -1462,9 +1524,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         }
 
         categories = {
-            str(c.get("name") or ""): c
-            for c in (stats_payload.get("categories") or [])
-            if isinstance(c, dict)
+            str(c.get("name") or ""): c for c in (stats_payload.get("categories") or []) if isinstance(c, dict)
         }
         primary_name = next((n for n in cls._PRIMARY_STAT_CATEGORIES if n in categories), "")
         career: dict[str, Any] = {}
@@ -1481,11 +1541,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     continue
                 season = row.get("season") or {}
                 tid = str(row.get("teamId") or "")
-                seasons.append({
-                    "year": str(season.get("year") or season.get("displayName") or ""),
-                    "team": team_abbr.get(tid, "") or str(row.get("teamSlug") or ""),
-                    "stats": [_cell(s) for s in (row.get("stats") or [])],
-                })
+                seasons.append(
+                    {
+                        "year": str(season.get("year") or season.get("displayName") or ""),
+                        "team": team_abbr.get(tid, "") or str(row.get("teamSlug") or ""),
+                        "stats": [_cell(s) for s in (row.get("stats") or [])],
+                    }
+                )
             career = {
                 "kind": "pitching" if "pitch" in primary_name else "batting",
                 "columns": [str(x or "") for x in (cat.get("labels") or [])],
@@ -1534,12 +1596,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 return ""
             athlete_id = ""
             if isinstance(ref, dict):
-                athlete_id = str(
-                    ref.get("playerId")
-                    or ref.get("id")
-                    or ((ref.get("athlete") or {}).get("id"))
-                    or ""
-                )
+                athlete_id = str(ref.get("playerId") or ref.get("id") or ((ref.get("athlete") or {}).get("id")) or "")
             athlete = cls._find_any_athlete(summary, athlete_id) if athlete_id else {}
             display_name = str(
                 athlete.get("displayName")
@@ -1867,9 +1924,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if cached is not None and (now_ts - cached[0]) < STANDINGS_TTL_SECONDS:
             return cached[1]
         try:
-            payload = await self._get_json(
-                "https://site.api.espn.com/apis/v2/sports/baseball/mlb/standings"
-            )
+            payload = await self._get_json("https://site.api.espn.com/apis/v2/sports/baseball/mlb/standings")
         except Exception as err:
             _LOGGER.debug("Unable to fetch standings: %s", err)
             if cached is not None and (now_ts - cached[0]) < STANDINGS_STALE_FALLBACK_SECONDS:
@@ -1890,9 +1945,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if cached is not None and (now_ts - cached[0]) < GROUPS_TTL_SECONDS:
             return cached[1]
         try:
-            payload = await self._get_json(
-                "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/groups"
-            )
+            payload = await self._get_json("https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/groups")
         except Exception as err:
             _LOGGER.debug("Unable to fetch groups: %s", err)
             if cached is not None and (now_ts - cached[0]) < GROUPS_STALE_FALLBACK_SECONDS:
@@ -1967,11 +2020,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # Across a game boundary, scores from the previous game don't compare
         # meaningfully to the new game. Skip dispatch entirely; the next poll
         # will establish the new baseline.
-        if (
-            prev.display_event_id
-            and curr.display_event_id
-            and prev.display_event_id != curr.display_event_id
-        ):
+        if prev.display_event_id and curr.display_event_id and prev.display_event_id != curr.display_event_id:
             return []
 
         comp = curr.selected_competition or {}
@@ -2035,9 +2084,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         return events
 
-    def _dispatch_game_events(
-        self, events: list[tuple[str, dict[str, Any]]]
-    ) -> None:
+    def _dispatch_game_events(self, events: list[tuple[str, dict[str, Any]]]) -> None:
         """Fire detector-produced events on the Home Assistant bus and run any
         user-configured action sequences attached to them.
         """
@@ -2059,9 +2106,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             opt_key = EVENT_OPTION_KEYS.get(name)
             sequence = options.get(opt_key) if opt_key else None
             if sequence:
-                self.hass.async_create_task(
-                    self._run_event_action(name, sequence, payload)
-                )
+                self.hass.async_create_task(self._run_event_action(name, sequence, payload))
 
     async def _run_event_action(
         self,
@@ -2079,9 +2124,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             )
             await script.async_run(payload, Context())
         except Exception as err:
-            _LOGGER.warning(
-                "Configured action for %s failed: %s", event_name, err
-            )
+            _LOGGER.warning("Configured action for %s failed: %s", event_name, err)
 
     async def _async_update_data(self) -> MlbLiveScoreboardData:
         schedule_url = (
@@ -2094,20 +2137,14 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # schedule is only used to enumerate this team's events and pull the
         # team display name — none of the live in-game state comes from it,
         # so a 30 min TTL has no user-visible impact.
-        if (
-            cached_schedule is not None
-            and (now_ts - cached_schedule[0]) < SCHEDULE_TTL_SECONDS
-        ):
+        if cached_schedule is not None and (now_ts - cached_schedule[0]) < SCHEDULE_TTL_SECONDS:
             schedule = cached_schedule[1]
         else:
             try:
                 schedule = await self._get_json(schedule_url)
                 self._schedule_cache = (now_ts, schedule)
             except Exception as err:
-                if (
-                    cached_schedule is not None
-                    and (now_ts - cached_schedule[0]) < SCHEDULE_STALE_FALLBACK_SECONDS
-                ):
+                if cached_schedule is not None and (now_ts - cached_schedule[0]) < SCHEDULE_STALE_FALLBACK_SECONDS:
                     _LOGGER.warning(
                         "Schedule fetch failed (%s); reusing cache from %.0fs ago",
                         err,
@@ -2140,7 +2177,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         mode = "live" if live_id and display_id == live_id else ("previous" if display_id == prev_id else "next")
 
         batter_season_payload = await self._get_public_batter_stats(batter_id) if batter_id else {}
-        batter_season_stats = self._extract_current_season_batter_stats(batter_season_payload) if batter_season_payload else {}
+        batter_season_stats = (
+            self._extract_current_season_batter_stats(batter_season_payload) if batter_season_payload else {}
+        )
 
         team_name = self.team_abbr
         if schedule.get("team") and isinstance(schedule["team"], dict):
@@ -2195,9 +2234,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             # ESPN flips the inning prefix before the third-out play lands.
             fallback_until = self._between_halves_entered_at + float(THIRD_OUT_HOLD_SECONDS)
             third_out_hold_until = (
-                max(third_out_hold_until, fallback_until)
-                if third_out_hold_until is not None
-                else fallback_until
+                max(third_out_hold_until, fallback_until) if third_out_hold_until is not None else fallback_until
             )
 
         due_up = self._normalize_due_up(summary)
@@ -2210,9 +2247,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         standings_payload = await self._get_standings()
         groups_payload = await self._get_groups()
         division_index = self._team_id_division_index(groups_payload)
-        division_standings = self._normalize_standings(
-            standings_payload, division_index, self.team_id
-        )
+        division_standings = self._normalize_standings(standings_payload, division_index, self.team_id)
 
         new_data = MlbLiveScoreboardData(
             team_abbr=self.team_abbr,
@@ -2225,6 +2260,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             selected_competition=self._compact_competition(display_comp),
             inning_context=inning_context,
             recent_plays=self._normalize_recent_plays(summary, inning_context),
+            scoring_plays=self._normalize_scoring_plays(summary),
             current_pitches=self._normalize_current_pitches(summary, inning_context),
             away_team=self._normalize_team_payload(away_team_payload),
             home_team=self._normalize_team_payload(home_team_payload),
