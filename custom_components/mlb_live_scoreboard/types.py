@@ -125,6 +125,29 @@ class RecentPlay(TypedDict, total=False):
     alternative_type: str
 
 
+class ScoringPlay(TypedDict, total=False):
+    """Shape of an entry in the ``scoring_plays`` attribute.
+
+    Built from ESPN's top-level ``summary.scoringPlays`` (which is distinct
+    from ``summary.plays``: it spans the full game and is prefiltered to
+    scoring plays only, whereas :class:`RecentPlay` is bounded to the current
+    half-inning). Powers the final-game expand panel's "Scoring Plays" block.
+
+    ``period_type`` is ESPN's raw label, typically ``"Top"`` or ``"Bottom"``;
+    ``period_number`` is the inning. ``team_id`` is the ESPN id of the team
+    that scored on the play when ESPN supplies it (empty otherwise).
+    """
+
+    id: str
+    text: str
+    period_type: str
+    period_number: int
+    away_score: int | None
+    home_score: int | None
+    score_value: int
+    team_id: str
+
+
 class DueUpEntry(TypedDict, total=False):
     """Shape of an entry in ``due_up``."""
 

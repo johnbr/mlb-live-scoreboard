@@ -395,6 +395,7 @@ def _make_data(
         selected_competition=comp,
         inning_context={"period": 5, "period_prefix": "Top 5th"},
         recent_plays=recent_plays or [],
+        scoring_plays=[],
         current_pitches=[],
         away_team={},
         home_team={},
