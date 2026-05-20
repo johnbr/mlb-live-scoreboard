@@ -3938,7 +3938,10 @@ white-space: nowrap;
           display: grid;
           grid-template-columns: 28px 38px 1fr max-content;
           gap: 6px;
-          align-items: baseline;
+          /* 'start' (not baseline) so multi-line wrapped text keeps the
+             period / team / score columns aligned to the top of the row
+             instead of drifting to the first wrapped line's baseline. */
+          align-items: start;
           padding: 2px 4px;
           font-size: 0.86em;
           line-height: 1.3;
@@ -3954,10 +3957,15 @@ white-space: nowrap;
           letter-spacing: 0.02em;
         }
         .scoring-play-text {
+          /* Wrap long play descriptions across multiple lines instead of
+             truncating with an ellipsis — narrow viewports (mobile) and
+             long ESPN play strings both routinely overflow a single line.
+             'min-width: 0' keeps the grid column from forcing its track to
+             the intrinsic text width; 'overflow-wrap: anywhere' is the
+             safety net for rare unbreakable tokens (URLs, long names). */
           min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+          white-space: normal;
+          overflow-wrap: anywhere;
         }
         .scoring-play-score {
           font-variant-numeric: tabular-nums;
