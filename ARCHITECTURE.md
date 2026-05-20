@@ -244,24 +244,25 @@ field for `refresh_rate`. The picker entry sets `preview: true` and a
 in a single module-level `CARD_DEFAULTS` constant shared by `setConfig`
 and the editor so unset toggles still reflect their true on/off state.
 
-| Option                 | Default    | Purpose                                                                                    |
-| ---------------------- | ---------- | ------------------------------------------------------------------------------------------ |
-| `entity`               | (required) | the `sensor.mlb_live_scoreboard_*` entity                                                  |
-| `title`                | `""`       | optional display title                                                                     |
-| `show_batter`          | `true`     | show the batter / pitcher matchup panel                                                    |
-| `show_records`         | `true`     | show team `(W-L)` next to names                                                            |
-| `show_linescore`       | `false`    | show inning-by-inning grid below the score                                                 |
-| `show_pitches`         | `true`     | show per-pitch sequence in the play feed                                                   |
-| `show_play_results`    | `true`     | show recent play results                                                                   |
-| `show_on_deck`         | `true`     | show on-deck batter line                                                                   |
-| `show_base_occupancy`  | `true`     | show occupied-bases summary row                                                            |
-| `show_diamond`         | `true`     | show the bases diamond graphic                                                             |
-| `show_count`           | `true`     | show ball/strike/out count dots                                                            |
-| `show_win_probability` | `true`     | show the live win-probability bar                                                          |
-| `player_link_target`   | `popup`    | clicking a player name: `popup` (in-card career popup) or `espn` (open ESPN's player page) |
-| `show_lineup_popup`    | `true`     | allow the matchup sides to open the team lineup popup (`false` = inert)                    |
-| `lineup_default_view`  | `auto`     | lineup popup default view: `auto` (Game while live, else Season) / `game` / `season`       |
-| `refresh_rate`         | `0`        | seconds; `0` disables (rely on HA state updates)                                           |
+| Option                 | Default    | Purpose                                                                                                                                |
+| ---------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `entity`               | (required) | the `sensor.mlb_live_scoreboard_*` entity                                                                                              |
+| `title`                | `""`       | optional display title                                                                                                                 |
+| `show_batter`          | `true`     | show the batter / pitcher matchup panel                                                                                                |
+| `show_records`         | `true`     | show team `(W-L)` next to names                                                                                                        |
+| `show_linescore`       | `false`    | show inning-by-inning grid below the score                                                                                             |
+| `show_pitches`         | `true`     | show per-pitch sequence in the play feed                                                                                               |
+| `show_play_results`    | `true`     | show recent play results                                                                                                               |
+| `show_on_deck`         | `true`     | show on-deck batter line                                                                                                               |
+| `show_base_occupancy`  | `true`     | show occupied-bases summary row                                                                                                        |
+| `show_diamond`         | `true`     | show the bases diamond graphic                                                                                                         |
+| `show_count`           | `true`     | show ball/strike/out count dots                                                                                                        |
+| `show_win_probability` | `true`     | show the live win-probability bar                                                                                                      |
+| `player_link_target`   | `popup`    | clicking a player name: `popup` (in-card career popup) or `espn` (open ESPN's player page)                                             |
+| `show_lineup_popup`    | `true`     | allow the matchup sides to open the team lineup popup (`false` = inert)                                                                |
+| `lineup_default_view`  | `auto`     | lineup popup default view: `auto` (Game while live, else Season) / `game` / `season`                                                   |
+| `headshot_size`        | `auto`     | inline headshot sizing: `auto` (CSS container query — scales with card width) or fixed presets `small` / `medium` / `large` / `xlarge` |
+| `refresh_rate`         | `0`        | seconds; `0` disables (rely on HA state updates)                                                                                       |
 
 ## ESPN endpoints used
 
