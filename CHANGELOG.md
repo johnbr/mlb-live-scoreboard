@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.13.0...v1.14.0) (2026-05-20)
+
+
+### Features
+
+* **card:** post-game summary in final-game expand panel ([3821013](https://github.com/johnbr/mlb-live-scoreboard/commit/38210135681aaad1dee4aa70923bd5fdde26f3c5))
+
 ## [1.13.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.12.0...v1.13.0) (2026-05-19)
 
 
