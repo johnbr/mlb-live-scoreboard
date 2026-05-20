@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.15.1...v1.15.2) (2026-05-20)
+
+
+### Bug Fixes
+
+* **docs:** absolute URLs for README screenshots so HACS renders them ([3de8aeb](https://github.com/johnbr/mlb-live-scoreboard/commit/3de8aeb8e64754e0507da1a2dcbb30cab43cdfe6))
+
 ## [1.15.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.15.0...v1.15.1) (2026-05-20)
 
 
