@@ -1,4 +1,4 @@
-# MLB Live Scoreboard
+# MLB Live Scoreboard / GameTracker
 
 A Home Assistant custom integration and Lovelace card for displaying live MLB game data from ESPN.
 
