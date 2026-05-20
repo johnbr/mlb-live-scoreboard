@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.15.2...v1.15.3) (2026-05-20)
+
+
+### Bug Fixes
+
+* **coordinator:** show two-way players' real batting line at the plate ([1a3831a](https://github.com/johnbr/mlb-live-scoreboard/commit/1a3831af9c2802751981847b5f3698a185ba8eb1))
+
 ## [1.15.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.15.1...v1.15.2) (2026-05-20)
 
 
