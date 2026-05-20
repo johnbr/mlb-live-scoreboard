@@ -57,6 +57,24 @@ const CARD_DEFAULTS = {
   // Which view that popup defaults to: "auto" (Game while the game is
   // live, Season otherwise) or a forced "game" / "season".
   lineup_default_view: "auto",
+  // Inline player-headshot size for the matchup portraits, due-up
+  // thumbnails, and probable-pitcher portraits. "auto" tracks the card's
+  // actual width via a CSS container query (responsive to HA's per-column
+  // dashboards, not the viewport). The explicit presets pin a fixed size
+  // for users who prefer a specific look. Modal popup avatars are
+  // unaffected — they size against the viewport, not the card.
+  headshot_size: "auto",
+};
+
+// Pixel size for each `headshot_size` preset. Used by the CSS rules at
+// the bottom of styles() to override the "auto" clamp(). Keep these in
+// sync with the rule block — there's no single source of truth in
+// CSS since we hand-write each preset's rule for clarity.
+const HEADSHOT_SIZE_PRESETS = {
+  small: 40,
+  medium: 56,
+  large: 72,
+  xlarge: 88,
 };
 
 // Locate this integration's sensor for getStubConfig(), so adding the card
@@ -133,6 +151,21 @@ const EDITOR_SCHEMA = [
           },
         },
       },
+      {
+        name: "headshot_size",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "auto", label: "Auto (scale to card width)" },
+              { value: "small", label: "Small (40px)" },
+              { value: "medium", label: "Medium (56px)" },
+              { value: "large", label: "Large (72px)" },
+              { value: "xlarge", label: "X-Large (88px)" },
+            ],
+          },
+        },
+      },
       { name: "show_lineup_popup", selector: { boolean: {} } },
     ],
   },
@@ -159,6 +192,7 @@ const EDITOR_LABELS = {
   refresh_rate: "Refresh rate (s, 0 = HA updates)",
   player_link_target: "Player name click",
   lineup_default_view: "Lineup popup default view",
+  headshot_size: "Headshot size",
   show_lineup_popup: "Enable team lineup popup",
   show_batter: "Batter",
   show_records: "Team records",
@@ -175,6 +209,8 @@ const EDITOR_LABELS = {
 const EDITOR_HELPERS = {
   entity: "Pick the sensor created by the MLB Live Scoreboard integration.",
   refresh_rate: "0 leaves refreshing to Home Assistant's own state updates.",
+  headshot_size:
+    "Auto scales headshots with the card's width (responsive to HA's per-column dashboards). Presets pin a fixed pixel size.",
 };
 
 // Visual (no-YAML) config editor. Plain custom element wrapping HA's native
@@ -1371,6 +1407,18 @@ class MlbLiveGameCard extends HTMLElement {
       clearInterval(this._refreshInterval);
       this._refreshInterval = null;
     }
+  }
+
+  // Returns the wrapper CSS class that drives headshot sizing. The card's
+  // styles() block scopes container-query and fixed-size rules under these
+  // classes. Unknown / unset values fall back to "auto" so a stale or
+  // hand-edited YAML never breaks the layout.
+  _headshotSizeClass() {
+    const v = String(this.config?.headshot_size || "auto").toLowerCase();
+    if (v === "auto" || HEADSHOT_SIZE_PRESETS[v] != null) {
+      return `headshot-size-${v}`;
+    }
+    return "headshot-size-auto";
   }
 
   // The third-out → due-up transition is driven entirely by the coordinator-
@@ -2755,7 +2803,7 @@ class MlbLiveGameCard extends HTMLElement {
     }
 
     const liveHtml = `
-      <div class="wrapper">
+      <div class="wrapper ${this._headshotSizeClass()}">
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
             ${this.teamRow(awayTeam, awayMeta, "", awayScore, awayWon, false, away, awayTotals)}
@@ -2915,7 +2963,11 @@ class MlbLiveGameCard extends HTMLElement {
       : expanded
         ? "Hide game summary"
         : "Show game summary";
-    const wrapperClasses = ["wrapper", "compact-mode"];
+    const wrapperClasses = [
+      "wrapper",
+      "compact-mode",
+      this._headshotSizeClass(),
+    ];
     if (expandable) wrapperClasses.push("upcoming-expandable");
     if (expanded) wrapperClasses.push("expanded");
     const html = `
@@ -3020,6 +3072,13 @@ class MlbLiveGameCard extends HTMLElement {
       <style>
         .wrapper {
           padding: 0 1px 0;
+          /* Make the card its own size-query container so headshots (and any
+             future width-aware element) can size in 'cqi' units. 'inline-size'
+             tracks the card's width, which is the right axis for HA's
+             per-column dashboards — viewport-relative units would be wrong
+             when one tab has 1 wide card and another has 4 narrow ones. */
+          container-type: inline-size;
+          container-name: mlb-card;
         }
         .header {
           display: flex;
@@ -3100,11 +3159,19 @@ line-height: 1.25;
           background: rgba(255,255,255,0.08);
         }
         .player-shot {
-          width: 56px;
-          height: 56px;
+          /* Default ("auto") behavior — scale headshots to ~14% of the card's
+             inline (width) size, clamped to a sane min/max. The clamp is
+             chosen so a 400px-wide card lands near the historic 56px size
+             (14% = 56), while wider cards grow and narrower cards shrink.
+             The headshot-size-* preset rules below replace this clamp with
+             a fixed pixel value when the user opts out of auto. */
+          width: clamp(40px, 14cqi, 80px);
+          height: clamp(40px, 14cqi, 80px);
           object-fit: cover;
           border-radius: 50%;
-          flex: 0 0 52px;
+          /* 'flex: 0 0 auto' lets the box's own width (the clamp) act as
+             the flex-basis, so the headshot shrinks/grows with the card. */
+          flex: 0 0 auto;
           background: rgba(255,255,255,0.06);
         }
         .player-shot.placeholder {
@@ -3890,8 +3957,11 @@ white-space: nowrap;
         }
         .upcoming-pitcher-side.align-right { /* symmetry hint, no-op layout */ }
         .upcoming-pitcher-img {
-          width: 58px;
-          height: 58px;
+          /* Same auto-scale strategy as .player-shot, with a slightly larger
+             ceiling because the probable-pitcher panel is dedicated to the
+             portrait so it can afford more pixels on wide cards. */
+          width: clamp(44px, 16cqi, 88px);
+          height: clamp(44px, 16cqi, 88px);
           border-radius: 50%;
           object-fit: cover;
           background: var(--secondary-background-color, rgba(127,127,127,0.15));
@@ -3902,6 +3972,38 @@ white-space: nowrap;
         }
         .upcoming-pitcher-img.placeholder {
           background: var(--secondary-background-color, rgba(127,127,127,0.15));
+        }
+
+        /* Headshot-size presets. Active when the user picks anything other
+           than "auto" in the editor. Each preset overrides both the matchup/
+           due-up headshot (.player-shot) and the probable-pitcher portrait
+           (.upcoming-pitcher-img) with the same fixed size so the card has a
+           single consistent headshot size across all panels.
+
+           These pixel values must stay in sync with HEADSHOT_SIZE_PRESETS at
+           the top of this file. The presets are intentionally a short
+           ladder (Small / Medium / Large / X-Large) rather than a free-form
+           pixel input — easier to choose, and the auto clamp already covers
+           the in-between cases for most viewports. */
+        .wrapper.headshot-size-small .player-shot,
+        .wrapper.headshot-size-small .upcoming-pitcher-img {
+          width: 40px;
+          height: 40px;
+        }
+        .wrapper.headshot-size-medium .player-shot,
+        .wrapper.headshot-size-medium .upcoming-pitcher-img {
+          width: 56px;
+          height: 56px;
+        }
+        .wrapper.headshot-size-large .player-shot,
+        .wrapper.headshot-size-large .upcoming-pitcher-img {
+          width: 72px;
+          height: 72px;
+        }
+        .wrapper.headshot-size-xlarge .player-shot,
+        .wrapper.headshot-size-xlarge .upcoming-pitcher-img {
+          width: 88px;
+          height: 88px;
         }
         .upcoming-pitcher-name {
           font-weight: 600;
