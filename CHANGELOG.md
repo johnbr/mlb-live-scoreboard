@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.14.0...v1.14.1) (2026-05-20)
+
+
+### Bug Fixes
+
+* **card:** wrap scoring-play text instead of truncating ([b563716](https://github.com/johnbr/mlb-live-scoreboard/commit/b563716dc005a5ee8c0b13b6d37f7682f199e28d))
+
 ## [1.14.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.13.0...v1.14.0) (2026-05-20)
 
 
