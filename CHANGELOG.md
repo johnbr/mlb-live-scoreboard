@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.15.3...v1.16.0) (2026-05-22)
+
+
+### Features
+
+* **card:** batter-line polish, post-final record sync, highlights link ([3352c1b](https://github.com/johnbr/mlb-live-scoreboard/commit/3352c1beba122e9ed4761025b05d0327d17e4e9e))
+
 ## [1.15.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.15.2...v1.15.3) (2026-05-20)
 
 
