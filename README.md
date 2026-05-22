@@ -113,6 +113,7 @@ Add the card to your dashboard — either way:
 | `show_diamond`         | boolean | `true`       | Show base diamond graphic                                                                                                                                                                                                                                                                                |
 | `show_count`           | boolean | `true`       | Show balls/strikes/outs dots                                                                                                                                                                                                                                                                             |
 | `show_win_probability` | boolean | `true`       | Show live win-probability bar between the score rows and the balls/strikes/outs row (hidden pre-game when ESPN doesn't yet publish a probability series)                                                                                                                                                 |
+| `show_highlights`      | boolean | `false`      | Show a "Watch highlights on ESPN" link in the final-game expand panel. Only renders once ESPN publishes clips (typically 30-90 min after the final pitch); off by default                                                                                                                                |
 | `player_link_target`   | string  | `popup`      | What clicking a (yellow) player name does: `popup` opens an in-card career-stats popup; `espn` opens ESPN's player page directly. The popup always includes a "View on ESPN" link, so ESPN stays reachable either way                                                                                    |
 | `show_lineup_popup`    | boolean | `true`       | Allow clicking a team's side of the matchup to open the team-lineup popup. Set `false` to make the matchup sides inert (player-name links still work)                                                                                                                                                    |
 | `lineup_default_view`  | string  | `auto`       | Which view the lineup popup opens to: `auto` (Game while the game is live, Season otherwise), or force `game` / `season`                                                                                                                                                                                 |
@@ -135,6 +136,7 @@ show_base_occupancy: true
 show_diamond: true
 show_count: true
 show_win_probability: true
+show_highlights: false
 player_link_target: popup
 show_lineup_popup: true
 lineup_default_view: auto

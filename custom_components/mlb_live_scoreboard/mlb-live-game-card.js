@@ -43,6 +43,10 @@ const CARD_DEFAULTS = {
   show_diamond: true,
   show_count: true,
   show_win_probability: true,
+  // Post-final ESPN highlights link. Defaults to off — the link only
+  // appears 30-90 min after the final pitch (when ESPN publishes clips)
+  // and most users won't want it in their dashboard. Opt in per card.
+  show_highlights: false,
   // seconds, 0 = disabled (rely on hass state updates)
   refresh_rate: 0,
   // Clicking a (yellow) player name: "popup" opens the in-card career
@@ -182,6 +186,7 @@ const EDITOR_SCHEMA = [
       { name: "show_diamond", selector: { boolean: {} } },
       { name: "show_count", selector: { boolean: {} } },
       { name: "show_win_probability", selector: { boolean: {} } },
+      { name: "show_highlights", selector: { boolean: {} } },
     ],
   },
 ];
@@ -204,6 +209,7 @@ const EDITOR_LABELS = {
   show_diamond: "Base diamond",
   show_count: "Count",
   show_win_probability: "Win probability",
+  show_highlights: "Highlights link (final)",
 };
 
 const EDITOR_HELPERS = {
@@ -211,6 +217,8 @@ const EDITOR_HELPERS = {
   refresh_rate: "0 leaves refreshing to Home Assistant's own state updates.",
   headshot_size:
     "Auto scales headshots with the card's width (responsive to HA's per-column dashboards). Presets pin a fixed pixel size.",
+  show_highlights:
+    "Shows a 'Watch highlights on ESPN' link in the final-game panel once ESPN publishes clips (typically 30-90 min after the final pitch).",
 };
 
 // Visual (no-YAML) config editor. Plain custom element wrapping HA's native
@@ -1232,6 +1240,24 @@ function renderUpcomingDetails(
     kind === "final" ? renderScoringPlaysPanel(attrs, awayMeta, homeMeta) : "";
   const leadersHtml =
     kind === "final" ? renderGameLeadersPanel(attrs, awayMeta, homeMeta) : "";
+  // Highlights gallery link — ESPN populates this 30-90 min after the final
+  // pitch. Hidden until the URL is present, so the panel stays clean in the
+  // immediate post-final window before clips are published. Opt-in via
+  // `show_highlights` because most users don't want it in their dashboard.
+  const highlightsEnabled = card?.config?.show_highlights === true;
+  const highlightsUrl =
+    kind === "final" && highlightsEnabled
+      ? String(attrs?.highlights_url || "").trim()
+      : "";
+  const highlightsHtml = highlightsUrl
+    ? `
+    <div class="final-highlights-row">
+      <a class="final-highlights-link" href="${highlightsUrl}" target="_blank" rel="noopener noreferrer">
+        <span class="final-highlights-icon" aria-hidden="true">▶</span>
+        <span class="final-highlights-label">Watch highlights on ESPN</span>
+      </a>
+    </div>`
+    : "";
   let standingsHtml = "";
   if (entries.length) {
     const rows = entries
@@ -1269,6 +1295,7 @@ function renderUpcomingDetails(
       ${pitchersHtml}
       ${scoringPlaysHtml}
       ${leadersHtml}
+      ${highlightsHtml}
       ${standingsHtml}
     </div>`;
 }
@@ -1490,6 +1517,8 @@ class MlbLiveGameCard extends HTMLElement {
       lastScoring?.away_score ?? "",
       lastScoring?.home_score ?? "",
       leadersFp,
+      // Highlights URL pops in 30-90 min post-final; repaint when it appears.
+      attrs?.highlights_url || "",
     ].join("|");
   }
 
@@ -2456,6 +2485,7 @@ class MlbLiveGameCard extends HTMLElement {
       bs.hits_ab,
       bs.hr,
       bs.rbi,
+      bs.game_rbi,
       bs.game_outcomes_display,
       ps.era,
       ps.ip,
@@ -2537,9 +2567,18 @@ class MlbLiveGameCard extends HTMLElement {
     const batterOutcomes = (
       attrs.batter_stats?.game_outcomes_display || ""
     ).trim();
-    const batterPrimaryLine = batterOutcomes
-      ? `${batterHitsAb} • ${batterOutcomes}`
-      : batterHitsAb;
+    // Game-RBI shows alongside the at-bat outcomes so the line carries the
+    // full "what happened today" picture (the secondary line is season totals).
+    // Suppress when zero / missing — an empty " • 0 RBI" tail just adds noise.
+    const gameRbiRaw = String(attrs.batter_stats?.game_rbi ?? "").trim();
+    const gameRbiNum = Number(gameRbiRaw);
+    const gameRbiBadge =
+      gameRbiRaw && Number.isFinite(gameRbiNum) && gameRbiNum > 0
+        ? `${gameRbiNum} RBI`
+        : "";
+    const batterPrimaryLine = [batterHitsAb, batterOutcomes, gameRbiBadge]
+      .filter(Boolean)
+      .join(" • ");
     const pitcherPrimaryLine = renderPitcherLinePrimary(attrs.pitcher_stats);
     const pitcherSecondaryLine = renderPitcherLineSecondary(
       attrs.pitcher_stats,
@@ -4076,6 +4115,38 @@ white-space: nowrap;
         .leader-empty {
           color: var(--secondary-text-color);
           opacity: 0.6;
+        }
+        .final-highlights-row {
+          display: flex;
+          justify-content: center;
+          margin: 4px 0 2px;
+        }
+        .final-highlights-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: var(--primary-text-color);
+          text-decoration: none;
+          font-size: 0.88em;
+          line-height: 1.2;
+          transition: background 0.12s ease;
+        }
+        .final-highlights-link:hover,
+        .final-highlights-link:focus {
+          background: rgba(255, 255, 255, 0.12);
+          text-decoration: none;
+          outline: none;
+        }
+        .final-highlights-icon {
+          color: var(--primary-color, #03a9f4);
+          font-size: 0.85em;
+        }
+        .final-highlights-label {
+          font-weight: 500;
         }
         .upcoming-standings {
           display: flex;

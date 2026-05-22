@@ -124,7 +124,10 @@ _BATTER_OUTCOME_PATTERNS: tuple[tuple[str, str], ...] = (
 )
 
 # Outcomes excluded from the compact batter-outcome display string.
-_BATTER_OUTCOME_EXCLUDED: frozenset[str] = frozenset({"GO", "FO", "LO", "PO", "GIDP", "FC", "HBP"})
+# Singles (1B) are omitted because they're already implicit in the H-AB hits
+# count (a single == "had a hit but not an XBH/HR"); the outcome string is
+# meant to surface the *notable* results (XBH, HR, BB, K, etc.).
+_BATTER_OUTCOME_EXCLUDED: frozenset[str] = frozenset({"1B", "GO", "FO", "LO", "PO", "GIDP", "FC", "HBP"})
 
 # Display ordering for the compact batter-outcome string.
 _BATTER_OUTCOME_ORDER: tuple[str, ...] = ("HR", "3B", "2B", "1B", "BB", "IBB", "SF", "SAC", "K", "E")
@@ -251,6 +254,10 @@ class MlbLiveScoreboardData:
     lineups: Lineups
     leaders: Leaders
     division_standings: Standings
+    # Post-game ESPN-hosted highlights gallery URL (e.g.
+    # ``https://www.espn.com/mlb/video?gameId=…``). Empty until ESPN publishes
+    # at least one clip — typically 30-90 minutes after the final pitch.
+    highlights_url: str
     mode: str
     status_text: str
     is_live: bool
@@ -371,12 +378,16 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         )
 
     @staticmethod
-    def _compact_competition(display_comp: dict[str, Any] | None) -> dict[str, Any] | None:
+    def _compact_competition(
+        display_comp: dict[str, Any] | None,
+        records_map: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
         if not display_comp:
             return None
         status = display_comp.get("status") or {}
         status_type = status.get("type") or {}
         compact_competitors: list[dict[str, Any]] = []
+        records_map = records_map or {}
         for competitor in display_comp.get("competitors") or []:
             team = competitor.get("team") or {}
             logos = team.get("logos") or []
@@ -390,13 +401,19 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                         "errors": line.get("errors"),
                     }
                 )
+            # Prefer the live standings record over the (often-stale) per-game
+            # ``recordSummary`` baked into the summary payload. Falls back to
+            # the summary value when this team isn't in the standings map
+            # (shouldn't happen for MLB teams, but be defensive).
+            standings_record = records_map.get(str(team.get("id") or ""))
+            record_summary = standings_record or competitor.get("recordSummary")
             compact_competitors.append(
                 {
                     "homeAway": competitor.get("homeAway"),
                     "score": competitor.get("score"),
                     "hits": competitor.get("hits"),
                     "errors": competitor.get("errors"),
-                    "recordSummary": competitor.get("recordSummary"),
+                    "recordSummary": record_summary,
                     "records": competitor.get("records") or [],
                     "probables": competitor.get("probables") or [],
                     "linescores": compact_lines,
@@ -771,6 +788,76 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     if tid:
                         index[tid] = division_name
         return index
+
+    @staticmethod
+    def _records_from_standings(standings_payload: dict[str, Any] | None) -> dict[str, str]:
+        """Return ``{team_id: "W-L"}`` for every team in the standings payload.
+
+        ESPN's per-game ``summary`` endpoint freezes ``competitor.recordSummary``
+        at the pre-game value and only refreshes it hours later. The league
+        ``/standings`` endpoint, in contrast, updates within minutes of a final.
+        We use this map to override the stale per-game records so the on-card
+        display matches the popup standings.
+        """
+        records: dict[str, str] = {}
+        if not standings_payload:
+            return records
+        children = standings_payload.get("children")
+        if not isinstance(children, list):
+            return records
+        for league in children:
+            if not isinstance(league, dict):
+                continue
+            standings = league.get("standings") or {}
+            entries = standings.get("entries") if isinstance(standings, dict) else None
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                team = entry.get("team") or {}
+                tid = str(team.get("id") or "")
+                if not tid:
+                    continue
+                wins = ""
+                losses = ""
+                for stat in entry.get("stats") or []:
+                    if not isinstance(stat, dict):
+                        continue
+                    name = str(stat.get("name") or "").lower()
+                    abbr = str(stat.get("abbreviation") or "").lower()
+                    val = str(stat.get("displayValue") or stat.get("value") or "")
+                    if name == "wins" or abbr == "w":
+                        wins = val
+                    elif name == "losses" or abbr == "l":
+                        losses = val
+                if wins and losses:
+                    records[tid] = f"{wins}-{losses}"
+        return records
+
+    @staticmethod
+    def _extract_highlights_url(summary: dict[str, Any]) -> str:
+        """Pull the ESPN-hosted highlights gallery URL from ``header.links[]``.
+
+        ESPN tags the gallery entry with ``rel: ['videos', ...]``. Returns ``""``
+        when the entry is absent (pre-game and during the game), so the card
+        renders nothing until ESPN actually publishes clips.
+        """
+        header = summary.get("header") or {}
+        links = header.get("links") or []
+        if not isinstance(links, list):
+            return ""
+        for link in links:
+            if not isinstance(link, dict):
+                continue
+            rel = link.get("rel") or []
+            if not isinstance(rel, list):
+                continue
+            if "videos" in (str(r).lower() for r in rel):
+                href = str(link.get("href") or "").strip()
+                if href:
+                    return href
+        return ""
 
     @staticmethod
     def _normalize_standings(
@@ -2283,6 +2370,19 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         groups_payload = await self._get_groups()
         division_index = self._team_id_division_index(groups_payload)
         division_standings = self._normalize_standings(standings_payload, division_index, self.team_id)
+        # ``records_map`` overrides the per-game ``recordSummary`` (which ESPN
+        # leaves stale for hours after a final) with live standings W-L.
+        records_map = self._records_from_standings(standings_payload)
+
+        away_team_norm = self._normalize_team_payload(away_team_payload)
+        home_team_norm = self._normalize_team_payload(home_team_payload)
+        # Same override for the team-metadata-derived ``record_summary`` field.
+        away_standings_record = records_map.get(str(away_team_norm.get("id") or ""))
+        home_standings_record = records_map.get(str(home_team_norm.get("id") or ""))
+        if away_standings_record:
+            away_team_norm["record_summary"] = away_standings_record
+        if home_standings_record:
+            home_team_norm["record_summary"] = home_standings_record
 
         new_data = MlbLiveScoreboardData(
             team_abbr=self.team_abbr,
@@ -2292,13 +2392,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             live_event_id=live_id,
             previous_event_id=prev_id,
             next_event_id=next_id,
-            selected_competition=self._compact_competition(display_comp),
+            selected_competition=self._compact_competition(display_comp, records_map),
             inning_context=inning_context,
             recent_plays=self._normalize_recent_plays(summary, inning_context),
             scoring_plays=self._normalize_scoring_plays(summary),
             current_pitches=self._normalize_current_pitches(summary, inning_context),
-            away_team=self._normalize_team_payload(away_team_payload),
-            home_team=self._normalize_team_payload(home_team_payload),
+            away_team=away_team_norm,
+            home_team=home_team_norm,
             current_batter=self._normalize_current_batter(summary, batter_id),
             current_pitcher=self._normalize_current_pitcher(summary, pitcher_id),
             batter_stats=self._normalize_batter_stats(summary, batter_id, batter_season_stats, is_live=is_live),
@@ -2313,6 +2413,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             lineups=self._normalize_lineups(summary, batter_id),
             leaders=self._normalize_leaders(summary),
             division_standings=division_standings,
+            highlights_url=self._extract_highlights_url(summary),
             mode=mode,
             status_text=status_detail,
             is_live=is_live,
@@ -2327,6 +2428,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             game_events = self._detect_game_events(self.data, new_data, self.team_id)
             if game_events:
                 self._dispatch_game_events(game_events)
+                # When a game ends, invalidate the standings cache so the very
+                # next poll (≤ scan interval) re-fetches W-L. Without this the
+                # on-card record could lag by up to STANDINGS_TTL_SECONDS.
+                if any(name == EVENT_GAME_ENDED for name, _ in game_events):
+                    self._standings_cache = None
         except Exception as err:
             # Never let event dispatch break a refresh.
             _LOGGER.warning("Game-event dispatch failed: %s", err)
