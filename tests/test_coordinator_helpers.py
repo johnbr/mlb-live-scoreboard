@@ -62,8 +62,14 @@ def test_parse_iso_ts_returns_none_for_garbage():
 
 
 def test_format_batter_outcomes_orders_and_counts():
-    # 2 HRs, single, walk, strikeout
-    assert Coord._format_batter_outcomes(["HR", "HR", "1B", "BB", "K"]) == "2HR, 1B, BB, K"
+    # 2 HRs, walk, strikeout. The single (1B) is intentionally suppressed —
+    # it's already implicit in the H-AB count and would clutter the line.
+    assert Coord._format_batter_outcomes(["HR", "HR", "1B", "BB", "K"]) == "2HR, BB, K"
+
+
+def test_format_batter_outcomes_excludes_singles():
+    # A pure-singles game collapses to empty (the H-AB count carries the info)
+    assert Coord._format_batter_outcomes(["1B", "1B"]) == ""
 
 
 def test_format_batter_outcomes_excludes_routine_outs():
@@ -405,6 +411,7 @@ def _make_data(
         lineups={},
         leaders={},
         division_standings={"division_name": "", "entries": []},
+        highlights_url="",
         mode="live" if is_live else "previous",
         status_text="Top 5th",
         is_live=is_live,
@@ -1421,3 +1428,183 @@ def test_extract_current_season_batter_stats_picks_first_nonempty_when_duplicate
     }
     out = Coord._extract_current_season_batter_stats(payload)
     assert out == {"hr": "12", "rbi": "40", "avg": ".275"}
+
+
+# ---------------------------------------------------------------------------
+# _records_from_standings
+# ---------------------------------------------------------------------------
+
+
+def test_records_from_standings_builds_full_id_to_wl_map():
+    # Mimics ESPN's nested shape: children=[league, league],
+    # each with standings.entries[] of teams, each with a stats list
+    # containing wins/losses by name and abbreviation.
+    payload = {
+        "children": [
+            {
+                "name": "American League",
+                "standings": {
+                    "entries": [
+                        {
+                            "team": {"id": "10"},
+                            "stats": [
+                                {"name": "wins", "abbreviation": "W", "displayValue": "30"},
+                                {"name": "losses", "abbreviation": "L", "displayValue": "18"},
+                            ],
+                        },
+                    ],
+                },
+            },
+            {
+                "name": "National League",
+                "standings": {
+                    "entries": [
+                        {
+                            "team": {"id": "19"},
+                            "stats": [
+                                {"name": "wins", "abbreviation": "W", "displayValue": "29"},
+                                {"name": "losses", "abbreviation": "L", "displayValue": "19"},
+                            ],
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+    out = Coord._records_from_standings(payload)
+    assert out == {"10": "30-18", "19": "29-19"}
+
+
+def test_records_from_standings_handles_missing_payload():
+    assert Coord._records_from_standings(None) == {}
+    assert Coord._records_from_standings({}) == {}
+    assert Coord._records_from_standings({"children": []}) == {}
+
+
+def test_records_from_standings_skips_entries_missing_wins_or_losses():
+    # An entry with only wins (or only losses) is incomplete — skip it
+    # rather than emit a malformed "W-" / "-L" string.
+    payload = {
+        "children": [
+            {
+                "standings": {
+                    "entries": [
+                        {
+                            "team": {"id": "10"},
+                            "stats": [{"name": "wins", "displayValue": "30"}],
+                        },
+                        {
+                            "team": {"id": "11"},
+                            "stats": [
+                                {"name": "wins", "displayValue": "20"},
+                                {"name": "losses", "displayValue": "28"},
+                            ],
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+    out = Coord._records_from_standings(payload)
+    assert out == {"11": "20-28"}
+
+
+# ---------------------------------------------------------------------------
+# _compact_competition with records_map override
+# ---------------------------------------------------------------------------
+
+
+def test_compact_competition_overrides_stale_record_summary_from_standings():
+    # The summary endpoint returns a stale "84-67"; the standings map has the
+    # fresh "85-67" (one win added post-game). The override should win.
+    comp = {
+        "id": "401",
+        "status": {"type": {"state": "post"}},
+        "competitors": [
+            {
+                "homeAway": "home",
+                "score": "5",
+                "recordSummary": "84-67",  # stale
+                "team": {"id": "19", "abbreviation": "LAD"},
+            },
+            {
+                "homeAway": "away",
+                "score": "2",
+                "recordSummary": "70-81",
+                "team": {"id": "20", "abbreviation": "SF"},
+            },
+        ],
+    }
+    records_map = {"19": "85-67", "20": "70-82"}
+    out = Coord._compact_competition(comp, records_map)
+    assert out is not None
+    by_side = {c["homeAway"]: c for c in out["competitors"]}
+    assert by_side["home"]["recordSummary"] == "85-67"  # overridden
+    assert by_side["away"]["recordSummary"] == "70-82"  # overridden
+
+
+def test_compact_competition_keeps_summary_record_when_team_not_in_map():
+    # Defensive: if the standings map is missing this team_id for any reason,
+    # fall back to the summary value rather than blanking the field.
+    comp = {
+        "id": "401",
+        "status": {"type": {"state": "post"}},
+        "competitors": [
+            {
+                "homeAway": "home",
+                "recordSummary": "84-67",
+                "team": {"id": "19"},
+            },
+        ],
+    }
+    out = Coord._compact_competition(comp, {})
+    assert out["competitors"][0]["recordSummary"] == "84-67"
+
+
+def test_compact_competition_unchanged_when_no_records_map():
+    # Back-compat: the original single-arg signature still works.
+    comp = {
+        "id": "401",
+        "status": {"type": {"state": "post"}},
+        "competitors": [
+            {"homeAway": "home", "recordSummary": "84-67", "team": {"id": "19"}},
+        ],
+    }
+    out = Coord._compact_competition(comp)
+    assert out["competitors"][0]["recordSummary"] == "84-67"
+
+
+# ---------------------------------------------------------------------------
+# _extract_highlights_url
+# ---------------------------------------------------------------------------
+
+
+def test_extract_highlights_url_returns_videos_rel_href():
+    summary = {
+        "header": {
+            "links": [
+                {"rel": ["summary", "desktop", "event"], "href": "https://example.com/summary"},
+                {"rel": ["videos", "desktop", "event"], "href": "https://www.espn.com/mlb/video?gameId=401"},
+            ],
+        },
+    }
+    assert Coord._extract_highlights_url(summary) == "https://www.espn.com/mlb/video?gameId=401"
+
+
+def test_extract_highlights_url_returns_empty_when_videos_link_absent():
+    # Pre-game / in-game: ESPN omits the videos rel link entirely.
+    summary = {
+        "header": {
+            "links": [
+                {"rel": ["summary", "desktop", "event"], "href": "https://example.com/summary"},
+                {"rel": ["boxscore", "desktop", "event"], "href": "https://example.com/box"},
+            ],
+        },
+    }
+    assert Coord._extract_highlights_url(summary) == ""
+
+
+def test_extract_highlights_url_returns_empty_for_missing_header():
+    assert Coord._extract_highlights_url({}) == ""
+    assert Coord._extract_highlights_url({"header": {}}) == ""
+    assert Coord._extract_highlights_url({"header": {"links": "not a list"}}) == ""
