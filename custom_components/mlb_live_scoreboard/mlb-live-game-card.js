@@ -43,6 +43,10 @@ const CARD_DEFAULTS = {
   show_diamond: true,
   show_count: true,
   show_win_probability: true,
+  // Post-final ESPN highlights link. Defaults to off — the link only
+  // appears 30-90 min after the final pitch (when ESPN publishes clips)
+  // and most users won't want it in their dashboard. Opt in per card.
+  show_highlights: false,
   // seconds, 0 = disabled (rely on hass state updates)
   refresh_rate: 0,
   // Clicking a (yellow) player name: "popup" opens the in-card career
@@ -182,6 +186,7 @@ const EDITOR_SCHEMA = [
       { name: "show_diamond", selector: { boolean: {} } },
       { name: "show_count", selector: { boolean: {} } },
       { name: "show_win_probability", selector: { boolean: {} } },
+      { name: "show_highlights", selector: { boolean: {} } },
     ],
   },
 ];
@@ -204,6 +209,7 @@ const EDITOR_LABELS = {
   show_diamond: "Base diamond",
   show_count: "Count",
   show_win_probability: "Win probability",
+  show_highlights: "Highlights link (final)",
 };
 
 const EDITOR_HELPERS = {
@@ -211,6 +217,8 @@ const EDITOR_HELPERS = {
   refresh_rate: "0 leaves refreshing to Home Assistant's own state updates.",
   headshot_size:
     "Auto scales headshots with the card's width (responsive to HA's per-column dashboards). Presets pin a fixed pixel size.",
+  show_highlights:
+    "Shows a 'Watch highlights on ESPN' link in the final-game panel once ESPN publishes clips (typically 30-90 min after the final pitch).",
 };
 
 // Visual (no-YAML) config editor. Plain custom element wrapping HA's native
@@ -1234,9 +1242,13 @@ function renderUpcomingDetails(
     kind === "final" ? renderGameLeadersPanel(attrs, awayMeta, homeMeta) : "";
   // Highlights gallery link — ESPN populates this 30-90 min after the final
   // pitch. Hidden until the URL is present, so the panel stays clean in the
-  // immediate post-final window before clips are published.
+  // immediate post-final window before clips are published. Opt-in via
+  // `show_highlights` because most users don't want it in their dashboard.
+  const highlightsEnabled = card?.config?.show_highlights === true;
   const highlightsUrl =
-    kind === "final" ? String(attrs?.highlights_url || "").trim() : "";
+    kind === "final" && highlightsEnabled
+      ? String(attrs?.highlights_url || "").trim()
+      : "";
   const highlightsHtml = highlightsUrl
     ? `
     <div class="final-highlights-row">
