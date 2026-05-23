@@ -296,11 +296,21 @@ def test_extract_batter_game_outcomes_returns_empty_for_unknown_id():
 # ---------------------------------------------------------------------------
 
 
-def _ev(eid: str, *, date: str | None = None, state: str = "pre", name: str = "STATUS_SCHEDULED"):
+def _ev(
+    eid: str,
+    *,
+    date: str | None = None,
+    state: str = "pre",
+    name: str = "STATUS_SCHEDULED",
+    completed: bool | None = None,
+):
+    status_type: dict[str, object] = {"state": state, "name": name}
+    if completed is not None:
+        status_type["completed"] = completed
     return {
         "id": eid,
         "date": date,
-        "competitions": [{"status": {"type": {"state": state, "name": name}}}],
+        "competitions": [{"status": {"type": status_type}}],
     }
 
 
@@ -340,6 +350,78 @@ def test_select_event_handles_empty_list():
     prev_id, next_id, live_id, display_id, display = Coord._select_event(None, [])
     assert (prev_id, next_id, live_id, display_id) == ("", "", "", "")
     assert display is None
+
+
+def test_select_event_skips_postponed_when_picking_prev():
+    """Postponed games (state="post", completed=false) must not shadow the
+    most-recent real final as `prev`, and the postponed game should be
+    promoted to `next_ev` to fill the gap before the next scheduled matchup.
+    """
+    import time as _time
+
+    now = _time.time()
+
+    # Use times within the SHOW_NEXT_AFTER_PREV_SECONDS window (16h) so the
+    # display stays on the finished game rather than skipping ahead to next.
+    final_at = datetime.fromtimestamp(now - 7200, tz=UTC).isoformat().replace("+00:00", "Z")
+    postponed_at = datetime.fromtimestamp(now - 3600, tz=UTC).isoformat().replace("+00:00", "Z")
+    tomorrow = datetime.fromtimestamp(now + 86400, tz=UTC).isoformat().replace("+00:00", "Z")
+
+    events = [
+        _ev("A", date=final_at, state="post", name="STATUS_FINAL", completed=True),
+        _ev("B", date=postponed_at, state="post", name="STATUS_POSTPONED", completed=False),
+        _ev("C", date=tomorrow, state="pre", name="STATUS_SCHEDULED"),
+    ]
+    prev_id, next_id, live_id, display_id, _disp = Coord._select_event(None, events)
+    assert prev_id == "A"
+    # Postponed is promoted into `next_ev` because it falls between `prev`
+    # (yesterday's final) and the actual next scheduled game (tomorrow).
+    assert next_id == "B"
+    assert live_id == ""
+    # Display is still the final until SHOW_NEXT_AFTER_PREV_SECONDS elapses.
+    assert display_id == "A"
+
+
+def test_select_event_postponed_does_not_displace_closer_scheduled():
+    """A postponement that's older than the next scheduled game should be
+    promoted to `next_ev`; a postponement *after* the next scheduled game
+    must not displace it.
+    """
+    import time as _time
+
+    now = _time.time()
+    prev_at = datetime.fromtimestamp(now - 7200, tz=UTC).isoformat().replace("+00:00", "Z")
+    soon = datetime.fromtimestamp(now + 3600, tz=UTC).isoformat().replace("+00:00", "Z")
+    postponed_at = datetime.fromtimestamp(now - 1800, tz=UTC).isoformat().replace("+00:00", "Z")
+
+    events = [
+        _ev("A", date=prev_at, state="post", name="STATUS_FINAL", completed=True),
+        _ev("B", date=postponed_at, state="post", name="STATUS_POSTPONED", completed=False),
+        _ev("C", date=soon, state="pre", name="STATUS_SCHEDULED"),
+    ]
+    _prev, next_id, _live, _disp_id, _disp = Coord._select_event(None, events)
+    # Postponed (30min ago) is between prev (2h ago) and next (1h from now),
+    # so it gets promoted.
+    assert next_id == "B"
+
+
+def test_select_event_postponed_only_no_prev_no_next():
+    """When the only candidate is a postponed past event, it should still
+    surface so the card can show "Postponed" instead of nothing.
+    """
+    import time as _time
+
+    now = _time.time()
+    postponed_at = datetime.fromtimestamp(now - 3600, tz=UTC).isoformat().replace("+00:00", "Z")
+
+    events = [
+        _ev("A", date=postponed_at, state="post", name="STATUS_POSTPONED", completed=False),
+    ]
+    prev_id, next_id, _live, display_id, _disp = Coord._select_event(None, events)
+    assert prev_id == ""
+    assert next_id == "A"
+    # display_event falls back to next_ev when prev is None.
+    assert display_id == "A"
 
 
 # ---------------------------------------------------------------------------

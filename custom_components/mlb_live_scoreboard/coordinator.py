@@ -332,6 +332,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         now_ts = time.time()
         prev: dict[str, Any] | None = None
         next_ev: dict[str, Any] | None = None
+        # Postponed/canceled past events are tracked separately. They carry
+        # state="post" with completed=false and score 0-0, so they must not be
+        # treated as a real "prev" (would shadow the actual most-recent final).
+        # But we still want the card to surface "Postponed" rather than skip
+        # straight to the next matchup, so we may promote one to `next_ev`
+        # below.
+        postponed: dict[str, Any] | None = None
         live: dict[str, Any] | None = None
 
         for ev in events:
@@ -345,11 +352,31 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             if not live and (state in LIVE_STATES or name == STATUS_NAME_IN_PROGRESS):
                 live = ev
 
-            if ts is not None:
+            if ts is None:
+                continue
+
+            is_unplayed_post = state == "post" and not status.get("completed")
+
+            if is_unplayed_post:
                 if ts <= now_ts:
-                    prev = ev
-                elif next_ev is None:
-                    next_ev = ev
+                    postponed = ev
+            elif ts <= now_ts:
+                prev = ev
+            elif next_ev is None:
+                next_ev = ev
+
+        # Promote a recent postponement to fill the gap between `prev` and the
+        # actual next scheduled game, so the card shows "Postponed" once `prev`
+        # ages out of the SHOW_NEXT_AFTER_PREV_SECONDS window.
+        if postponed is not None:
+            post_ts = _parse_iso_ts(postponed.get("date"))
+            prev_ts = _parse_iso_ts(prev.get("date")) if prev else None
+            next_ts = _parse_iso_ts((next_ev or {}).get("date")) if next_ev else None
+            if post_ts is not None:
+                after_prev = prev_ts is None or post_ts > prev_ts
+                before_next = next_ts is None or post_ts < next_ts
+                if after_prev and before_next:
+                    next_ev = postponed
 
         previous_event_id = str((prev or {}).get("id", ""))
         next_event_id = str((next_ev or {}).get("id", ""))
