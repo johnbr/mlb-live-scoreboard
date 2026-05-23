@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.16.1...v1.16.2) (2026-05-23)
+
+
+### Bug Fixes
+
+* **card:** render postponed games as PPD instead of Final 0-0 ([7bce2e5](https://github.com/johnbr/mlb-live-scoreboard/commit/7bce2e5d2bd850ab08f2dd584c1562b6cd6aa17a))
+
 ## [1.16.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.16.0...v1.16.1) (2026-05-23)
 
 
