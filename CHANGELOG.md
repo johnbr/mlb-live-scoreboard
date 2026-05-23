@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.16.0...v1.16.1) (2026-05-23)
+
+
+### Bug Fixes
+
+* **coordinator:** don't render postponed game as 0-0 final ([fa9e3ef](https://github.com/johnbr/mlb-live-scoreboard/commit/fa9e3efe8990ce5ad60160284e489bb2e827515d))
+
 ## [1.16.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.15.3...v1.16.0) (2026-05-22)
 
 
