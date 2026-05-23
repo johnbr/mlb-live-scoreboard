@@ -476,11 +476,21 @@ function deriveGameState(attrs) {
     state === "live" ||
     name === "STATUS_IN_PROGRESS" ||
     isDelayed;
+  // Postponed/canceled games carry state="post" with completed=false. They
+  // must be detected before isFinal — otherwise the "Final" pill + "F" marker
+  // render over a misleading 0-0 score.
+  const isPostponed =
+    name === "STATUS_POSTPONED" ||
+    name === "STATUS_CANCELED" ||
+    (state === "post" && type?.completed === false) ||
+    detail.toLowerCase().startsWith("postponed") ||
+    detail.toLowerCase().startsWith("canceled");
   const isFinal =
-    state === "post" ||
-    type?.completed === true ||
-    name === "STATUS_FINAL" ||
-    detail.toLowerCase().startsWith("final");
+    !isPostponed &&
+    (state === "post" ||
+      type?.completed === true ||
+      name === "STATUS_FINAL" ||
+      detail.toLowerCase().startsWith("final"));
   const isPregame =
     state === "pre" || name === "STATUS_SCHEDULED" || mode === "next";
 
@@ -497,6 +507,14 @@ function deriveGameState(attrs) {
       pillText: "Live",
       pillClass: "live",
       statusText: detail || "In progress",
+    };
+  }
+
+  if (isPostponed) {
+    return {
+      pillText: "Postponed",
+      pillClass: "postponed",
+      statusText: detail || "Postponed",
     };
   }
 
@@ -2793,7 +2811,11 @@ class MlbLiveGameCard extends HTMLElement {
       stateInfo.pillClass === "final" && marker === "F"
         ? `<div class="state-panel final-panel"><span class="mini-state">F</span><span>Final</span><span class="totals-inline">Away H/E ${awayTotals.hits}/${awayTotals.errors} • Home H/E ${homeTotals.hits}/${homeTotals.errors}</span></div>`
         : "";
-    if (stateInfo.pillClass === "next" || stateInfo.pillClass === "final") {
+    if (
+      stateInfo.pillClass === "next" ||
+      stateInfo.pillClass === "final" ||
+      stateInfo.pillClass === "postponed"
+    ) {
       // Reset expanded state when the displayed game changes (different opponent / date).
       const gameKeyForExpand = String(
         competition?.id ||
@@ -2959,6 +2981,7 @@ class MlbLiveGameCard extends HTMLElement {
       homeTeam?.abbreviation ||
       "—";
     const isFinal = stateInfo.pillClass === "final";
+    const isPostponed = stateInfo.pillClass === "postponed";
     const awayWon =
       isFinal &&
       awayScore.num != null &&
@@ -2970,6 +2993,7 @@ class MlbLiveGameCard extends HTMLElement {
       homeScore.num != null &&
       homeScore.num > awayScore.num;
     const finalMarker = `<div class="compact-final-marker"><div class="compact-pill compact-pill-final">F</div></div>`;
+    const postponedMarker = `<div class="compact-final-marker"><div class="compact-pill compact-pill-postponed">PPD</div></div>`;
     const nextRight = when.isToday
       ? `<div class="compact-next-wrap today-only">
           <div class="compact-time">${when.time || ""}</div>
@@ -2978,7 +3002,11 @@ class MlbLiveGameCard extends HTMLElement {
           <div class="compact-date">${when.date || ""}</div>
           <div class="compact-time">${when.time || ""}</div>
         </div>`;
-    const rightHtml = isFinal ? finalMarker : nextRight;
+    const rightHtml = isPostponed
+      ? postponedMarker
+      : isFinal
+        ? finalMarker
+        : nextRight;
     const expandable = isUpcoming || isFinalCompact;
     const detailsPanel =
       expandable && expanded
@@ -3055,6 +3083,8 @@ class MlbLiveGameCard extends HTMLElement {
   renderInningMarker(stateInfo, inningState) {
     if (stateInfo.pillClass === "delayed")
       return `<div class="marker-text">DLY</div>`;
+    if (stateInfo.pillClass === "postponed")
+      return `<div class="marker-text">PPD</div>`;
     if (stateInfo.pillClass === "final" || inningState.pseudoFinal)
       return `<div class="marker-text">F</div>`;
     if (stateInfo.pillClass !== "live") return "";
@@ -3150,6 +3180,7 @@ border-radius: 999px;
         .pill.live { color: var(--success-color); }
         .pill.delayed { color: var(--warning-color); }
         .pill.final { color: var(--primary-text-color); }
+        .pill.postponed { color: var(--warning-color); }
         .pill.next { color: var(--secondary-text-color); }
         .pill.idle { color: var(--secondary-text-color); }
         .status {
@@ -3318,6 +3349,7 @@ border-radius: 0;
         .inning-marker.live { color: var(--success-color); }
         .inning-marker.delayed { color: var(--warning-color); }
         .inning-marker.final { color: var(--primary-text-color); }
+        .inning-marker.postponed { color: var(--warning-color); }
         .inning-stack {
           display:flex;
           flex-direction:column;
@@ -3934,6 +3966,14 @@ white-space: nowrap;
           align-items:center;
           align-self:center;
           min-height: 34px;
+        }
+        .compact-pill-postponed {
+          display:flex;
+          align-items:center;
+          align-self:center;
+          min-height: 34px;
+          color: var(--warning-color);
+          font-size: 0.85em;
         }
         .compact-final-marker {
           display:flex;
