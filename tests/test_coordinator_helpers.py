@@ -226,6 +226,60 @@ def test_normalize_inning_context_ignores_plays_when_half_missing():
 
 
 # ---------------------------------------------------------------------------
+# _resolve_status_info — delay/suspend detection
+# ---------------------------------------------------------------------------
+
+
+def _status_comp(name="", detail="", state="in"):
+    return {"status": {"type": {"name": name, "state": state, "detail": detail}}}
+
+
+def test_resolve_status_info_flags_status_delayed():
+    detail, is_live, is_delayed = Coord._resolve_status_info(
+        _status_comp(name="STATUS_DELAYED", detail="Delayed")
+    )
+    assert is_delayed is True
+    assert is_live is True
+    assert detail == "Delayed"
+
+
+def test_resolve_status_info_flags_rain_delay_name():
+    # ESPN sometimes uses a dedicated STATUS_RAIN_DELAY name without
+    # the string "delayed" anywhere in the detail.
+    _, is_live, is_delayed = Coord._resolve_status_info(
+        _status_comp(name="STATUS_RAIN_DELAY", detail="Rain Delay")
+    )
+    assert is_delayed is True
+    assert is_live is True
+
+
+def test_resolve_status_info_flags_rain_delay_detail_only():
+    # The previous "delayed" substring check missed this case: detail is
+    # "Rain Delay" (no trailing -ed), name is the generic in-progress one.
+    _, is_live, is_delayed = Coord._resolve_status_info(
+        _status_comp(name="STATUS_IN_PROGRESS", detail="Rain Delay")
+    )
+    assert is_delayed is True
+    assert is_live is True
+
+
+def test_resolve_status_info_flags_suspended():
+    _, is_live, is_delayed = Coord._resolve_status_info(
+        _status_comp(name="STATUS_SUSPENDED", detail="Suspended")
+    )
+    assert is_delayed is True
+    assert is_live is True
+
+
+def test_resolve_status_info_does_not_flag_normal_inning():
+    _, is_live, is_delayed = Coord._resolve_status_info(
+        _status_comp(name="STATUS_IN_PROGRESS", detail="Top 4th", state="in")
+    )
+    assert is_delayed is False
+    assert is_live is True
+
+
+# ---------------------------------------------------------------------------
 # _normalize_recent_plays
 # ---------------------------------------------------------------------------
 
