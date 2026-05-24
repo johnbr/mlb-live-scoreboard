@@ -1151,7 +1151,7 @@ function renderDecisionsPanel(card, attrs) {
         return v ? `${v}${unit}` : "";
       })
       .filter(Boolean);
-    return parts.join(" · ");
+    return parts.join("·");
   };
   const order = [
     ["win", "Win"],
@@ -4249,6 +4249,7 @@ white-space: nowrap;
           font-size: 0.82em;
           color: var(--secondary-text-color);
           font-variant-numeric: tabular-nums;
+          font-weight: 500;
         }
         .decision-team {
           font-weight: 600;
@@ -4258,6 +4259,7 @@ white-space: nowrap;
           font-size: 0.8em;
           color: var(--secondary-text-color);
           font-variant-numeric: tabular-nums;
+          font-weight: 500;
           line-height: 1.25;
           margin-top: 2px;
           overflow-wrap: anywhere;
