@@ -4210,10 +4210,11 @@ white-space: nowrap;
         }
         .panel-heading {
           font-size: 0.78em;
-          font-weight: 600;
+          font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          opacity: 0.7;
+          text-align: center;
+          opacity: 0.85;
           margin-bottom: 4px;
         }
         .decisions-panel {
