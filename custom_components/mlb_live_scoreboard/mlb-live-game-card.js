@@ -466,10 +466,20 @@ function deriveGameState(attrs) {
   ).trim();
   const eventDate = get(competition, ["date"], "");
   const scheduledText = formatEventDate(eventDate);
+  // ESPN uses several status flavors for an interrupted live game
+  // (STATUS_DELAYED, STATUS_RAIN_DELAY, STATUS_SUSPENDED, ...) and several
+  // detail strings ("Delayed", "Rain Delay", "Weather Delay", "Delay: Rain").
+  // Match on the shorter "delay" stem and on "suspend" so we flip the live
+  // matchup panel off whenever the game is paused, not only when ESPN sends
+  // the exact "Delayed" wording.
+  const detailLower = detail.toLowerCase();
   const isDelayed =
     attrs.is_delayed === true ||
     name === "STATUS_DELAYED" ||
-    detail.toLowerCase().includes("delayed");
+    name.includes("DELAY") ||
+    name.includes("SUSPEND") ||
+    detailLower.includes("delay") ||
+    detailLower.includes("suspend");
   const isLive =
     attrs.is_live === true ||
     state === "in" ||
@@ -2882,9 +2892,17 @@ class MlbLiveGameCard extends HTMLElement {
           }
         </div>`
         : "";
+    // Prefer ESPN's specific detail ("Rain Delay", "Weather Delay", "Suspended")
+    // as the primary label so the banner doesn't stack a generic "Game delayed"
+    // on top of it. Fall back to the generic phrase when ESPN gives us nothing
+    // recognisable.
+    const delayedDetail = String(stateInfo.statusText || "").trim();
+    const delayedHasSpecific =
+      /\b(delay|suspend|rain|weather)\b/i.test(delayedDetail);
+    const delayedPrimary = delayedHasSpecific ? delayedDetail : "Game delayed";
     const delayedExtras =
       stateInfo.pillClass === "delayed"
-        ? `<div class="state-panel delayed-panel"><span class="mini-state warning">DLY</span><span>Game delayed</span>${stateInfo.statusText ? `<span class="muted">${stateInfo.statusText}</span>` : ""}</div>`
+        ? `<div class="state-panel delayed-panel"><span class="mini-state warning">DLY</span><span>${escapeHtml(delayedPrimary)}</span></div>`
         : "";
     const finalExtras =
       stateInfo.pillClass === "final" && marker === "F"

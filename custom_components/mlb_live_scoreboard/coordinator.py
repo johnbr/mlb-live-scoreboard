@@ -2235,7 +2235,20 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             or status_type.get("description")
             or ""
         ).strip()
-        is_delayed = status_name == STATUS_NAME_DELAYED or "delayed" in status_detail.lower()
+        # ESPN uses several status flavors for an interrupted live game:
+        # STATUS_DELAYED, STATUS_RAIN_DELAY, STATUS_SUSPENDED, etc.; the
+        # detail text likewise varies ("Delayed", "Rain Delay", "Weather
+        # Delay", "Delay: Rain", "Suspended"). Match on the shorter "delay"
+        # stem (the previous "delayed" check missed "Rain Delay") and on
+        # "suspend" so suspended games also flip the live matchup view off.
+        detail_lower = status_detail.lower()
+        is_delayed = (
+            status_name == STATUS_NAME_DELAYED
+            or "DELAY" in status_name
+            or "SUSPEND" in status_name
+            or "delay" in detail_lower
+            or "suspend" in detail_lower
+        )
         is_live = state in LIVE_STATES or status_name == STATUS_NAME_IN_PROGRESS or is_delayed
         return status_detail, is_live, is_delayed
 
