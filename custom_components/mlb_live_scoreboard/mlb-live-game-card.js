@@ -1120,6 +1120,55 @@ function formatScoringPlayPeriod(periodType, periodNumber) {
   return letter ? `${letter}${num}` : `${num}`;
 }
 
+// Build the "Decisions" sub-panel for the final-game expand view —
+// winning pitcher, losing pitcher, and save (when there is one). Reads
+// `attrs.decisions`, which the coordinator pulls from the box score's
+// `pitchingDecision` notes. Empty (no panel) until ESPN attaches the
+// notes, which it does at or shortly after the final pitch.
+function renderDecisionsPanel(card, attrs) {
+  const decisions = attrs?.decisions || {};
+  const order = [
+    ["win", "Win"],
+    ["loss", "Loss"],
+    ["save", "Save"],
+  ];
+  const cells = order
+    .map(([key, label]) => {
+      const d = decisions[key];
+      if (!d || !(d.id || d.name)) return "";
+      const name = String(d.short_name || d.name || "").trim();
+      const displayName = name ? shortPersonName(name) : "";
+      const recordRaw = String(d.record || "").trim();
+      // Save's "record" from ESPN is a season save count, not a W-L —
+      // prefix it so users don't read it as a W-L line.
+      const recordLine =
+        recordRaw && key === "save" ? `SV ${recordRaw}` : recordRaw;
+      const headshot = d.headshot ? requestCachedLogo(card, d.headshot) : "";
+      const portrait = headshot
+        ? `<img class="decision-img" src="${headshot}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+        : `<div class="decision-img placeholder"></div>`;
+      const teamAbbr = String(d.team_abbr || "").toUpperCase();
+      return `
+        <div class="decision-cell">
+          ${portrait}
+          <div class="decision-label">${escapeHtml(label)}</div>
+          <div class="decision-name">${playerNameMarkup(displayName, d.id)}</div>
+          <div class="decision-meta">
+            ${teamAbbr ? `<span class="decision-team">${escapeHtml(teamAbbr)}</span>` : ""}
+            ${recordLine ? `<span class="decision-record">${escapeHtml(recordLine)}</span>` : ""}
+          </div>
+        </div>`;
+    })
+    .filter(Boolean)
+    .join("");
+  if (!cells) return "";
+  return `
+      <div class="decisions-panel">
+        <div class="panel-heading">Decisions</div>
+        <div class="decisions-grid">${cells}</div>
+      </div>`;
+}
+
 // Build the per-game "Scoring Plays" sub-panel for the final-game expand
 // view. Reads `attrs.scoring_plays` (whole-game, chronological — distinct
 // from `recent_plays` which is half-inning-bounded). Each row is a compact
@@ -1254,6 +1303,8 @@ function renderUpcomingDetails(
       ${renderUpcomingPitcherSide(card, probables.home, homeLogo || homeMeta?.logo || "", true)}
     </div>`
     : "";
+  const decisionsHtml =
+    kind === "final" ? renderDecisionsPanel(card, attrs) : "";
   const scoringPlaysHtml =
     kind === "final" ? renderScoringPlaysPanel(attrs, awayMeta, homeMeta) : "";
   const leadersHtml =
@@ -1311,6 +1362,7 @@ function renderUpcomingDetails(
   return `
     <div class="upcoming-details-panel">
       ${pitchersHtml}
+      ${decisionsHtml}
       ${scoringPlaysHtml}
       ${leadersHtml}
       ${highlightsHtml}
@@ -4109,6 +4161,62 @@ white-space: nowrap;
           letter-spacing: 0.05em;
           opacity: 0.7;
           margin-bottom: 4px;
+        }
+        .decisions-panel {
+          margin-top: 10px;
+          padding-top: 8px;
+          border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .decisions-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+          gap: 10px;
+          align-items: start;
+        }
+        .decision-cell {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          min-width: 0;
+          text-align: center;
+        }
+        .decision-img {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          object-fit: cover;
+          background: rgba(255,255,255,0.04);
+        }
+        .decision-img.placeholder {
+          background: rgba(255,255,255,0.06);
+        }
+        .decision-label {
+          font-size: 0.72em;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--secondary-text-color);
+        }
+        .decision-name {
+          font-size: 0.92em;
+          line-height: 1.2;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
+        }
+        .decision-meta {
+          display: flex;
+          gap: 6px;
+          align-items: baseline;
+          font-size: 0.82em;
+          color: var(--secondary-text-color);
+          font-variant-numeric: tabular-nums;
+        }
+        .decision-team {
+          font-weight: 600;
+          letter-spacing: 0.02em;
         }
         .scoring-plays-panel {
           display: flex;
