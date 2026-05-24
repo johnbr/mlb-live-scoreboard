@@ -1120,13 +1120,39 @@ function formatScoringPlayPeriod(periodType, periodNumber) {
   return letter ? `${letter}${num}` : `${num}`;
 }
 
-// Build the "Decisions" sub-panel for the final-game expand view —
+// Build the decisions sub-panel for the final-game expand view —
 // winning pitcher, losing pitcher, and save (when there is one). Reads
-// `attrs.decisions`, which the coordinator pulls from the box score's
-// `pitchingDecision` notes. Empty (no panel) until ESPN attaches the
-// notes, which it does at or shortly after the final pitch.
+// `attrs.decisions` (W/L/SV id + record from box-score notes) and
+// cross-references each pitcher's game line in `attrs.lineups` to avoid
+// duplicating per-pitcher stats in the sensor payload. Empty (no panel)
+// until ESPN attaches the decision notes (post-final).
 function renderDecisionsPanel(card, attrs) {
   const decisions = attrs?.decisions || {};
+  const lineups = attrs?.lineups || {};
+  const findPitcher = (side, id) => {
+    if (!id) return null;
+    const pitchers = (lineups[side] && lineups[side].pitchers) || [];
+    return pitchers.find((p) => String(p?.id || "") === String(id)) || null;
+  };
+  // Compact `IP · H · ER · K · BB` line using the card's standard dot
+  // separator. Any individual missing/zero-length stat is skipped rather
+  // than rendered as a bare unit suffix.
+  const formatStatLine = (pitcher) => {
+    if (!pitcher) return "";
+    const parts = [
+      ["ip", "IP"],
+      ["h", "H"],
+      ["er", "ER"],
+      ["k", "K"],
+      ["bb", "BB"],
+    ]
+      .map(([key, unit]) => {
+        const v = String(pitcher[key] ?? "").trim();
+        return v ? `${v}${unit}` : "";
+      })
+      .filter(Boolean);
+    return parts.join(" · ");
+  };
   const order = [
     ["win", "Win"],
     ["loss", "Loss"],
@@ -1148,6 +1174,7 @@ function renderDecisionsPanel(card, attrs) {
         ? `<img class="decision-img" src="${headshot}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
         : `<div class="decision-img placeholder"></div>`;
       const teamAbbr = String(d.team_abbr || "").toUpperCase();
+      const statLine = formatStatLine(findPitcher(d.team_side, d.id));
       return `
         <div class="decision-cell">
           ${portrait}
@@ -1157,6 +1184,7 @@ function renderDecisionsPanel(card, attrs) {
             ${teamAbbr ? `<span class="decision-team">${escapeHtml(teamAbbr)}</span>` : ""}
             ${recordLine ? `<span class="decision-record">${escapeHtml(recordLine)}</span>` : ""}
           </div>
+          ${statLine ? `<div class="decision-stats">${escapeHtml(statLine)}</div>` : ""}
         </div>`;
     })
     .filter(Boolean)
@@ -1164,7 +1192,6 @@ function renderDecisionsPanel(card, attrs) {
   if (!cells) return "";
   return `
       <div class="decisions-panel">
-        <div class="panel-heading">Decisions</div>
         <div class="decisions-grid">${cells}</div>
       </div>`;
 }
@@ -4073,6 +4100,15 @@ white-space: nowrap;
           margin-top: 6px;
           border-top: 1px solid var(--divider-color, rgba(127,127,127,0.25));
         }
+        /* The container's border-top already separates the panel from the
+           linescore — the first sub-panel doesn't need its own divider or
+           top spacing on top of that. Subsequent sub-panels keep their
+           border-top so they remain visually distinct. */
+        .upcoming-details-panel > :first-child {
+          margin-top: 0;
+          padding-top: 0;
+          border-top: none;
+        }
         .upcoming-pitchers-grid {
           display: grid;
           grid-template-columns: 1fr auto 1fr;
@@ -4217,6 +4253,14 @@ white-space: nowrap;
         .decision-team {
           font-weight: 600;
           letter-spacing: 0.02em;
+        }
+        .decision-stats {
+          font-size: 0.8em;
+          color: var(--secondary-text-color);
+          font-variant-numeric: tabular-nums;
+          line-height: 1.25;
+          margin-top: 2px;
+          overflow-wrap: anywhere;
         }
         .scoring-plays-panel {
           display: flex;
