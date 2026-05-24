@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.19.2...v1.19.3) (2026-05-24)
+
+
+### Bug Fixes
+
+* **coordinator:** dedupe scoring plays so duplicates don't render twice ([#46](https://github.com/johnbr/mlb-live-scoreboard/issues/46)) ([a40d1f1](https://github.com/johnbr/mlb-live-scoreboard/commit/a40d1f10b4d20cc7146aa65ab6b2fb778d91cf9d))
+
 ## [1.19.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.19.1...v1.19.2) (2026-05-24)
 
 
