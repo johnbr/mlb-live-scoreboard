@@ -650,11 +650,21 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         purpose-built top-level array; we fall back to scanning
         ``summary.plays`` for ``scoringPlay is True`` when ESPN omits it
         (occasionally happens early in a game).
+
+        Deduplicates within the same half-inning by play id (preferred) and
+        by ``(half, inning, text)`` signature (fallback). ESPN has been
+        observed emitting the same scoring play twice in ``scoringPlays`` —
+        e.g. a multi-runner wild-pitch entry showing up as two identical
+        rows in the same inning — and the fallback path that scans
+        ``summary.plays`` can pick up the same play via both branches when
+        ``scoringPlay`` is set on multiple sub-events.
         """
         scoring = summary.get("scoringPlays")
         if not isinstance(scoring, list) or not scoring:
             scoring = [p for p in (summary.get("plays") or []) if isinstance(p, dict) and p.get("scoringPlay") is True]
         results: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        seen_signatures: set[tuple[str, int, str]] = set()
         for play in scoring:
             if not isinstance(play, dict):
                 continue
@@ -663,12 +673,23 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 continue
             period = play.get("period") or {}
             team = play.get("team") or {}
+            play_id = str(play.get("id") or "")
+            period_type = str(period.get("type") or "").strip()
+            period_number = int(period.get("number") or 0)
+            if play_id and play_id in seen_ids:
+                continue
+            signature = (period_type.lower(), period_number, txt)
+            if signature in seen_signatures:
+                continue
+            if play_id:
+                seen_ids.add(play_id)
+            seen_signatures.add(signature)
             results.append(
                 {
-                    "id": str(play.get("id") or ""),
+                    "id": play_id,
                     "text": txt,
-                    "period_type": str(period.get("type") or "").strip(),
-                    "period_number": int(period.get("number") or 0),
+                    "period_type": period_type,
+                    "period_number": period_number,
                     "away_score": play.get("awayScore"),
                     "home_score": play.get("homeScore"),
                     "score_value": int(play.get("scoreValue") or 0),

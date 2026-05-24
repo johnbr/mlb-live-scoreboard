@@ -280,6 +280,89 @@ def test_resolve_status_info_does_not_flag_normal_inning():
 
 
 # ---------------------------------------------------------------------------
+# _normalize_scoring_plays
+# ---------------------------------------------------------------------------
+
+
+def _scoring_entry(*, play_id, half, inning, text, away=0, home=0, team_id="1"):
+    return {
+        "id": play_id,
+        "text": text,
+        "period": {"type": half, "number": inning},
+        "awayScore": away,
+        "homeScore": home,
+        "scoreValue": 1,
+        "team": {"id": team_id},
+    }
+
+
+def test_normalize_scoring_plays_keeps_distinct_plays():
+    summary = {
+        "scoringPlays": [
+            _scoring_entry(play_id="p1", half="Bottom", inning=2, text="Frelick groundout, Bauers scored.", away=0, home=1, team_id="158"),
+            _scoring_entry(play_id="p2", half="Top", inning=4, text="T. Hernández scored on wild pitch.", away=1, home=1, team_id="19"),
+            _scoring_entry(play_id="p3", half="Top", inning=5, text="Pages homered.", away=2, home=1, team_id="19"),
+        ]
+    }
+    out = Coord._normalize_scoring_plays(summary)
+    assert len(out) == 3
+    assert [p["id"] for p in out] == ["p1", "p2", "p3"]
+
+
+def test_normalize_scoring_plays_deduplicates_repeated_id():
+    summary = {
+        "scoringPlays": [
+            _scoring_entry(play_id="p1", half="Top", inning=4, text="Wild pitch, runner scored.", away=1, home=0),
+            _scoring_entry(play_id="p1", half="Top", inning=4, text="Wild pitch, runner scored.", away=1, home=0),
+        ]
+    }
+    out = Coord._normalize_scoring_plays(summary)
+    assert len(out) == 1
+    assert out[0]["id"] == "p1"
+
+
+def test_normalize_scoring_plays_deduplicates_by_content_when_ids_differ():
+    # ESPN observed emitting two scoringPlays entries with identical text
+    # in the same half-inning but different ids (multi-runner play split).
+    summary = {
+        "scoringPlays": [
+            _scoring_entry(play_id="p1", half="Top", inning=4, text="Hernández scored on wild pitch, Rojas to second."),
+            _scoring_entry(play_id="p2", half="Top", inning=4, text="Hernández scored on wild pitch, Rojas to second."),
+        ]
+    }
+    out = Coord._normalize_scoring_plays(summary)
+    assert len(out) == 1
+    assert out[0]["id"] == "p1"  # first occurrence kept
+
+
+def test_normalize_scoring_plays_preserves_same_text_in_different_innings():
+    # Two plays with identical text in different half-innings are genuinely
+    # distinct (rare in practice, but the signature includes the half/inning
+    # to be safe).
+    summary = {
+        "scoringPlays": [
+            _scoring_entry(play_id="p1", half="Top", inning=3, text="Solo home run."),
+            _scoring_entry(play_id="p2", half="Top", inning=7, text="Solo home run."),
+        ]
+    }
+    out = Coord._normalize_scoring_plays(summary)
+    assert len(out) == 2
+
+
+def test_normalize_scoring_plays_falls_back_to_plays_when_scoringplays_empty():
+    summary = {
+        "scoringPlays": [],
+        "plays": [
+            {"id": "x1", "text": "Pop out.", "scoringPlay": False, "period": {"type": "Top", "number": 1}},
+            {"id": "x2", "text": "Sac fly, run scores.", "scoringPlay": True, "period": {"type": "Top", "number": 1}, "scoreValue": 1},
+        ],
+    }
+    out = Coord._normalize_scoring_plays(summary)
+    assert len(out) == 1
+    assert out[0]["id"] == "x2"
+
+
+# ---------------------------------------------------------------------------
 # _normalize_recent_plays
 # ---------------------------------------------------------------------------
 
