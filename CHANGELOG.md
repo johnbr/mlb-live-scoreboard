@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.19.0...v1.19.1) (2026-05-24)
+
+
+### Bug Fixes
+
+* **card:** detect rain/weather/suspended delays, not just "Delayed" ([a0a35ee](https://github.com/johnbr/mlb-live-scoreboard/commit/a0a35eecbea24bb818d1b66d3473db65cb70bdb9))
+
 ## [1.19.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.18.0...v1.19.0) (2026-05-24)
 
 
