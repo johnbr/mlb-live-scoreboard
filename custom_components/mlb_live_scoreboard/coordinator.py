@@ -443,8 +443,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     "hits": competitor.get("hits"),
                     "errors": competitor.get("errors"),
                     "recordSummary": record_summary,
-                    "records": competitor.get("records") or [],
-                    "probables": competitor.get("probables") or [],
                     "linescores": compact_lines,
                     "team": {
                         "id": team.get("id"),
@@ -482,10 +480,39 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
     @staticmethod
     def _normalize_inning_context(summary: dict[str, Any], display_comp: dict[str, Any] | None) -> dict[str, Any]:
         """Derive inning number, half (top/bot/mid/end) and display strings from the
-        competition status block. Used to filter recent plays/pitches by inning."""
+        competition status block. Used to filter recent plays/pitches by inning.
+
+        Falls back to the freshest play's period when ESPN's status block
+        lags behind ``summary.plays`` — a real failure mode observed in
+        production where the CDN serves a stale status while plays update
+        in-band, pinning the card to a half-inning the game has already
+        left. Cache-busting the summary fetch mitigates most cases; this
+        fallback covers the residual.
+        """
         status = (display_comp or {}).get("status") or {}
         prefix = str(status.get("periodPrefix") or ((status.get("type") or {}).get("detail") or ""))
         period = int(status.get("period") or ((status.get("type") or {}).get("period") or 0) or 0)
+        plays = summary.get("plays") or []
+        if isinstance(plays, list) and plays:
+            # Plays are chronological; the freshest is at the tail. Scan the
+            # tail backwards for a usable (period, half) pair so we don't get
+            # tripped up if the very last entry is malformed or missing a
+            # half-inning type.
+            max_play_period = 0
+            max_play_half = ""
+            for play in reversed(plays):
+                if not isinstance(play, dict):
+                    continue
+                play_period = play.get("period") or {}
+                n = int(play_period.get("number") or 0)
+                half = str(play_period.get("type") or "").strip()
+                if n > 0 and half:
+                    max_play_period = n
+                    max_play_half = half
+                    break
+            if max_play_period > period and max_play_half:
+                period = max_play_period
+                prefix = f"{max_play_half} {max_play_period}"
         due_up = (summary.get("situation") or {}).get("dueUp") or []
         return {
             "period": period,
@@ -2372,8 +2399,12 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         summary: dict[str, Any] = {}
         if display_id:
             try:
+                # `_=<ts>` busts ESPN's CDN cache so we don't serve a stale
+                # status block that pins our inning filter to a half-inning
+                # the game has already left (observed in the wild as a
+                # multi-minute card freeze).
                 summary = await self._get_json(
-                    f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event={display_id}"
+                    f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event={display_id}&_={int(now_ts)}"
                 )
             except Exception as err:
                 _LOGGER.warning("Unable to fetch summary for %s: %s", display_id, err)

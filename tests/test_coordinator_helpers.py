@@ -186,6 +186,45 @@ def test_normalize_inning_context_handles_missing_comp():
     assert ctx["is_between_halves"] is False
 
 
+def test_normalize_inning_context_promotes_when_plays_ahead_of_status():
+    # ESPN status pins us to Top 2, but plays[] has already moved to Bot 3.
+    # The stale-status freeze observed in prod: status lags, plays don't.
+    summary = {
+        "situation": {"dueUp": []},
+        "plays": [
+            {"period": {"number": 2, "type": "Top"}, "text": "Single."},
+            {"period": {"number": 2, "type": "Bottom"}, "text": "Walk."},
+            {"period": {"number": 3, "type": "Top"}, "text": "Strikeout."},
+            {"period": {"number": 3, "type": "Bottom"}, "text": "Wild pitch."},
+        ],
+    }
+    comp = {"status": {"periodPrefix": "Top", "period": 2}}
+    ctx = Coord._normalize_inning_context(summary, comp)
+    assert ctx["period"] == 3
+    assert ctx["period_prefix"] == "Bottom 3"
+    assert ctx["is_between_halves"] is False
+
+
+def test_normalize_inning_context_keeps_status_when_plays_match():
+    # Plays are at the same period as status -> no override.
+    summary = {
+        "plays": [{"period": {"number": 4, "type": "Top"}, "text": "Single."}],
+    }
+    comp = {"status": {"periodPrefix": "Top 4th", "period": 4}}
+    ctx = Coord._normalize_inning_context(summary, comp)
+    assert ctx["period"] == 4
+    assert ctx["period_prefix"] == "Top 4th"
+
+
+def test_normalize_inning_context_ignores_plays_when_half_missing():
+    # If we can't derive the half from the play, don't override.
+    summary = {"plays": [{"period": {"number": 9, "type": ""}, "text": "X."}]}
+    comp = {"status": {"periodPrefix": "Top 1st", "period": 1}}
+    ctx = Coord._normalize_inning_context(summary, comp)
+    assert ctx["period"] == 1
+    assert ctx["period_prefix"] == "Top 1st"
+
+
 # ---------------------------------------------------------------------------
 # _normalize_recent_plays
 # ---------------------------------------------------------------------------
