@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.17.1...v1.18.0) (2026-05-24)
+
+
+### Features
+
+* **card:** per-pitcher game stats + flush layout in decisions panel ([f087117](https://github.com/johnbr/mlb-live-scoreboard/commit/f087117f68dae24bd2e077c659be1529597522e0))
+
 ## [1.17.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.17.0...v1.17.1) (2026-05-24)
 
 
