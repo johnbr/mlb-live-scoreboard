@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.16.2...v1.17.0) (2026-05-24)
+
+
+### Features
+
+* **card:** add pitcher decisions panel (W/L/SV) to final-game summary ([c95a66f](https://github.com/johnbr/mlb-live-scoreboard/commit/c95a66f00390b6ceef8a87861640870a20a8e343))
+
 ## [1.16.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.16.1...v1.16.2) (2026-05-23)
 
 
