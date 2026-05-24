@@ -93,6 +93,7 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
             "probable_pitchers": data.probable_pitchers,
             "win_probability": data.win_probability,
             "leaders": data.leaders,
+            "decisions": data.decisions,
             "division_standings": data.division_standings,
             "highlights_url": data.highlights_url,
         }

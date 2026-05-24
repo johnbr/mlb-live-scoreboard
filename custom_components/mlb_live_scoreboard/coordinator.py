@@ -59,6 +59,7 @@ from .types import (
     Leaders,
     Lineups,
     OnDeck,
+    PitcherDecisions,
     PitcherStats,
     PlayerCard,
     ProbablePitchers,
@@ -253,6 +254,7 @@ class MlbLiveScoreboardData:
     on_deck: OnDeck
     lineups: Lineups
     leaders: Leaders
+    decisions: PitcherDecisions
     division_standings: Standings
     # Post-game ESPN-hosted highlights gallery URL (e.g.
     # ``https://www.espn.com/mlb/video?gameId=…``). Empty until ESPN publishes
@@ -1942,6 +1944,67 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return result
 
     @classmethod
+    def _normalize_decisions(cls, summary: dict[str, Any]) -> PitcherDecisions:
+        """Pull the W/L/SV pitcher trio out of the box score's pitching notes.
+
+        ESPN tags decision pitchers with a ``"pitchingDecision"`` note whose
+        text is ``"W, 3-1"`` / ``"L, 2-5"`` / ``"SV, 5"`` (the trailing token
+        is a season W-L for W/L and a save count for SV). Pure transform of
+        the already-fetched box score — no extra ESPN calls. Returns ``{}``
+        until ESPN attaches the notes (post-final). HLD and other decisions
+        are ignored.
+        """
+        boxscore = summary.get("boxscore") or {}
+        side_by_team_id: dict[str, str] = {}
+        for team_entry in boxscore.get("teams") or []:
+            tid = str((team_entry.get("team") or {}).get("id") or "")
+            side = str(team_entry.get("homeAway") or "").lower()
+            if tid and side in ("away", "home"):
+                side_by_team_id[tid] = side
+
+        role_by_code = {"W": "win", "L": "loss", "SV": "save"}
+        result: PitcherDecisions = {}
+        for team_block in boxscore.get("players") or []:
+            team = team_block.get("team") or {}
+            team_id = str(team.get("id") or "")
+            team_abbr = str(team.get("abbreviation") or "")
+            team_side = side_by_team_id.get(team_id, "")
+            for stat_block in team_block.get("statistics") or []:
+                if stat_block.get("type") != "pitching":
+                    continue
+                for entry in stat_block.get("athletes") or []:
+                    text = ""
+                    for note in entry.get("notes") or []:
+                        if str((note or {}).get("type") or "") == "pitchingDecision":
+                            text = str((note or {}).get("text") or "")
+                            if text:
+                                break
+                    if not text:
+                        continue
+                    head, _, tail = text.partition(",")
+                    code = head.strip().upper()
+                    role = role_by_code.get(code)
+                    if not role:
+                        continue
+                    athlete = entry.get("athlete") or {}
+                    headshot_obj = athlete.get("headshot")
+                    if isinstance(headshot_obj, dict):
+                        headshot = str(headshot_obj.get("href") or "")
+                    else:
+                        headshot = str(headshot_obj or "")
+                    result[role] = {  # type: ignore[literal-required]
+                        "id": str(athlete.get("id") or ""),
+                        "name": str(athlete.get("displayName") or athlete.get("shortName") or ""),
+                        "short_name": str(athlete.get("shortName") or athlete.get("displayName") or ""),
+                        "headshot": headshot,
+                        "record": tail.strip(),
+                        "decision": code,
+                        "team_side": team_side,
+                        "team_abbr": team_abbr,
+                    }
+        return result
+
+    @classmethod
     def _lineup_hitter_row(cls, entry: dict[str, Any], keys: list[str]) -> dict[str, Any]:
         """One hitter row for :meth:`_normalize_lineups` (Game stats).
 
@@ -2439,6 +2502,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             on_deck=self._normalize_on_deck(summary, inning_context, batter_id),
             lineups=self._normalize_lineups(summary, batter_id),
             leaders=self._normalize_leaders(summary),
+            decisions=self._normalize_decisions(summary),
             division_standings=division_standings,
             highlights_url=self._extract_highlights_url(summary),
             mode=mode,

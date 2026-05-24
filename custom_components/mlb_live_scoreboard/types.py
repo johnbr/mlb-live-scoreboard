@@ -300,6 +300,40 @@ class LineupPitcher(TypedDict, total=False):
     era: str
 
 
+class PitcherDecision(TypedDict, total=False):
+    """One W/L/SV pitcher entry in :class:`PitcherDecisions`.
+
+    Sourced from ``boxscore.players[].statistics[type=pitching].athletes[].notes``
+    where ``type == "pitchingDecision"``. The ESPN note text is split on
+    the first comma: ``"W, 3-1"`` -> ``decision="W"``, ``record="3-1"``;
+    ``"SV, 5"`` -> ``decision="SV"``, ``record="5"`` (a save count, not a
+    W-L). ``headshot`` is the ESPN portrait URL the box score already
+    carries on the athlete entry.
+    """
+
+    id: str
+    name: str
+    short_name: str
+    headshot: str
+    record: str
+    decision: str
+    team_side: str
+    team_abbr: str
+
+
+class PitcherDecisions(TypedDict, total=False):
+    """Shape of the ``decisions`` attribute.
+
+    Populated post-final once ESPN attaches ``pitchingDecision`` notes to
+    the box score. Keys are present only when ESPN supplies that decision
+    — every final has a ``win`` and ``loss``; ``save`` is optional.
+    """
+
+    win: PitcherDecision
+    loss: PitcherDecision
+    save: PitcherDecision
+
+
 class LineupTeam(TypedDict, total=False):
     """One side of the :class:`Lineups` attribute.
 

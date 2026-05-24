@@ -269,6 +269,140 @@ def test_normalize_third_out_play_returns_empty_when_no_third_out():
 
 
 # ---------------------------------------------------------------------------
+# _normalize_decisions
+# ---------------------------------------------------------------------------
+
+
+def _make_pitching_entry(
+    *, athlete_id, name, short_name, decision_text, headshot=""
+):
+    athlete = {"id": athlete_id, "displayName": name, "shortName": short_name}
+    if headshot:
+        athlete["headshot"] = {"href": headshot, "alt": name}
+    return {
+        "athlete": athlete,
+        "notes": [{"type": "pitchingDecision", "text": decision_text}],
+    }
+
+
+def _make_summary_with_pitchers(away_entries, home_entries):
+    return {
+        "boxscore": {
+            "teams": [
+                {"team": {"id": "1"}, "homeAway": "away"},
+                {"team": {"id": "2"}, "homeAway": "home"},
+            ],
+            "players": [
+                {
+                    "team": {"id": "1", "abbreviation": "BOS"},
+                    "statistics": [{"type": "pitching", "athletes": away_entries}],
+                },
+                {
+                    "team": {"id": "2", "abbreviation": "ATL"},
+                    "statistics": [{"type": "pitching", "athletes": home_entries}],
+                },
+            ],
+        }
+    }
+
+
+def test_normalize_decisions_parses_win_loss_save():
+    summary = _make_summary_with_pitchers(
+        away_entries=[
+            _make_pitching_entry(
+                athlete_id="4720856",
+                name="Brayan Bello",
+                short_name="B. Bello",
+                decision_text="L, 2-5",
+                headshot="https://a.espncdn.com/i/headshots/mlb/players/full/4720856.png",
+            ),
+        ],
+        home_entries=[
+            _make_pitching_entry(
+                athlete_id="33840",
+                name="Grant Holmes",
+                short_name="G. Holmes",
+                decision_text="W, 3-1",
+            ),
+            _make_pitching_entry(
+                athlete_id="40404",
+                name="Closer Closington",
+                short_name="C. Closington",
+                decision_text="SV, 5",
+            ),
+        ],
+    )
+    result = Coord._normalize_decisions(summary)
+    assert set(result.keys()) == {"win", "loss", "save"}
+    assert result["win"]["id"] == "33840"
+    assert result["win"]["record"] == "3-1"
+    assert result["win"]["decision"] == "W"
+    assert result["win"]["team_side"] == "home"
+    assert result["win"]["team_abbr"] == "ATL"
+    assert result["loss"]["id"] == "4720856"
+    assert result["loss"]["record"] == "2-5"
+    assert result["loss"]["decision"] == "L"
+    assert result["loss"]["team_side"] == "away"
+    assert (
+        result["loss"]["headshot"]
+        == "https://a.espncdn.com/i/headshots/mlb/players/full/4720856.png"
+    )
+    assert result["save"]["decision"] == "SV"
+    assert result["save"]["record"] == "5"
+
+
+def test_normalize_decisions_handles_missing_save():
+    summary = _make_summary_with_pitchers(
+        away_entries=[
+            _make_pitching_entry(
+                athlete_id="1",
+                name="A Pitcher",
+                short_name="A. Pitcher",
+                decision_text="L, 1-2",
+            ),
+        ],
+        home_entries=[
+            _make_pitching_entry(
+                athlete_id="2",
+                name="B Pitcher",
+                short_name="B. Pitcher",
+                decision_text="W, 4-0",
+            ),
+        ],
+    )
+    result = Coord._normalize_decisions(summary)
+    assert set(result.keys()) == {"win", "loss"}
+    assert "save" not in result
+
+
+def test_normalize_decisions_ignores_holds_and_unknown_codes():
+    summary = _make_summary_with_pitchers(
+        away_entries=[
+            _make_pitching_entry(
+                athlete_id="1",
+                name="Held Hold",
+                short_name="H. Hold",
+                decision_text="HLD, 3",
+            ),
+        ],
+        home_entries=[
+            _make_pitching_entry(
+                athlete_id="2",
+                name="Blown Save",
+                short_name="B. Save",
+                decision_text="BSV, 1",
+            ),
+        ],
+    )
+    assert Coord._normalize_decisions(summary) == {}
+
+
+def test_normalize_decisions_returns_empty_when_no_boxscore():
+    assert Coord._normalize_decisions({}) == {}
+    assert Coord._normalize_decisions({"boxscore": {}}) == {}
+
+
+# ---------------------------------------------------------------------------
 # _extract_batter_game_outcomes
 # ---------------------------------------------------------------------------
 
@@ -492,6 +626,7 @@ def _make_data(
         on_deck={},
         lineups={},
         leaders={},
+        decisions={},
         division_standings={"division_name": "", "entries": []},
         highlights_url="",
         mode="live" if is_live else "previous",
