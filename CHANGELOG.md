@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.17.0...v1.17.1) (2026-05-24)
+
+
+### Bug Fixes
+
+* **coordinator:** unstick inning context when ESPN status lags plays ([a799d9e](https://github.com/johnbr/mlb-live-scoreboard/commit/a799d9e85083a1d7f3915cbcf40e53544c0d8c85))
+
 ## [1.17.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.16.2...v1.17.0) (2026-05-24)
 
 
