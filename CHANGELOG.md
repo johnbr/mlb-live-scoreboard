@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.19.1...v1.19.2) (2026-05-24)
+
+
+### Bug Fixes
+
+* **card:** center and bolden sub-panel headings in final-game expand ([#44](https://github.com/johnbr/mlb-live-scoreboard/issues/44)) ([5886b1b](https://github.com/johnbr/mlb-live-scoreboard/commit/5886b1ba3f34d43cceb7d82df1b8c67026fe9451))
+
 ## [1.19.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.19.0...v1.19.1) (2026-05-24)
 
 
