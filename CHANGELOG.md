@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.18.0...v1.19.0) (2026-05-24)
+
+
+### Features
+
+* **card:** tighten and weight decisions panel meta + stat lines ([#40](https://github.com/johnbr/mlb-live-scoreboard/issues/40)) ([71591aa](https://github.com/johnbr/mlb-live-scoreboard/commit/71591aacee61a3322b11200ab56558c586db6fc7))
+
 ## [1.18.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.17.1...v1.18.0) (2026-05-24)
 
 
