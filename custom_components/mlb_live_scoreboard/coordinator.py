@@ -1996,11 +1996,15 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         """Pull the W/L/SV pitcher trio out of the box score's pitching notes.
 
         ESPN tags decision pitchers with a ``"pitchingDecision"`` note whose
-        text is ``"W, 3-1"`` / ``"L, 2-5"`` / ``"SV, 5"`` (the trailing token
-        is a season W-L for W/L and a save count for SV). Pure transform of
-        the already-fetched box score — no extra ESPN calls. Returns ``{}``
-        until ESPN attaches the notes (post-final). HLD and other decisions
-        are ignored.
+        text is ``"W, 3-1"`` / ``"L, 2-5"`` / ``"S, 12"`` (the trailing token
+        is a season W-L for W/L and a save count for S). The save code is
+        observed as ``"S"`` in ESPN's MLB feeds; we also accept ``"SV"``
+        defensively. ESPN occasionally concatenates a second decision onto a
+        loss (``"L, 3-2, B, 4"`` for a loss + blown save) — we keep only
+        the first comma-segment after the code as the record. Pure
+        transform of the already-fetched box score; no extra ESPN calls.
+        Returns ``{}`` until ESPN attaches the notes (post-final). HLD and
+        other decisions are ignored.
         """
         boxscore = summary.get("boxscore") or {}
         side_by_team_id: dict[str, str] = {}
@@ -2010,7 +2014,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             if tid and side in ("away", "home"):
                 side_by_team_id[tid] = side
 
-        role_by_code = {"W": "win", "L": "loss", "SV": "save"}
+        role_by_code = {"W": "win", "L": "loss", "S": "save", "SV": "save"}
         result: PitcherDecisions = {}
         for team_block in boxscore.get("players") or []:
             team = team_block.get("team") or {}
@@ -2029,11 +2033,12 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                                 break
                     if not text:
                         continue
-                    head, _, tail = text.partition(",")
-                    code = head.strip().upper()
+                    segments = [s.strip() for s in text.split(",")]
+                    code = segments[0].upper() if segments else ""
                     role = role_by_code.get(code)
                     if not role:
                         continue
+                    record = segments[1] if len(segments) > 1 else ""
                     athlete = entry.get("athlete") or {}
                     headshot_obj = athlete.get("headshot")
                     if isinstance(headshot_obj, dict):
@@ -2045,7 +2050,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                         "name": str(athlete.get("displayName") or athlete.get("shortName") or ""),
                         "short_name": str(athlete.get("shortName") or athlete.get("displayName") or ""),
                         "headshot": headshot,
-                        "record": tail.strip(),
+                        "record": record,
                         "decision": code,
                         "team_side": team_side,
                         "team_abbr": team_abbr,
