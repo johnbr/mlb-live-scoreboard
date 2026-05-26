@@ -1145,8 +1145,9 @@ function renderDecisionsPanel(card, attrs) {
     return pitchers.find((p) => String(p?.id || "") === String(id)) || null;
   };
   // Compact `IP · H · ER · K · BB` line using the card's standard dot
-  // separator. Any individual missing/zero-length stat is skipped rather
-  // than rendered as a bare unit suffix.
+  // separator. Space between value and unit (`0.2 IP`) for readability;
+  // separator stays tight (no surrounding spaces) so the line wraps as
+  // few times as possible in the narrow 3-column grid.
   const formatStatLine = (pitcher) => {
     if (!pitcher) return "";
     const parts = [
@@ -1158,7 +1159,7 @@ function renderDecisionsPanel(card, attrs) {
     ]
       .map(([key, unit]) => {
         const v = String(pitcher[key] ?? "").trim();
-        return v ? `${v}${unit}` : "";
+        return v ? `${v} ${unit}` : "";
       })
       .filter(Boolean);
     return parts.join("·");
@@ -1174,26 +1175,21 @@ function renderDecisionsPanel(card, attrs) {
       if (!d || !(d.id || d.name)) return "";
       const name = String(d.short_name || d.name || "").trim();
       const displayName = name ? shortPersonName(name) : "";
+      // ESPN's "record" tail is a W-L for win/loss and a single season
+      // save count for SV. The label above already disambiguates, so we
+      // just wrap whatever's there in parens.
       const recordRaw = String(d.record || "").trim();
-      // Save's "record" from ESPN is a season save count, not a W-L —
-      // prefix it so users don't read it as a W-L line.
-      const recordLine =
-        recordRaw && key === "save" ? `SV ${recordRaw}` : recordRaw;
+      const recordParen = recordRaw ? `(${recordRaw})` : "";
       const headshot = d.headshot ? requestCachedLogo(card, d.headshot) : "";
       const portrait = headshot
         ? `<img class="decision-img" src="${headshot}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
         : `<div class="decision-img placeholder"></div>`;
-      const teamAbbr = String(d.team_abbr || "").toUpperCase();
       const statLine = formatStatLine(findPitcher(d.team_side, d.id));
       return `
         <div class="decision-cell">
           ${portrait}
           <div class="decision-label">${escapeHtml(label)}</div>
-          <div class="decision-name">${playerNameMarkup(displayName, d.id)}</div>
-          <div class="decision-meta">
-            ${teamAbbr ? `<span class="decision-team">${escapeHtml(teamAbbr)}</span>` : ""}
-            ${recordLine ? `<span class="decision-record">${escapeHtml(recordLine)}</span>` : ""}
-          </div>
+          <div class="decision-name">${playerNameMarkup(displayName, d.id)}${recordParen ? ` <span class="decision-record">${escapeHtml(recordParen)}</span>` : ""}</div>
           ${statLine ? `<div class="decision-stats">${escapeHtml(statLine)}</div>` : ""}
         </div>`;
     })
@@ -4261,18 +4257,11 @@ white-space: nowrap;
           text-overflow: ellipsis;
           max-width: 100%;
         }
-        .decision-meta {
-          display: flex;
-          gap: 6px;
-          align-items: baseline;
-          font-size: 0.82em;
+        .decision-record {
           color: var(--secondary-text-color);
           font-variant-numeric: tabular-nums;
           font-weight: 500;
-        }
-        .decision-team {
-          font-weight: 600;
-          letter-spacing: 0.02em;
+          margin-left: 2px;
         }
         .decision-stats {
           font-size: 0.8em;
