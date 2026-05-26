@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.19.3...v1.20.0) (2026-05-26)
+
+
+### Features
+
+* **card:** compact decisions cell + show save count in parens ([dd4506b](https://github.com/johnbr/mlb-live-scoreboard/commit/dd4506b8699c22e781c161772349ac8c8ddb6f74))
+
 ## [1.19.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.19.2...v1.19.3) (2026-05-24)
 
 
