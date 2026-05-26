@@ -504,7 +504,7 @@ def test_normalize_decisions_parses_win_loss_save():
                 athlete_id="40404",
                 name="Closer Closington",
                 short_name="C. Closington",
-                decision_text="SV, 5",
+                decision_text="S, 5",
             ),
         ],
     )
@@ -523,8 +523,45 @@ def test_normalize_decisions_parses_win_loss_save():
         result["loss"]["headshot"]
         == "https://a.espncdn.com/i/headshots/mlb/players/full/4720856.png"
     )
-    assert result["save"]["decision"] == "SV"
+    assert result["save"]["decision"] == "S"
     assert result["save"]["record"] == "5"
+
+
+def test_normalize_decisions_accepts_legacy_sv_code():
+    """Defensive: if ESPN ever switches back to ``"SV, N"`` we still parse it."""
+    summary = _make_summary_with_pitchers(
+        away_entries=[],
+        home_entries=[
+            _make_pitching_entry(
+                athlete_id="9",
+                name="A Saver",
+                short_name="A. Saver",
+                decision_text="SV, 12",
+            ),
+        ],
+    )
+    result = Coord._normalize_decisions(summary)
+    assert result["save"]["decision"] == "SV"
+    assert result["save"]["record"] == "12"
+
+
+def test_normalize_decisions_strips_secondary_decision_from_record():
+    """A loss can carry a blown save tail (``"L, 3-2, B, 4"``); we keep
+    only the first comma-segment after the code as the record."""
+    summary = _make_summary_with_pitchers(
+        away_entries=[
+            _make_pitching_entry(
+                athlete_id="7",
+                name="Lucas Erceg",
+                short_name="L. Erceg",
+                decision_text="L, 3-2, B, 4",
+            ),
+        ],
+        home_entries=[],
+    )
+    result = Coord._normalize_decisions(summary)
+    assert result["loss"]["decision"] == "L"
+    assert result["loss"]["record"] == "3-2"
 
 
 def test_normalize_decisions_handles_missing_save():
