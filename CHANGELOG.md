@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.20.0...v1.20.1) (2026-05-26)
+
+
+### Bug Fixes
+
+* **coordinator:** recognize ESPN's "S" save code in pitching decisions ([253ecfe](https://github.com/johnbr/mlb-live-scoreboard/commit/253ecfe011a4f3b1191362225245a0df2cac44a7))
+
 ## [1.20.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.19.3...v1.20.0) (2026-05-26)
 
 
