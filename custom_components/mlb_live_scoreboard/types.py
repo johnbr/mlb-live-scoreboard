@@ -75,6 +75,25 @@ class PitcherStats(TypedDict, total=False):
     strikeouts: str
 
 
+class CurrentPitch(TypedDict, total=False):
+    """Shape of one entry in ``current_pitches``.
+
+    ``text`` is ESPN's full pitch line (``"Pitch 1 : Strike 1 Swinging"``)
+    and is always present. The remaining fields come from the same play's
+    structured ``pitchType``/``pitchVelocity``/``type``/``resultCount``
+    blocks and may be absent when ESPN doesn't supply them (intentional
+    walks, automatic balls, partial Statcast feeds).
+    """
+
+    text: str
+    pitch_type: str
+    pitch_type_abbr: str
+    velocity: int
+    result: str
+    balls: int
+    strikes: int
+
+
 class Situation(TypedDict, total=False):
     """Shape of ``situation`` attribute.
 

@@ -377,6 +377,89 @@ def _make_play(*, period: int, half: str, text: str, play_type: str = "play resu
     }
 
 
+# ---------------------------------------------------------------------------
+# _normalize_current_pitches
+# ---------------------------------------------------------------------------
+
+
+def _make_pitch(
+    *,
+    seq: int,
+    period: int = 1,
+    half: str = "Top",
+    pitch_type: str | None = "Four-seam FB",
+    pitch_type_abbr: str | None = "FF",
+    velocity: int | None = 95,
+    result: str | None = "Strike Looking",
+    balls: int | None = 0,
+    strikes: int | None = 1,
+):
+    play: dict = {
+        "id": f"pitch{seq}",
+        "period": {"number": period, "type": half},
+        "type": {"text": result or "", "type": "pitch"},
+        "text": f"Pitch {seq} : {result or 'pitch'}",
+    }
+    pt: dict = {}
+    if pitch_type:
+        pt["text"] = pitch_type
+    if pitch_type_abbr:
+        pt["abbreviation"] = pitch_type_abbr
+    if pt:
+        play["pitchType"] = pt
+    if velocity is not None:
+        play["pitchVelocity"] = velocity
+    rc: dict = {}
+    if balls is not None:
+        rc["balls"] = balls
+    if strikes is not None:
+        rc["strikes"] = strikes
+    if rc:
+        play["resultCount"] = rc
+    return play
+
+
+def test_normalize_current_pitches_surfaces_structured_fields():
+    summary = {"plays": [_make_pitch(seq=1, velocity=95, result="Strike Looking", balls=0, strikes=1)]}
+    out = Coord._normalize_current_pitches(summary, {"period": 1, "period_prefix": "Top 1st"})
+    assert len(out) == 1
+    entry = out[0]
+    assert entry["text"].startswith("Pitch 1")
+    assert entry["pitch_type"] == "Four-seam FB"
+    assert entry["pitch_type_abbr"] == "FF"
+    assert entry["velocity"] == 95
+    assert entry["result"] == "Strike Looking"
+    assert entry["balls"] == 0
+    assert entry["strikes"] == 1
+
+
+def test_normalize_current_pitches_omits_missing_fields():
+    # ESPN sometimes serves pitches without pitchType / pitchVelocity (intentional
+    # walks, partial Statcast). The entry should still come through carrying text.
+    summary = {
+        "plays": [_make_pitch(seq=1, pitch_type=None, pitch_type_abbr=None, velocity=None, result="Ball", balls=1, strikes=0)]
+    }
+    out = Coord._normalize_current_pitches(summary, {"period": 1, "period_prefix": "Top 1st"})
+    assert len(out) == 1
+    entry = out[0]
+    assert "pitch_type" not in entry
+    assert "pitch_type_abbr" not in entry
+    assert "velocity" not in entry
+    assert entry["result"] == "Ball"
+    assert entry["balls"] == 1
+
+
+def test_normalize_current_pitches_filters_to_target_half():
+    # Last half-inning's pitches must not bleed into the current one.
+    plays = [
+        _make_pitch(seq=1, period=1, half="top", result="Ball"),
+        _make_pitch(seq=1, period=1, half="bottom", result="Strike Looking"),
+    ]
+    out = Coord._normalize_current_pitches({"plays": plays}, {"period": 1, "period_prefix": "Bottom 1st"})
+    assert len(out) == 1
+    assert out[0]["result"] == "Strike Looking"
+
+
 def test_normalize_recent_plays_filters_to_target_half():
     plays = [
         _make_play(period=1, half="top", text="A grounded out.", outs=1, play_id="p1"),

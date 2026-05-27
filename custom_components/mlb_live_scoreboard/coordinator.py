@@ -53,6 +53,7 @@ from .types import (
     BatterStats,
     Competition,
     CurrentBatter,
+    CurrentPitch,
     CurrentPitcher,
     DueUpEntry,
     InningContext,
@@ -238,7 +239,7 @@ class MlbLiveScoreboardData:
     inning_context: InningContext
     recent_plays: list[RecentPlay]
     scoring_plays: list[ScoringPlay]
-    current_pitches: list[str]
+    current_pitches: list[CurrentPitch]
     away_team: TeamMetadata
     home_team: TeamMetadata
     current_batter: CurrentBatter
@@ -523,11 +524,16 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         }
 
     @staticmethod
-    def _normalize_current_pitches(summary: dict[str, Any], inning_context: dict[str, Any]) -> list[str]:
-        """Return the pitch-text list for the at-bat in progress, in chronological order.
+    def _normalize_current_pitches(
+        summary: dict[str, Any], inning_context: dict[str, Any]
+    ) -> list[CurrentPitch]:
+        """Return the pitches for the at-bat in progress, in chronological order.
 
         Walks plays backwards from newest, collecting ``Pitch N: ...`` entries until
         an at-bat boundary (start/end batter, terminating play result) is reached.
+        Each entry carries ESPN's raw text plus structured fields pulled from the
+        same play (``pitchType``, ``pitchVelocity``, ``type.text``, ``resultCount``)
+        so the card can render richer per-pitch lines without re-fetching.
         """
         plays = summary.get("plays") or []
         if not isinstance(plays, list) or not plays:
@@ -550,7 +556,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if not relevant:
             return []
 
-        current: list[str] = []
+        current: list[CurrentPitch] = []
         saw_pitch = False
 
         for play in reversed(relevant):
@@ -569,7 +575,26 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 return []
 
             if txt.lower().startswith("pitch "):
-                current.insert(0, txt)
+                entry: CurrentPitch = {"text": txt}
+                pt = play.get("pitchType") or {}
+                pt_text = str(pt.get("text") or "").strip()
+                pt_abbr = str(pt.get("abbreviation") or "").strip()
+                if pt_text:
+                    entry["pitch_type"] = pt_text
+                if pt_abbr:
+                    entry["pitch_type_abbr"] = pt_abbr
+                vel = play.get("pitchVelocity")
+                if isinstance(vel, (int, float)) and vel > 0:
+                    entry["velocity"] = int(vel)
+                result_text = str((play.get("type") or {}).get("text") or "").strip()
+                if result_text:
+                    entry["result"] = result_text
+                rc = play.get("resultCount") or {}
+                if isinstance(rc.get("balls"), int):
+                    entry["balls"] = rc["balls"]
+                if isinstance(rc.get("strikes"), int):
+                    entry["strikes"] = rc["strikes"]
+                current.insert(0, entry)
                 saw_pitch = True
                 continue
 

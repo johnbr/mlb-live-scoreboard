@@ -609,22 +609,38 @@ function renderCountDotsRow(situation, currentPitches = []) {
     : [];
 
   // Derive balls/strikes from the pitches array when available for consistency
-  // with the pitch-by-pitch display, otherwise fall back to situation
+  // with the pitch-by-pitch display, otherwise fall back to situation.
+  // Prefer the structured count from the latest pitch's `resultCount`; fall
+  // back to text-parsing for entries that pre-date the structured shape or
+  // when ESPN omits the resultCount block.
   let balls = 0;
   let strikes = 0;
   if (activePitches.length) {
-    for (const pitch of activePitches) {
-      const p = String(pitch).toLowerCase();
-      if (p.includes("ball") && !p.includes("foul")) {
-        balls++;
-      } else if (
-        p.includes("strike") ||
-        p.includes("foul") ||
-        p.includes("swinging") ||
-        p === "in play"
-      ) {
-        // Foul with 2 strikes doesn't add a strike, but we cap at 2 anyway
-        strikes++;
+    const latest = activePitches[activePitches.length - 1];
+    const latestObj = latest && typeof latest === "object" ? latest : null;
+    if (
+      latestObj &&
+      Number.isFinite(latestObj.balls) &&
+      Number.isFinite(latestObj.strikes)
+    ) {
+      balls = Number(latestObj.balls);
+      strikes = Number(latestObj.strikes);
+    } else {
+      for (const pitch of activePitches) {
+        const p = String(
+          (pitch && typeof pitch === "object" ? pitch.text : pitch) || "",
+        ).toLowerCase();
+        if (p.includes("ball") && !p.includes("foul")) {
+          balls++;
+        } else if (
+          p.includes("strike") ||
+          p.includes("foul") ||
+          p.includes("swinging") ||
+          p === "in play"
+        ) {
+          // Foul with 2 strikes doesn't add a strike, but we cap at 2 anyway
+          strikes++;
+        }
       }
     }
     // Cap at max values (4 balls ends at-bat, 3 strikes ends at-bat but foul can exceed)
@@ -1452,6 +1468,48 @@ function renderPlayIndicator(play, previousContext = {}) {
   return "";
 }
 
+// Shorten the few ESPN pitch-type strings that are verbose. Anything not in
+// the map is kept as-is — ESPN's `pitchType.text` is already reasonably
+// short for the common pitches (Slider, Changeup, Cutter, Sinker, …).
+const PITCH_TYPE_DISPLAY = {
+  "Four-seam FB": "Fastball",
+  "Four-seam Fastball": "Fastball",
+  "Two-seam FB": "Two-seam",
+  "Two-seam Fastball": "Two-seam",
+  "Knuckle Curve": "Knuckle Cv",
+};
+
+function prettyPitchType(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return "";
+  return PITCH_TYPE_DISPLAY[trimmed] || trimmed;
+}
+
+// Format one entry of `current_pitches`. Accepts the structured shape
+// emitted by the coordinator ({text, pitch_type, velocity, result, ...}) and
+// falls back to the bare string the coordinator used to emit. Output:
+// "Pitch 1: Fastball 95 (Strike Looking)" with whichever pieces are available.
+function formatPitchLine(pitch) {
+  if (!pitch) return "";
+  if (typeof pitch === "string") return pitch.trim();
+  if (typeof pitch !== "object") return String(pitch).trim();
+  const text = String(pitch.text || "").trim();
+  const seq = text.match(/^Pitch\s+(\d+)\s*:/i);
+  const prefix = seq ? `Pitch ${seq[1]}:` : text ? text.split(":")[0] + ":" : "Pitch:";
+  const typeLabel = prettyPitchType(pitch.pitch_type);
+  const vel = Number(pitch.velocity);
+  const result = String(pitch.result || "").trim();
+  const pieces = [];
+  if (typeLabel) pieces.push(typeLabel);
+  if (Number.isFinite(vel) && vel > 0) pieces.push(String(vel));
+  let line = `${prefix}${pieces.length ? " " + pieces.join(" ") : ""}`;
+  if (result) line += ` (${result})`;
+  // If we have nothing structured to add, the original ESPN text is more
+  // informative than just "Pitch N:".
+  if (!pieces.length && !result) return text || line;
+  return line.trim();
+}
+
 function renderRecentPlays(
   plays,
   currentPitches = [],
@@ -1466,11 +1524,7 @@ function renderRecentPlays(
   const list = showPlayResults ? [...chronological] : [];
   const pitches =
     showPitches && Array.isArray(currentPitches)
-      ? currentPitches
-          .filter(Boolean)
-          .map((p) => String(p).trim())
-          .filter(Boolean)
-          .reverse()
+      ? currentPitches.filter(Boolean).map(formatPitchLine).filter(Boolean).reverse()
       : [];
   if (!list.length && !pitches.length) return "";
   const pitchHtml = pitches
