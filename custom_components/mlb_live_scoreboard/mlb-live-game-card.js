@@ -1468,10 +1468,27 @@ function renderPlayIndicator(play, previousContext = {}) {
   return "";
 }
 
+// Shorten the few ESPN pitch-type strings that are verbose. Anything not in
+// the map is kept as-is — ESPN's `pitchType.text` is already reasonably
+// short for the common pitches (Slider, Changeup, Cutter, Sinker, …).
+const PITCH_TYPE_DISPLAY = {
+  "Four-seam FB": "Fastball",
+  "Four-seam Fastball": "Fastball",
+  "Two-seam FB": "Two-seam",
+  "Two-seam Fastball": "Two-seam",
+  "Knuckle Curve": "Knuckle Cv",
+};
+
+function prettyPitchType(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return "";
+  return PITCH_TYPE_DISPLAY[trimmed] || trimmed;
+}
+
 // Format one entry of `current_pitches`. Accepts the structured shape
-// emitted by the coordinator ({text, pitch_type_abbr, velocity, result, ...})
-// and falls back to the bare string the coordinator used to emit. Output:
-// "Pitch 1: FF 95 (Strike Looking)" with whichever pieces are available.
+// emitted by the coordinator ({text, pitch_type, velocity, result, ...}) and
+// falls back to the bare string the coordinator used to emit. Output:
+// "Pitch 1: Fastball 95 (Strike Looking)" with whichever pieces are available.
 function formatPitchLine(pitch) {
   if (!pitch) return "";
   if (typeof pitch === "string") return pitch.trim();
@@ -1479,12 +1496,10 @@ function formatPitchLine(pitch) {
   const text = String(pitch.text || "").trim();
   const seq = text.match(/^Pitch\s+(\d+)\s*:/i);
   const prefix = seq ? `Pitch ${seq[1]}:` : text ? text.split(":")[0] + ":" : "Pitch:";
-  const abbr = String(pitch.pitch_type_abbr || "").trim();
-  const typeName = String(pitch.pitch_type || "").trim();
+  const typeLabel = prettyPitchType(pitch.pitch_type);
   const vel = Number(pitch.velocity);
   const result = String(pitch.result || "").trim();
   const pieces = [];
-  const typeLabel = abbr || typeName;
   if (typeLabel) pieces.push(typeLabel);
   if (Number.isFinite(vel) && vel > 0) pieces.push(String(vel));
   let line = `${prefix}${pieces.length ? " " + pieces.join(" ") : ""}`;
