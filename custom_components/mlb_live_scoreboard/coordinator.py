@@ -2297,8 +2297,16 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         # Across a game boundary, scores from the previous game don't compare
         # meaningfully to the new game. Skip dispatch entirely; the next poll
-        # will establish the new baseline.
-        if prev.display_event_id and curr.display_event_id and prev.display_event_id != curr.display_event_id:
+        # will establish the new baseline. An empty-vs-set transition (e.g. a
+        # cold-start refresh that couldn't resolve a display event) is also
+        # treated as a boundary so we don't compare a synthetic 0-0 baseline
+        # against a real final score and emit spurious score deltas.
+        if prev.display_event_id != curr.display_event_id:
+            return []
+        # A prev with no usable competition has no real scores to compare
+        # against; treat this refresh as the baseline rather than firing
+        # deltas relative to (0, 0).
+        if not prev.selected_competition:
             return []
 
         comp = curr.selected_competition or {}
