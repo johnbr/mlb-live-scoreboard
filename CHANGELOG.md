@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.20.1...v1.20.2) (2026-05-27)
+
+
+### Bug Fixes
+
+* **coordinator:** suppress score events when prev baseline is empty ([0f6219e](https://github.com/johnbr/mlb-live-scoreboard/commit/0f6219e3c482b851db5bbd4eaf0bb3a11a3afe99))
+
 ## [1.20.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.20.0...v1.20.1) (2026-05-26)
 
 
