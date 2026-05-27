@@ -905,6 +905,28 @@ def test_detect_skips_across_event_id_boundary():
     assert Coord._detect_game_events(prev, curr, 19) == []
 
 
+def test_detect_skips_when_prev_has_empty_event_id():
+    # A cold-start refresh that couldn't pick a display event leaves prev
+    # with display_event_id="" and selected_competition=None. The next
+    # refresh — which lands on a final 15-6 game — must not fire score
+    # deltas relative to that synthetic 0-0 baseline.
+    prev = _make_data(my_score=0, opp_score=0, event_id="G1")
+    prev.display_event_id = ""
+    prev.selected_competition = None
+    curr = _make_data(my_score=15, opp_score=6, event_id="G1")
+    assert Coord._detect_game_events(prev, curr, 19) == []
+
+
+def test_detect_skips_when_prev_competition_missing():
+    # Defensive: same event id on both sides but prev.selected_competition
+    # is None (summary fetch failed, schedule fallback returned nothing
+    # usable). Still no real baseline → no events.
+    prev = _make_data(my_score=0, opp_score=0, event_id="G1")
+    prev.selected_competition = None
+    curr = _make_data(my_score=15, opp_score=6, event_id="G1")
+    assert Coord._detect_game_events(prev, curr, 19) == []
+
+
 def test_detect_game_started():
     prev = _make_data(my_score=0, opp_score=0, is_live=False, state="pre")
     curr = _make_data(my_score=0, opp_score=0, is_live=True, state="in")
