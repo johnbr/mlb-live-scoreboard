@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.20.2...v1.21.0) (2026-05-27)
+
+
+### Features
+
+* **card:** show pitch type + velocity for each pitch in the at-bat ([168a8f6](https://github.com/johnbr/mlb-live-scoreboard/commit/168a8f6d4a547893cc924209bc0bdf6fd697a3f5))
+
 ## [1.20.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.20.1...v1.20.2) (2026-05-27)
 
 
