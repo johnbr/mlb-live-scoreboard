@@ -3643,7 +3643,7 @@ color: var(--secondary-text-color);
         /* Widen the center column only when the pitch zone is present, so the
            layout stays unchanged for users who don't opt in. */
         .matchup-grid.enhanced.with-pitch-zone {
-          grid-template-columns: minmax(0,1fr) 96px minmax(0,1fr);
+          grid-template-columns: minmax(0,1fr) 180px minmax(0,1fr);
         }
         .matchup-center {
           display:flex;
@@ -3652,7 +3652,7 @@ color: var(--secondary-text-color);
         }
         .matchup-center.stack-center {
           flex-direction: column;
-          gap: 8px;
+          gap: 4px;
           align-self: stretch;
           justify-content: center;
         }
@@ -3663,7 +3663,7 @@ color: var(--secondary-text-color);
         /* Pitch-zone graphic — sits below the diamond when both render. The
            SVG scales via viewBox; the wrapper just bounds its width. */
         .pitch-zone {
-          width: 84px;
+          width: 168px;
           aspect-ratio: 220 / 270;
           display: flex;
           align-items: center;
