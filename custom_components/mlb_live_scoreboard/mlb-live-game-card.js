@@ -43,6 +43,11 @@ const CARD_DEFAULTS = {
   show_diamond: true,
   show_count: true,
   show_win_probability: true,
+  // SVG strike-zone with one numbered, color-coded dot per pitch in the
+  // in-progress at-bat. Off by default; opt in per card. Only shows up
+  // while pitches with coordinates are present (between at-bats it
+  // disappears and the diamond reflows back to center).
+  show_pitch_zone: false,
   // Post-final ESPN highlights link. Defaults to off — the link only
   // appears 30-90 min after the final pitch (when ESPN publishes clips)
   // and most users won't want it in their dashboard. Opt in per card.
@@ -184,6 +189,7 @@ const EDITOR_SCHEMA = [
       { name: "show_on_deck", selector: { boolean: {} } },
       { name: "show_base_occupancy", selector: { boolean: {} } },
       { name: "show_diamond", selector: { boolean: {} } },
+      { name: "show_pitch_zone", selector: { boolean: {} } },
       { name: "show_count", selector: { boolean: {} } },
       { name: "show_win_probability", selector: { boolean: {} } },
       { name: "show_highlights", selector: { boolean: {} } },
@@ -207,6 +213,7 @@ const EDITOR_LABELS = {
   show_on_deck: "On-deck",
   show_base_occupancy: "Base occupancy",
   show_diamond: "Base diamond",
+  show_pitch_zone: "Pitch zone (live at-bat)",
   show_count: "Count",
   show_win_probability: "Win probability",
   show_highlights: "Highlights link (final)",
@@ -217,6 +224,8 @@ const EDITOR_HELPERS = {
   refresh_rate: "0 leaves refreshing to Home Assistant's own state updates.",
   headshot_size:
     "Auto scales headshots with the card's width (responsive to HA's per-column dashboards). Presets pin a fixed pixel size.",
+  show_pitch_zone:
+    "Adds a small strike-zone graphic below the base diamond with one colored dot per pitch in the current at-bat. Auto-hides between at-bats.",
   show_highlights:
     "Shows a 'Watch highlights on ESPN' link in the final-game panel once ESPN publishes clips (typically 30-90 min after the final pitch).",
 };
@@ -1468,6 +1477,27 @@ function renderPlayIndicator(play, previousContext = {}) {
   return "";
 }
 
+// Color palette for pitch-zone dots, keyed by ESPN's `pitch_type_abbr`. The
+// chosen hues are roughly distinct under both light and dark HA themes and
+// keep the family separation that broadcasters use (fastballs warm, breaking
+// balls cool, off-speed magenta/brown). Unknown abbreviations fall back to
+// a neutral gray so wild/unmapped pitches still plot.
+const PITCH_TYPE_COLOR = {
+  FF: "#e53935", // Four-seam Fastball
+  FT: "#fb8c00", // Two-seam Fastball
+  SI: "#fb8c00", // Sinker (warm, fastball family)
+  FC: "#fbc02d", // Cutter
+  SL: "#43a047", // Slider
+  ST: "#26a69a", // Sweeper
+  CU: "#1e88e5", // Curveball
+  KC: "#7e57c2", // Knuckle Curve
+  CH: "#ec407a", // Changeup
+  FS: "#8d6e63", // Splitter
+  KN: "#90a4ae", // Knuckleball
+  EP: "#90a4ae", // Eephus
+};
+const PITCH_TYPE_COLOR_FALLBACK = "#9e9e9e";
+
 // Shorten the few ESPN pitch-type strings that are verbose. Anything not in
 // the map is kept as-is — ESPN's `pitchType.text` is already reasonably
 // short for the common pitches (Slider, Changeup, Cutter, Sinker, …).
@@ -1508,6 +1538,56 @@ function formatPitchLine(pitch) {
   // informative than just "Pitch N:".
   if (!pieces.length && !result) return text || line;
   return line.trim();
+}
+
+// Render the in-at-bat pitch-zone SVG. One numbered dot per pitch, colored
+// by pitch type, with a regulation-zone outline for reference and a home
+// plate icon for orientation. Returns "" when no pitch has a coordinate so
+// the caller can skip layout for empty at-bats.
+//
+// Coordinate system: ESPN supplies catcher's-POV pixel coords on a roughly
+// 0-220 × 0-260 canvas; we keep the data as-is and rely on viewBox scaling.
+function renderPitchZone(pitches) {
+  if (!Array.isArray(pitches) || !pitches.length) return "";
+  const plottable = pitches.filter(
+    (p) =>
+      p &&
+      typeof p === "object" &&
+      p.pitch_coordinate &&
+      Number.isFinite(Number(p.pitch_coordinate.x)) &&
+      Number.isFinite(Number(p.pitch_coordinate.y)),
+  );
+  if (!plottable.length) return "";
+  // Regulation-zone box, empirically tuned from called-strike clusters
+  // (x ∈ [78,144], y ∈ [132,197] in ESPN's units).
+  const ZONE = { x: 78, y: 132, w: 66, h: 65 };
+  // viewBox covers the full ESPN canvas with a strip below the zone for the
+  // plate icon.
+  const VB = { w: 220, h: 270 };
+  const dots = plottable
+    .map((p, idx) => {
+      const seq = idx + 1;
+      const cx = Number(p.pitch_coordinate.x);
+      const cy = Number(p.pitch_coordinate.y);
+      const abbr = String(p.pitch_type_abbr || "").trim();
+      const fill = PITCH_TYPE_COLOR[abbr] || PITCH_TYPE_COLOR_FALLBACK;
+      const title = escapeHtml(formatPitchLine(p));
+      return `
+        <g class="pitch-zone-dot">
+          <circle cx="${cx}" cy="${cy}" r="13" fill="${fill}" stroke="white" stroke-width="1.5"></circle>
+          <text x="${cx}" y="${cy + 4.5}" text-anchor="middle" font-size="13" font-weight="700" fill="white">${seq}</text>
+          <title>${title}</title>
+        </g>`;
+    })
+    .join("");
+  return `
+    <div class="pitch-zone" role="img" aria-label="Pitch locations for current at-bat">
+      <svg viewBox="0 0 ${VB.w} ${VB.h}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+        <rect class="pitch-zone-frame" x="${ZONE.x}" y="${ZONE.y}" width="${ZONE.w}" height="${ZONE.h}" rx="2" ry="2"></rect>
+        <polygon class="pitch-zone-plate" points="78,230 144,230 144,242 111,255 78,242"></polygon>
+        ${dots}
+      </svg>
+    </div>`;
 }
 
 function renderRecentPlays(
@@ -2882,6 +2962,16 @@ class MlbLiveGameCard extends HTMLElement {
       this.config.show_diamond !== false
         ? renderBaseDiamond(attrs.situation || {})
         : "";
+    // Pitch zone is opt-in (default off) and only renders during a live at-bat
+    // with pitches that carry coordinates. `renderPitchZone` returns "" for
+    // empty inputs so the surrounding wrapper stays inert between at-bats.
+    const pitchZoneHtml =
+      this.config.show_pitch_zone === true &&
+      stateInfo.pillClass === "live" &&
+      !betweenHalves &&
+      !holdThirdOut
+        ? renderPitchZone(attrs.current_pitches || [])
+        : "";
     // Clicking a matchup half (anywhere but the player-name link) opens that
     // team's lineup popup: pitcher half -> fielding team, batter half ->
     // batting team. Resolve + bake the side into the markup so the delegated
@@ -2898,10 +2988,17 @@ class MlbLiveGameCard extends HTMLElement {
         ` aria-label="Show ${nm} lineup" title="Show ${nm} lineup"`
       );
     };
+    // Combine diamond + pitch-zone into the matchup grid's center column.
+    // Stack them only when both are present; otherwise emit the diamond (or
+    // the zone) bare so the layout stays unchanged.
+    const stackCenter = !!(diamondHtml && pitchZoneHtml);
+    const centerColumnHtml = stackCenter
+      ? `<div class="matchup-center stack-center">${diamondHtml}${pitchZoneHtml}</div>`
+      : diamondHtml || pitchZoneHtml;
     const matchupPanel = this.config.show_batter
       ? `
             <div class="matchup-block ${batter || pitcher ? "" : "muted-block"}">
-              <div class="matchup-grid enhanced productionish ${this.config.show_diamond !== false ? "with-diamond" : ""}">
+              <div class="matchup-grid enhanced productionish ${this.config.show_diamond !== false ? "with-diamond" : ""} ${pitchZoneHtml ? "with-pitch-zone" : ""}">
                 <div class="matchup-side with-headshot stacked centered-half"${luSideAttrs(luPitcherSide)}>
                   ${renderPlayerHeadshot(this, attrs.current_pitcher?.headshot || "", pitcher || "Pitcher")}
                   <div class="matchup-copy centered-copy">
@@ -2910,7 +3007,7 @@ class MlbLiveGameCard extends HTMLElement {
                     <div class="matchup-subtle secondary stat-line">${pitcherSecondaryLine || ""}</div>
                   </div>
                 </div>
-                ${diamondHtml}
+                ${centerColumnHtml}
                 <div class="matchup-side with-headshot stacked centered-half align-right"${luSideAttrs(luBatterSide)}>
                   ${renderPlayerHeadshot(this, attrs.current_batter?.headshot || "", batter || "Batter")}
                   <div class="matchup-copy centered-copy">
@@ -3543,14 +3640,52 @@ color: var(--secondary-text-color);
           row-gap: 0;
           align-items:start;
         }
+        /* Widen the center column only when the pitch zone is present, so the
+           layout stays unchanged for users who don't opt in. */
+        .matchup-grid.enhanced.with-pitch-zone {
+          grid-template-columns: minmax(0,1fr) 96px minmax(0,1fr);
+        }
         .matchup-center {
           display:flex;
           align-items:center;
           justify-content:center;
         }
+        .matchup-center.stack-center {
+          flex-direction: column;
+          gap: 8px;
+          align-self: stretch;
+          justify-content: center;
+        }
         .diamond-center {
           align-self:center;
           min-height: 70px;
+        }
+        /* Pitch-zone graphic — sits below the diamond when both render. The
+           SVG scales via viewBox; the wrapper just bounds its width. */
+        .pitch-zone {
+          width: 84px;
+          aspect-ratio: 220 / 270;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .pitch-zone svg {
+          width: 100%;
+          height: 100%;
+          overflow: visible;
+        }
+        .pitch-zone-frame {
+          fill: rgba(255,255,255,0.04);
+          stroke: rgba(255,255,255,0.55);
+          stroke-width: 1.5;
+        }
+        .pitch-zone-plate {
+          fill: rgba(255,255,255,0.55);
+          stroke: rgba(255,255,255,0.75);
+          stroke-width: 1;
+        }
+        .pitch-zone-dot circle {
+          filter: drop-shadow(0 0 1px rgba(0,0,0,0.45));
         }
         .diamond-graphic {
           position: relative;

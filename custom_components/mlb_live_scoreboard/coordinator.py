@@ -594,6 +594,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     entry["balls"] = rc["balls"]
                 if isinstance(rc.get("strikes"), int):
                     entry["strikes"] = rc["strikes"]
+                pc = play.get("pitchCoordinate") or {}
+                px, py = pc.get("x"), pc.get("y")
+                if isinstance(px, (int, float)) and isinstance(py, (int, float)):
+                    entry["pitch_coordinate"] = {"x": int(px), "y": int(py)}
                 current.insert(0, entry)
                 saw_pitch = True
                 continue

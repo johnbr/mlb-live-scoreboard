@@ -393,6 +393,8 @@ def _make_pitch(
     result: str | None = "Strike Looking",
     balls: int | None = 0,
     strikes: int | None = 1,
+    coord_x: int | None = None,
+    coord_y: int | None = None,
 ):
     play: dict = {
         "id": f"pitch{seq}",
@@ -416,6 +418,8 @@ def _make_pitch(
         rc["strikes"] = strikes
     if rc:
         play["resultCount"] = rc
+    if coord_x is not None and coord_y is not None:
+        play["pitchCoordinate"] = {"x": coord_x, "y": coord_y}
     return play
 
 
@@ -447,6 +451,20 @@ def test_normalize_current_pitches_omits_missing_fields():
     assert "velocity" not in entry
     assert entry["result"] == "Ball"
     assert entry["balls"] == 1
+
+
+def test_normalize_current_pitches_surfaces_pitch_coordinate():
+    # ESPN's `pitchCoordinate` is plumbed straight through to feed the
+    # opt-in strike-zone canvas on the card side.
+    with_coord = _make_pitch(seq=1, coord_x=129, coord_y=215)
+    without_coord = _make_pitch(seq=2, coord_x=None, coord_y=None)
+    out = Coord._normalize_current_pitches(
+        {"plays": [with_coord, without_coord]},
+        {"period": 1, "period_prefix": "Top 1st"},
+    )
+    assert len(out) == 2
+    assert out[0]["pitch_coordinate"] == {"x": 129, "y": 215}
+    assert "pitch_coordinate" not in out[1]
 
 
 def test_normalize_current_pitches_filters_to_target_half():

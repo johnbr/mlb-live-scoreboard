@@ -80,9 +80,13 @@ class CurrentPitch(TypedDict, total=False):
 
     ``text`` is ESPN's full pitch line (``"Pitch 1 : Strike 1 Swinging"``)
     and is always present. The remaining fields come from the same play's
-    structured ``pitchType``/``pitchVelocity``/``type``/``resultCount``
-    blocks and may be absent when ESPN doesn't supply them (intentional
-    walks, automatic balls, partial Statcast feeds).
+    structured ``pitchType``/``pitchVelocity``/``type``/``resultCount``/
+    ``pitchCoordinate`` blocks and may be absent when ESPN doesn't supply
+    them (intentional walks, automatic balls, partial Statcast feeds).
+
+    ``pitch_coordinate`` carries ESPN's catcher-POV pixel coords on a
+    roughly 0-220 × 0-260 canvas; consumers should treat it as an
+    opaque (x, y) plot pair, not an absolute strike-zone position.
     """
 
     text: str
@@ -92,6 +96,7 @@ class CurrentPitch(TypedDict, total=False):
     result: str
     balls: int
     strikes: int
+    pitch_coordinate: dict[str, int]
 
 
 class Situation(TypedDict, total=False):
