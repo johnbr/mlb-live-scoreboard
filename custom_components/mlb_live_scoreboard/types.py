@@ -85,7 +85,7 @@ class CurrentPitch(TypedDict, total=False):
     them (intentional walks, automatic balls, partial Statcast feeds).
 
     ``pitch_coordinate`` carries ESPN's catcher-POV pixel coords on a
-    roughly 0-220 × 0-260 canvas; consumers should treat it as an
+    roughly 0-220 by 0-260 canvas; consumers should treat it as an
     opaque (x, y) plot pair, not an absolute strike-zone position.
     """
 
