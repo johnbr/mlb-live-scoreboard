@@ -1546,7 +1546,11 @@ function formatPitchLine(pitch) {
 // the caller can skip layout for empty at-bats.
 //
 // Coordinate system: ESPN supplies catcher's-POV pixel coords on a roughly
-// 0-220 × 0-260 canvas; we keep the data as-is and rely on viewBox scaling.
+// 0-220 wide canvas; we keep the data as-is and rely on viewBox scaling.
+// The viewBox is cropped to y=80..270 (190 units tall) so the visible
+// canvas hugs the strike zone — the upper 80 units of ESPN's nominal
+// 0-270 range were nearly always blank padding and pushed the zone rect
+// uncomfortably far below the diamond.
 function renderPitchZone(pitches) {
   if (!Array.isArray(pitches) || !pitches.length) return "";
   const plottable = pitches.filter(
@@ -1559,11 +1563,11 @@ function renderPitchZone(pitches) {
   );
   if (!plottable.length) return "";
   // Regulation-zone box, empirically tuned from called-strike clusters
-  // (x ∈ [78,144], y ∈ [132,197] in ESPN's units).
+  // (x in [78,144], y in [132,197] in ESPN's units).
   const ZONE = { x: 78, y: 132, w: 66, h: 65 };
-  // viewBox covers the full ESPN canvas with a strip below the zone for the
-  // plate icon.
-  const VB = { w: 220, h: 270 };
+  // Cropped viewBox — start at y=80 (the top of ESPN's canvas is mostly
+  // empty padding above the zone) so the rect hugs the diamond above.
+  const VB = { x: 0, y: 80, w: 220, h: 190 };
   const dots = plottable
     .map((p, idx) => {
       const seq = idx + 1;
@@ -1582,7 +1586,7 @@ function renderPitchZone(pitches) {
     .join("");
   return `
     <div class="pitch-zone" role="img" aria-label="Pitch locations for current at-bat">
-      <svg viewBox="0 0 ${VB.w} ${VB.h}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+      <svg viewBox="${VB.x} ${VB.y} ${VB.w} ${VB.h}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
         <rect class="pitch-zone-frame" x="${ZONE.x}" y="${ZONE.y}" width="${ZONE.w}" height="${ZONE.h}" rx="2" ry="2"></rect>
         <polygon class="pitch-zone-plate" points="78,230 144,230 144,242 111,255 78,242"></polygon>
         ${dots}
@@ -3641,9 +3645,11 @@ color: var(--secondary-text-color);
           align-items:start;
         }
         /* Widen the center column only when the pitch zone is present, so the
-           layout stays unchanged for users who don't opt in. */
+           layout stays unchanged for users who don't opt in. Sized with the
+           same container-query approach as the headshots so it grows with
+           the dashboard column. */
         .matchup-grid.enhanced.with-pitch-zone {
-          grid-template-columns: minmax(0,1fr) 180px minmax(0,1fr);
+          grid-template-columns: minmax(0,1fr) clamp(140px, 42cqi, 260px) minmax(0,1fr);
         }
         .matchup-center {
           display:flex;
@@ -3652,19 +3658,26 @@ color: var(--secondary-text-color);
         }
         .matchup-center.stack-center {
           flex-direction: column;
-          gap: 4px;
-          align-self: stretch;
-          justify-content: center;
+          gap: 0;
+          align-self: start;
+          justify-content: flex-start;
+        }
+        /* When the diamond is part of the stack-center column the wrapper's
+           default 70px floor (used for vertical centering in the row-flex
+           layout) just adds dead space between diamond and zone. Collapse it. */
+        .matchup-center.stack-center > .diamond-center {
+          min-height: 0;
         }
         .diamond-center {
           align-self:center;
           min-height: 70px;
         }
         /* Pitch-zone graphic — sits below the diamond when both render. The
-           SVG scales via viewBox; the wrapper just bounds its width. */
+           SVG scales via viewBox; the wrapper bounds its width with the same
+           clamp(min, Xcqi, max) pattern so the zone tracks the card width. */
         .pitch-zone {
-          width: 168px;
-          aspect-ratio: 220 / 270;
+          width: clamp(120px, 36cqi, 240px);
+          aspect-ratio: 220 / 190;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -3689,8 +3702,11 @@ color: var(--secondary-text-color);
         }
         .diamond-graphic {
           position: relative;
-          width: 52px;
-          height: 52px;
+          /* Scales with the card's inline (width) size via the same 'cqi'
+             container query used by the headshots — grows on wide
+             dashboards, clamps to a sane min/max on narrow ones. */
+          width: clamp(44px, 13cqi, 80px);
+          height: clamp(44px, 13cqi, 80px);
           display:flex;
           align-items:center;
           justify-content:center;
