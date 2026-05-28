@@ -1518,26 +1518,27 @@ function prettyPitchType(name) {
 // Format one entry of `current_pitches`. Accepts the structured shape
 // emitted by the coordinator ({text, pitch_type, velocity, result, ...}) and
 // falls back to the bare string the coordinator used to emit. Output:
-// "Pitch 1: Fastball 95 (Strike Looking)" with whichever pieces are available.
+// "Fastball 95 (Strike Looking) · 1" — content first, sequence number
+// trailing after the project's usual middle-dot separator.
 function formatPitchLine(pitch) {
   if (!pitch) return "";
   if (typeof pitch === "string") return pitch.trim();
   if (typeof pitch !== "object") return String(pitch).trim();
   const text = String(pitch.text || "").trim();
-  const seq = text.match(/^Pitch\s+(\d+)\s*:/i);
-  const prefix = seq ? `Pitch ${seq[1]}:` : text ? text.split(":")[0] + ":" : "Pitch:";
+  const seqMatch = text.match(/^Pitch\s+(\d+)\s*:/i);
+  const seqNum = seqMatch ? seqMatch[1] : "";
   const typeLabel = prettyPitchType(pitch.pitch_type);
   const vel = Number(pitch.velocity);
   const result = String(pitch.result || "").trim();
   const pieces = [];
   if (typeLabel) pieces.push(typeLabel);
   if (Number.isFinite(vel) && vel > 0) pieces.push(String(vel));
-  let line = `${prefix}${pieces.length ? " " + pieces.join(" ") : ""}`;
-  if (result) line += ` (${result})`;
+  let line = pieces.join(" ");
+  if (result) line += `${line ? " " : ""}(${result})`;
   // If we have nothing structured to add, the original ESPN text is more
-  // informative than just "Pitch N:".
-  if (!pieces.length && !result) return text || line;
-  return line.trim();
+  // informative than just a bare sequence number.
+  if (!pieces.length && !result) return text;
+  return seqNum ? `${line} · ${seqNum}` : line;
 }
 
 // Render the in-at-bat pitch-zone SVG. One numbered dot per pitch, colored
