@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.21.0...v1.22.0) (2026-06-01)
+
+
+### Features
+
+* **card:** opt-in pitch-zone graphic under the base diamond ([6c08591](https://github.com/johnbr/mlb-live-scoreboard/commit/6c08591f128140a9d2f7cb8f7006f6ec8ecffeaa))
+
 ## [1.21.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.20.2...v1.21.0) (2026-05-27)
 
 
