@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.0...v1.22.1) (2026-06-03)
+
+
+### Bug Fixes
+
+* **coordinator:** on-deck shows active sub, not subbed-out starter ([015474c](https://github.com/johnbr/mlb-live-scoreboard/commit/015474c5a0f0d5afdde6c8b70a12808765c88869))
+
 ## [1.22.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.21.0...v1.22.0) (2026-06-01)
 
 
