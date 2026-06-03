@@ -502,6 +502,62 @@ def test_normalize_recent_plays_skips_blank_text():
     assert [p["id"] for p in out] == ["real"]
 
 
+def _on_deck_summary(*athletes):
+    """A minimal box score with a single batting team block.
+
+    Each athlete is ``(id, name, bat_order, active)``.
+    """
+    return {
+        "boxscore": {
+            "players": [
+                {
+                    "team": {"id": "1"},
+                    "statistics": [
+                        {
+                            "type": "batting",
+                            "keys": ["hits", "atBats", "avg"],
+                            "athletes": [
+                                {
+                                    "athlete": {"id": aid, "displayName": name, "shortName": name},
+                                    "batOrder": bat_order,
+                                    "active": active,
+                                    "stats": ["1", "3", ".275"],
+                                }
+                                for (aid, name, bat_order, active) in athletes
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+
+def test_normalize_on_deck_returns_next_in_order():
+    summary = _on_deck_summary(
+        ("10", "First", 1, True),
+        ("20", "Second", 2, True),
+    )
+    out = Coord._normalize_on_deck(summary, {}, "10")
+    assert out["id"] == "20"
+    assert out["short_name"] == "Second"
+    assert out["bat_order"] == 2
+
+
+def test_normalize_on_deck_prefers_active_substitute_in_shared_slot():
+    # The slot 2 starter was subbed out; ESPN lists the starter first
+    # (active=False) and the replacement after it (active=True). On-deck
+    # must surface the player currently in the game, not the starter.
+    summary = _on_deck_summary(
+        ("10", "First", 1, True),
+        ("20", "OldStarter", 2, False),
+        ("21", "Replacement", 2, True),
+    )
+    out = Coord._normalize_on_deck(summary, {}, "10")
+    assert out["id"] == "21"
+    assert out["short_name"] == "Replacement"
+
+
 def test_normalize_recent_plays_returns_empty_for_no_plays():
     assert Coord._normalize_recent_plays({}, {"period": 1, "period_prefix": "Top"}) == []
     assert Coord._normalize_recent_plays({"plays": []}, {"period": 1, "period_prefix": "Top"}) == []
