@@ -1910,27 +1910,40 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # Calculate next batter in order (wrap 9 -> 1)
         next_bat_order = (current_bat_order % BATTING_ORDER_SIZE) + 1
 
-        # Find the next batter
+        # Find the next batter. When a slot has been double-filled by a
+        # substitution, ESPN keeps both the starter and the sub at the same
+        # batOrder (starter listed first), so the first match is the
+        # subbed-out player. Prefer the entry currently in the game
+        # (active=True); fall back to the last candidate, then the first.
         for stat_block in batting_team_block.get("statistics") or []:
             if stat_block.get("type") != "batting":
                 continue
             keys = [str(k or "") for k in (stat_block.get("keys") or [])]
-            for athlete_entry in stat_block.get("athletes") or []:
-                if int(athlete_entry.get("batOrder") or 0) == next_bat_order:
-                    athlete = athlete_entry.get("athlete") or {}
-                    # Get stats for on-deck batter
-                    h = cls._stat_from_entry(athlete_entry, keys, "h", "hits")
-                    ab = cls._stat_from_entry(athlete_entry, keys, "ab", "atBats")
-                    avg = cls._stat_from_entry(athlete_entry, keys, "avg", "battingAverage")
-                    return {
-                        "id": str(athlete.get("id") or ""),
-                        "display_name": athlete.get("displayName") or athlete.get("shortName") or "",
-                        "short_name": athlete.get("shortName") or athlete.get("displayName") or "",
-                        "headshot": ((athlete.get("headshot") or {}).get("href") or ""),
-                        "bat_order": next_bat_order,
-                        "avg": avg,
-                        "hits_ab": f"{h}-{ab}" if h and ab else "",
-                    }
+            candidates = [
+                entry
+                for entry in (stat_block.get("athletes") or [])
+                if int(entry.get("batOrder") or 0) == next_bat_order
+            ]
+            if not candidates:
+                continue
+            athlete_entry = next(
+                (e for e in candidates if e.get("active")),
+                candidates[-1],
+            )
+            athlete = athlete_entry.get("athlete") or {}
+            # Get stats for on-deck batter
+            h = cls._stat_from_entry(athlete_entry, keys, "h", "hits")
+            ab = cls._stat_from_entry(athlete_entry, keys, "ab", "atBats")
+            avg = cls._stat_from_entry(athlete_entry, keys, "avg", "battingAverage")
+            return {
+                "id": str(athlete.get("id") or ""),
+                "display_name": athlete.get("displayName") or athlete.get("shortName") or "",
+                "short_name": athlete.get("shortName") or athlete.get("displayName") or "",
+                "headshot": ((athlete.get("headshot") or {}).get("href") or ""),
+                "bat_order": next_bat_order,
+                "avg": avg,
+                "hits_ab": f"{h}-{ab}" if h and ab else "",
+            }
         return {}
 
     @classmethod
