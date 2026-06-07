@@ -1520,7 +1520,7 @@ function prettyPitchType(name) {
 // falls back to the bare string the coordinator used to emit. Output:
 // "Fastball 95 (Strike Looking) · 1" — content first, sequence number
 // trailing after the project's usual middle-dot separator.
-function formatPitchLine(pitch) {
+function formatPitchLine(pitch, { html = false } = {}) {
   if (!pitch) return "";
   if (typeof pitch === "string") return pitch.trim();
   if (typeof pitch !== "object") return String(pitch).trim();
@@ -1532,7 +1532,16 @@ function formatPitchLine(pitch) {
   const result = String(pitch.result || "").trim();
   const pieces = [];
   if (typeLabel) pieces.push(typeLabel);
-  if (Number.isFinite(vel) && vel > 0) pieces.push(String(vel));
+  if (Number.isFinite(vel) && vel > 0) {
+    // Triple-digit velocities get a cosmetic red/bold highlight, but only in
+    // the HTML render path — the plain-text path feeds the pitch-zone tooltip
+    // (escaped), where markup would show up literally.
+    pieces.push(
+      html && vel >= 100
+        ? `<span class="pitch-velo-hot">${vel}</span>`
+        : String(vel),
+    );
+  }
   let line = pieces.join(" ");
   if (result) line += `${line ? " " : ""}(${result})`;
   // If we have nothing structured to add, the original ESPN text is more
@@ -1609,7 +1618,11 @@ function renderRecentPlays(
   const list = showPlayResults ? [...chronological] : [];
   const pitches =
     showPitches && Array.isArray(currentPitches)
-      ? currentPitches.filter(Boolean).map(formatPitchLine).filter(Boolean).reverse()
+      ? currentPitches
+          .filter(Boolean)
+          .map((p) => formatPitchLine(p, { html: true }))
+          .filter(Boolean)
+          .reverse()
       : [];
   if (!list.length && !pitches.length) return "";
   const pitchHtml = pitches
@@ -4050,6 +4063,13 @@ line-height: 1.2;
 line-height: 1.05;
         }
         .pitch-row .play-indicator { display: none; }
+        /* Cosmetic highlight for triple-digit pitch velocities. The override
+           is !important because the card renders in light DOM, where host
+           dashboard CSS can otherwise win the cascade on color. */
+        .pitch-velo-hot {
+          color: #ff4d4d !important;
+          font-weight: 700;
+        }
         .play-indicator {
           color: var(--secondary-text-color);
           white-space: nowrap;
