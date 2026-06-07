@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.2...v1.22.3) (2026-06-07)
+
+
+### Bug Fixes
+
+* **card:** highlight triple-digit pitch velocities in red ([7d8c4d6](https://github.com/johnbr/mlb-live-scoreboard/commit/7d8c4d6c1397093e92c9e37305befe58e8712445))
+
 ## [1.22.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.1...v1.22.2) (2026-06-07)
 
 
