@@ -3707,7 +3707,13 @@ color: var(--secondary-text-color);
              container query used by the headshots — grows on wide
              dashboards, clamps to a sane min/max on narrow ones. */
           width: clamp(44px, 13cqi, 80px);
-          height: clamp(44px, 13cqi, 80px);
+          /* Keep the box square via aspect-ratio rather than a fixed height.
+             The center grid column is a fixed 56px, so on wide dashboards the
+             clamp width (up to 80px) gets flex-shrunk to fit. A fixed height
+             would NOT shrink with it, leaving a tall rectangle — and the
+             rotate(45deg) below then renders it as a slanted rhombus. Deriving
+             height from the used width keeps it square at any shrink. */
+          aspect-ratio: 1 / 1;
           display:flex;
           align-items:center;
           justify-content:center;
