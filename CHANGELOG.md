@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.1...v1.22.2) (2026-06-07)
+
+
+### Bug Fixes
+
+* **card:** keep base diamond square when center column shrinks ([b9c8873](https://github.com/johnbr/mlb-live-scoreboard/commit/b9c8873bd8fccaa0ab21215858c350fdaa2b1e35))
+
 ## [1.22.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.0...v1.22.1) (2026-06-03)
 
 
