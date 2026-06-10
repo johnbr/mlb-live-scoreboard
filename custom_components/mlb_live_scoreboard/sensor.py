@@ -66,6 +66,11 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
             "team_id": data.team_id,
             "team_name": data.team_name,
             "mode": data.mode,
+            # True only when the card is currently displaying the live game
+            # (mode == "live", i.e. the displayed event is the live event).
+            # Stable boolean for dashboards/automations to gate on "a game is
+            # on screen right now" without string-comparing `mode`.
+            "game_active": data.mode == "live",
             "is_live": data.is_live,
             "is_delayed": data.is_delayed,
             "status_text": data.status_text,
