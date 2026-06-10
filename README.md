@@ -254,6 +254,32 @@ top-level template variables (e.g. `{{ team_score }}`), whereas in
 automations they're nested under `trigger.event.data` (e.g.
 `{{ trigger.event.data.team_score }}`).
 
+## Sensor state attributes
+
+The sensor's state is the ESPN event ID (or `idle`); all game data rides in
+state attributes. A few are handy for dashboards and automations:
+
+| Attribute     | Type   | Description                                                                                                       |
+| ------------- | ------ | --------------------------------------------------------------------------------------------------------------- |
+| `game_active` | bool   | `true` only while the card is displaying the live game (`mode == "live"`). Use it to gate cards/automations on "a game is on screen right now." |
+| `mode`        | string | Which event the card shows: `live`, `previous`, or `next`.                                                       |
+| `is_live`     | bool   | The displayed competition's status is in-progress (or delayed/suspended).                                        |
+| `status_text` | string | Human-readable status detail, e.g. `Top 3rd`, `Final`, `Rain Delay`.                                             |
+
+Example — only show the scoreboard card while a game is live:
+
+```yaml
+type: conditional
+conditions:
+  - condition: state
+    entity: sensor.mlb_live_scoreboard_lad
+    attribute: game_active
+    state: true
+card:
+  type: custom:mlb-live-game-card
+  entity: sensor.mlb_live_scoreboard_lad
+```
+
 ## Supported Teams
 
 | Abbreviation | Team                  |
