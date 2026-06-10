@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.4](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.3...v1.22.4) (2026-06-10)
+
+
+### Bug Fixes
+
+* expose game_active state attribute on scoreboard sensor ([#64](https://github.com/johnbr/mlb-live-scoreboard/issues/64)) ([dab2969](https://github.com/johnbr/mlb-live-scoreboard/commit/dab2969b4fbfc992bf5e84dac4e169f9e185ffb6))
+
 ## [1.22.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.2...v1.22.3) (2026-06-07)
 
 
