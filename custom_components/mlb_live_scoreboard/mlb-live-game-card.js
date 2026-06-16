@@ -2,6 +2,11 @@ const CARD_TAG = "mlb-live-game-card";
 const CARD_VERSION = "1.22.4"; // x-release-please-version
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
+// After navigating the schedule away from the default game, auto-snap back to
+// the live/auto-selected view this long after the last arrow tap. Each tap
+// re-arms the timer; returning to the default view cancels it.
+const NAV_IDLE_RETURN_MS = 60000;
+
 // Number of seconds the card keeps showing the third-out play after it occurs,
 // before yielding to the due-up panel for the next half-inning.
 const THIRD_OUT_HOLD_SECONDS = 30;
@@ -1710,6 +1715,7 @@ class MlbLiveGameCard extends HTMLElement {
     this._navInflight = null;
     if (this._navCache instanceof Map) this._navCache.clear();
     else this._navCache = new Map();
+    this._clearNavIdleTimer();
   }
 
   _clearRefreshTimer() {
@@ -2723,7 +2729,28 @@ class MlbLiveGameCard extends HTMLElement {
     this._lastFingerprint = "";
     this._lastCompactFp = "";
     this._lastLiveHtml = "";
+    // Off the default view → arm the idle auto-return; back on it → cancel.
+    if (this._navOffset !== 0) this._armNavIdleTimer();
+    else this._clearNavIdleTimer();
     this.render();
+  }
+
+  _armNavIdleTimer() {
+    this._clearNavIdleTimer();
+    this._navIdleTimer = setTimeout(() => {
+      this._navIdleTimer = null;
+      if (this._navOffset !== 0) {
+        this._resetScheduleNav();
+        this._forceScheduleRerender();
+      }
+    }, NAV_IDLE_RETURN_MS);
+  }
+
+  _clearNavIdleTimer() {
+    if (this._navIdleTimer) {
+      clearTimeout(this._navIdleTimer);
+      this._navIdleTimer = null;
+    }
   }
 
   _setupRefreshTimer() {
@@ -2742,6 +2769,7 @@ class MlbLiveGameCard extends HTMLElement {
   disconnectedCallback() {
     this._clearRefreshTimer();
     this._clearHoldExpiryTimer();
+    this._clearNavIdleTimer();
     clearTimeout(this._renderTimer);
     this._destroyPlayerCardPopup();
     this._destroyLineupPopup();
@@ -3389,7 +3417,11 @@ class MlbLiveGameCard extends HTMLElement {
       awayScore.num != null &&
       homeScore.num != null &&
       homeScore.num > awayScore.num;
-    const finalMarker = `<div class="compact-final-marker"><div class="compact-pill compact-pill-final">F</div></div>`;
+    const finalMarker = `<div class="compact-final-marker">${
+      when.date
+        ? `<div class="compact-date compact-final-date">${when.date}</div>`
+        : ""
+    }<div class="compact-pill compact-pill-final">F</div></div>`;
     const postponedMarker = `<div class="compact-final-marker"><div class="compact-pill compact-pill-postponed">PPD</div></div>`;
     const nextRight = when.isToday
       ? `<div class="compact-next-wrap today-only">
@@ -4469,7 +4501,12 @@ white-space: nowrap;
           display:flex;
           align-items:center;
           align-self:center;
-          min-height: 34px;
+          min-height: 20px;
+        }
+        .compact-final-date {
+          font-size: 0.78em;
+          font-weight: 400;
+          opacity: 0.85;
         }
         .compact-pill-postponed {
           display:flex;
@@ -4481,8 +4518,10 @@ white-space: nowrap;
         }
         .compact-final-marker {
           display:flex;
+          flex-direction:column;
           align-items:center;
           justify-content:center;
+          gap:1px;
           height:100%;
         }
         .compact-final-score-right {
