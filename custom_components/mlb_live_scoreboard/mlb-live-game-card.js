@@ -1398,8 +1398,17 @@ function renderUpcomingDetails(
       </a>
     </div>`
     : "";
+  // Standings reflect *today's* table, not the table on a past game's date, so
+  // they're misleading on an older final reached via schedule navigation (and
+  // the current game's card already shows them). Only surface standings for an
+  // upcoming game or for the single most-recent final — identifiable because
+  // its own event id equals the schedule's `previous_event_id`.
+  const displayId = String(attrs?.display_event_id || "");
+  const isMostRecentFinal =
+    displayId !== "" && displayId === String(attrs?.previous_event_id || "");
+  const showStandings = kind !== "final" || isMostRecentFinal;
   let standingsHtml = "";
-  if (entries.length) {
+  if (entries.length && showStandings) {
     const rows = entries
       .map((entry) => {
         const isMyTeam =
