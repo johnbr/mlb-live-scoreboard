@@ -408,6 +408,42 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         )
 
     @staticmethod
+    def _event_at_offset(
+        events: list[dict[str, Any]],
+        anchor_event_id: str,
+        offset: int,
+    ) -> tuple[str | None, int, bool, bool]:
+        """Resolve the schedule event ``offset`` steps from the anchor.
+
+        ``anchor_event_id`` is the id the coordinator currently displays
+        (navigation offset 0). Events are ordered chronologically; the offset is
+        applied and clamped to the schedule bounds. Returns
+        ``(target_event_id, clamped_offset, has_prev, has_next)`` where the
+        booleans say whether an earlier/later game exists relative to the
+        target, so the card can disable the arrows at the ends of the schedule.
+        Returns ``(None, 0, False, False)`` when the schedule is empty or the
+        anchor is absent.
+        """
+        ordered = sorted(
+            (e for e in events if e.get("id") is not None),
+            key=lambda e: (_parse_iso_ts(e.get("date")) or 0.0),
+        )
+        ids = [str(e.get("id", "")) for e in ordered]
+        if not ids:
+            return None, 0, False, False
+        try:
+            anchor_idx = ids.index(str(anchor_event_id))
+        except ValueError:
+            return None, 0, False, False
+        target_idx = max(0, min(anchor_idx + int(offset), len(ids) - 1))
+        return (
+            ids[target_idx],
+            target_idx - anchor_idx,
+            target_idx > 0,
+            target_idx < len(ids) - 1,
+        )
+
+    @staticmethod
     def _compact_competition(
         display_comp: dict[str, Any] | None,
         records_map: dict[str, str] | None = None,
@@ -2454,36 +2490,88 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         except Exception as err:
             _LOGGER.warning("Configured action for %s failed: %s", event_name, err)
 
-    async def _async_update_data(self) -> MlbLiveScoreboardData:
+    async def _fetch_schedule(self) -> dict[str, Any]:
+        """Fetch this team's schedule, served from a 30-min TTL cache.
+
+        The endpoint is ~55 KB gzip and dominates per-game bandwidth, but it is
+        only used to enumerate this team's events and pull the display name —
+        none of the live in-game state comes from it — so a long TTL has no
+        user-visible impact. Falls back to a slightly-stale cache when a fetch
+        fails, and only raises once even that window has elapsed.
+        """
         schedule_url = (
             f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{self.team_abbr.lower()}/schedule"
         )
         now_ts = time.time()
         cached_schedule = self._schedule_cache
-        # Fresh-cache fast path: avoid the per-tick schedule fetch (the
-        # endpoint is ~55 KB gzip and dominates per-game bandwidth). The
-        # schedule is only used to enumerate this team's events and pull the
-        # team display name — none of the live in-game state comes from it,
-        # so a 30 min TTL has no user-visible impact.
         if cached_schedule is not None and (now_ts - cached_schedule[0]) < SCHEDULE_TTL_SECONDS:
-            schedule = cached_schedule[1]
-        else:
-            try:
-                schedule = await self._get_json(schedule_url)
-                self._schedule_cache = (now_ts, schedule)
-            except Exception as err:
-                if cached_schedule is not None and (now_ts - cached_schedule[0]) < SCHEDULE_STALE_FALLBACK_SECONDS:
-                    _LOGGER.warning(
-                        "Schedule fetch failed (%s); reusing cache from %.0fs ago",
-                        err,
-                        now_ts - cached_schedule[0],
-                    )
-                    schedule = cached_schedule[1]
-                else:
-                    raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
+            return cached_schedule[1]
+        try:
+            schedule = await self._get_json(schedule_url)
+            self._schedule_cache = (now_ts, schedule)
+            return schedule
+        except Exception as err:
+            if cached_schedule is not None and (now_ts - cached_schedule[0]) < SCHEDULE_STALE_FALLBACK_SECONDS:
+                _LOGGER.warning(
+                    "Schedule fetch failed (%s); reusing cache from %.0fs ago",
+                    err,
+                    now_ts - cached_schedule[0],
+                )
+                return cached_schedule[1]
+            raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
 
+    async def async_get_game_at_offset(self, offset: int) -> dict[str, Any] | None:
+        """Return a neighboring game's full card payload for schedule navigation.
+
+        ``offset`` is signed steps from the game the card currently displays
+        (0 = the auto-selected game). Used by the
+        ``mlb_live_scoreboard/game_at_offset`` WebSocket command so the card can
+        page back through previous results / forward through upcoming games
+        without disturbing the shared live sensor. Returns ``None`` when there
+        is no game at the (clamped) offset.
+        """
+        schedule = await self._fetch_schedule()
         events = schedule.get("events") or []
-        prev_id, next_id, live_id, display_id, display_event = self._select_event(events)
+        prev_id, next_id, live_id, display_id, _ = self._select_event(events)
+        target_id, clamped_offset, has_prev, has_next = self._event_at_offset(events, display_id, offset)
+        if not target_id:
+            return None
+        data = await self._assemble_game_data(
+            events, target_id, prev_id, next_id, live_id, schedule, live_bridge=False
+        )
+        # Lazy import avoids a module-load cycle (sensor imports the package).
+        from .sensor import build_state_attributes
+
+        return {
+            "game_data": build_state_attributes(data),
+            "offset": clamped_offset,
+            "has_prev": has_prev,
+            "has_next": has_next,
+            "event_id": target_id,
+        }
+
+    async def _assemble_game_data(
+        self,
+        events: list[dict[str, Any]],
+        display_id: str,
+        prev_id: str,
+        next_id: str,
+        live_id: str,
+        schedule: dict[str, Any],
+        *,
+        live_bridge: bool,
+    ) -> MlbLiveScoreboardData:
+        """Fetch the summary for ``display_id`` and normalize it into card data.
+
+        Shared by the live refresh (``live_bridge=True``) and schedule
+        navigation (``live_bridge=False``). The live-only inning-rollover
+        bridging mutates coordinator state and compares against ``self.data``,
+        so it runs only for the live refresh; a navigated final/scheduled game
+        is never between-halves, so skipping it is both correct and
+        side-effect-free.
+        """
+        now_ts = time.time()
+        display_event = next((e for e in events if str(e.get("id", "")) == str(display_id)), None)
 
         summary: dict[str, Any] = {}
         if display_id:
@@ -2521,60 +2609,65 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # (summary, display_comp), so previously calling it 5x per refresh was wasteful.
         inning_context = self._normalize_inning_context(summary, display_comp)
 
-        # Bridge the inning rollover so the card never flashes between Due Up
-        # and the matchup view while ESPN's status / situation fields update
-        # out of order. See the two bug modes documented around
-        # ``_between_halves_entered_at`` in ``__init__``.
-        now_ts = time.time()
-        raw_between = bool(inning_context.get("is_between_halves"))
-        prev_inning_context = getattr(self.data, "inning_context", None) or {}
-        prev_between = bool(prev_inning_context.get("is_between_halves"))
+        if live_bridge:
+            # Bridge the inning rollover so the card never flashes between Due Up
+            # and the matchup view while ESPN's status / situation fields update
+            # out of order. See the two bug modes documented around
+            # ``_between_halves_entered_at`` in ``__init__``.
+            now_ts = time.time()
+            raw_between = bool(inning_context.get("is_between_halves"))
+            prev_inning_context = getattr(self.data, "inning_context", None) or {}
+            prev_between = bool(prev_inning_context.get("is_between_halves"))
 
-        if raw_between:
-            if not prev_between:
-                self._between_halves_entered_at = now_ts
-            if batter_id and not self._third_out_batter_id:
-                # ``situation.batter`` at this moment is still the at-bat that
-                # produced the third out — capture so we can detect a stale
-                # situation block right after the next half starts.
-                self._third_out_batter_id = batter_id
+            if raw_between:
+                if not prev_between:
+                    self._between_halves_entered_at = now_ts
+                if batter_id and not self._third_out_batter_id:
+                    # ``situation.batter`` at this moment is still the at-bat that
+                    # produced the third out — capture so we can detect a stale
+                    # situation block right after the next half starts.
+                    self._third_out_batter_id = batter_id
 
-        # Treat the very brief window where ESPN has advanced ``periodPrefix``
-        # to the next half but ``situation.batter`` still points at the
-        # just-ended at-bat as a continuation of between-halves, so the Due Up
-        # panel stays on screen instead of rendering the previous matchup.
-        stale_situation = (
-            not raw_between
-            and prev_between
-            and bool(self._third_out_batter_id)
-            and bool(batter_id)
-            and batter_id == self._third_out_batter_id
-        )
-
-        effective_between = raw_between or stale_situation
-        if effective_between:
-            inning_context["is_between_halves"] = True
-        else:
-            self._between_halves_entered_at = None
-            self._third_out_batter_id = None
-
-        third_out_hold_until = self._compute_third_out_hold_until(summary, inning_context)
-        if effective_between and self._between_halves_entered_at is not None:
-            # Anchor the hold to whichever is later: the third-out play's
-            # wallclock (preferred, when it has arrived) or the moment we
-            # observed the inning end. The fallback covers the case where
-            # ESPN flips the inning prefix before the third-out play lands.
-            fallback_until = self._between_halves_entered_at + float(THIRD_OUT_HOLD_SECONDS)
-            third_out_hold_until = (
-                max(third_out_hold_until, fallback_until) if third_out_hold_until is not None else fallback_until
+            # Treat the very brief window where ESPN has advanced ``periodPrefix``
+            # to the next half but ``situation.batter`` still points at the
+            # just-ended at-bat as a continuation of between-halves, so the Due Up
+            # panel stays on screen instead of rendering the previous matchup.
+            stale_situation = (
+                not raw_between
+                and prev_between
+                and bool(self._third_out_batter_id)
+                and bool(batter_id)
+                and batter_id == self._third_out_batter_id
             )
 
-        due_up = self._normalize_due_up(summary)
-        if stale_situation and not due_up and self.data and self.data.due_up:
-            # ESPN occasionally clears ``situation.dueUp`` before
-            # ``situation.batter`` updates — reuse the prior snapshot so the
-            # Due Up panel keeps rendering through the stale window.
-            due_up = list(self.data.due_up)
+            effective_between = raw_between or stale_situation
+            if effective_between:
+                inning_context["is_between_halves"] = True
+            else:
+                self._between_halves_entered_at = None
+                self._third_out_batter_id = None
+
+            third_out_hold_until = self._compute_third_out_hold_until(summary, inning_context)
+            if effective_between and self._between_halves_entered_at is not None:
+                # Anchor the hold to whichever is later: the third-out play's
+                # wallclock (preferred, when it has arrived) or the moment we
+                # observed the inning end. The fallback covers the case where
+                # ESPN flips the inning prefix before the third-out play lands.
+                fallback_until = self._between_halves_entered_at + float(THIRD_OUT_HOLD_SECONDS)
+                third_out_hold_until = (
+                    max(third_out_hold_until, fallback_until) if third_out_hold_until is not None else fallback_until
+                )
+
+            due_up = self._normalize_due_up(summary)
+            if stale_situation and not due_up and self.data and self.data.due_up:
+                # ESPN occasionally clears ``situation.dueUp`` before
+                # ``situation.batter`` updates — reuse the prior snapshot so the
+                # Due Up panel keeps rendering through the stale window.
+                due_up = list(self.data.due_up)
+        else:
+            # Navigated games are finals/scheduled — no inning-rollover bridge.
+            third_out_hold_until = self._compute_third_out_hold_until(summary, inning_context)
+            due_up = self._normalize_due_up(summary)
 
         standings_payload = await self._get_standings()
         groups_payload = await self._get_groups()
@@ -2594,7 +2687,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if home_standings_record:
             home_team_norm["record_summary"] = home_standings_record
 
-        new_data = MlbLiveScoreboardData(
+        return MlbLiveScoreboardData(
             team_abbr=self.team_abbr,
             team_id=self.team_id,
             team_name=team_name,
@@ -2629,6 +2722,15 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             status_text=status_detail,
             is_live=is_live,
             is_delayed=is_delayed,
+        )
+
+    async def _async_update_data(self) -> MlbLiveScoreboardData:
+        schedule = await self._fetch_schedule()
+        events = schedule.get("events") or []
+        prev_id, next_id, live_id, display_id, _ = self._select_event(events)
+
+        new_data = await self._assemble_game_data(
+            events, display_id, prev_id, next_id, live_id, schedule, live_bridge=True
         )
 
         # Detect and fire game events by comparing against the previously

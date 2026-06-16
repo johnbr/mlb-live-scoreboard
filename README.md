@@ -116,6 +116,7 @@ Add the card to your dashboard — either way:
 | `show_highlights`      | boolean | `false`      | Show a "Watch highlights on ESPN" link in the final-game expand panel. Only renders once ESPN publishes clips (typically 30-90 min after the final pitch); off by default                                                                                                                                |
 | `player_link_target`   | string  | `popup`      | What clicking a (yellow) player name does: `popup` opens an in-card career-stats popup; `espn` opens ESPN's player page directly. The popup always includes a "View on ESPN" link, so ESPN stays reachable either way                                                                                    |
 | `show_lineup_popup`    | boolean | `true`       | Allow clicking a team's side of the matchup to open the team-lineup popup. Set `false` to make the matchup sides inert (player-name links still work)                                                                                                                                                    |
+| `show_schedule_nav`    | boolean | `true`       | Show `‹ ›` arrows beside the date/status on the non-live card to page back through previous results and forward through upcoming games (as many taps as needed). Hidden while a game is live; set `false` to hide entirely                                                                                |
 | `lineup_default_view`  | string  | `auto`       | Which view the lineup popup opens to: `auto` (Game while the game is live, Season otherwise), or force `game` / `season`                                                                                                                                                                                 |
 | `headshot_size`        | string  | `auto`       | Size of inline headshots (matchup, due-up, probable pitchers). `auto` scales them with the card's actual width via a CSS container query — responsive to HA's per-column dashboards. Fixed presets: `small` (40px), `medium` (56px), `large` (72px), `xlarge` (88px). Modal-popup avatars are unaffected |
 
@@ -139,6 +140,7 @@ show_win_probability: true
 show_highlights: false
 player_link_target: popup
 show_lineup_popup: true
+show_schedule_nav: true
 lineup_default_view: auto
 headshot_size: auto
 ```

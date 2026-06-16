@@ -929,6 +929,96 @@ def test_select_event_postponed_only_no_prev_no_next():
 
 
 # ---------------------------------------------------------------------------
+# _event_at_offset — schedule-navigation index math
+# ---------------------------------------------------------------------------
+
+
+def _nav_events():
+    """Five chronological games G0..G4 (April 1-5), deliberately unsorted."""
+    out = []
+    for i in (3, 0, 4, 1, 2):  # scrambled insertion order
+        date = datetime(2026, 4, 1 + i, tzinfo=UTC).isoformat().replace("+00:00", "Z")
+        out.append(_ev(f"G{i}", date=date))
+    return out
+
+
+def test_event_at_offset_steps_back_and_forward():
+    events = _nav_events()
+    # From the middle game, -1 lands on the prior game, +1 on the next.
+    assert Coord._event_at_offset(events, "G2", -1) == ("G1", -1, True, True)
+    assert Coord._event_at_offset(events, "G2", 1) == ("G3", 1, True, True)
+
+
+def test_event_at_offset_orders_by_date_not_input():
+    """Input order is scrambled; navigation must follow chronological order."""
+    events = _nav_events()
+    assert Coord._event_at_offset(events, "G0", 1)[0] == "G1"
+    assert Coord._event_at_offset(events, "G4", -1)[0] == "G3"
+
+
+def test_event_at_offset_no_prev_at_first_game():
+    events = _nav_events()
+    target, clamped, has_prev, has_next = Coord._event_at_offset(events, "G0", -1)
+    # Clamped to the first game; no earlier game exists.
+    assert (target, clamped, has_prev, has_next) == ("G0", 0, False, True)
+
+
+def test_event_at_offset_no_next_at_last_game():
+    events = _nav_events()
+    assert Coord._event_at_offset(events, "G4", 1) == ("G4", 0, True, False)
+
+
+def test_event_at_offset_clamps_beyond_bounds():
+    events = _nav_events()
+    # -10 from G2 clamps to G0 (two steps back), and bottoms out has_prev.
+    assert Coord._event_at_offset(events, "G2", -10) == ("G0", -2, False, True)
+    assert Coord._event_at_offset(events, "G2", 10) == ("G4", 2, True, False)
+
+
+def test_event_at_offset_anchor_absent():
+    assert Coord._event_at_offset(_nav_events(), "NOPE", -1) == (None, 0, False, False)
+
+
+def test_event_at_offset_empty_events():
+    assert Coord._event_at_offset([], "G0", -1) == (None, 0, False, False)
+
+
+def test_event_at_offset_single_game():
+    events = [_ev("G0", date="2026-04-01T18:00:00Z")]
+    assert Coord._event_at_offset(events, "G0", -1) == ("G0", 0, False, False)
+    assert Coord._event_at_offset(events, "G0", 1) == ("G0", 0, False, False)
+
+
+# ---------------------------------------------------------------------------
+# build_state_attributes — shape parity for the sensor + WS command
+# ---------------------------------------------------------------------------
+
+
+def test_build_state_attributes_exposes_navigation_ids():
+    from custom_components.mlb_live_scoreboard.sensor import build_state_attributes
+
+    data = _make_data(my_score=3, opp_score=1, is_live=False)
+    attrs = build_state_attributes(data)
+    # The card reads these to decide navigation/state; keep them in the bus.
+    for key in (
+        "display_event_id",
+        "previous_event_id",
+        "next_event_id",
+        "mode",
+        "game_active",
+        "competition",
+        "away_team",
+        "home_team",
+        "decisions",
+        "leaders",
+    ):
+        assert key in attrs
+    # game_active is a derived boolean, true only in live mode.
+    assert attrs["game_active"] is False
+    assert build_state_attributes(_make_data(my_score=0, opp_score=0))["game_active"] is True
+
+
+# ---------------------------------------------------------------------------
 # _detect_game_events
 # ---------------------------------------------------------------------------
 
