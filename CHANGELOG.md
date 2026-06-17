@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.5](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.4...v1.22.5) (2026-06-17)
+
+
+### Bug Fixes
+
+* **coordinator:** don't surface a two-way player's pitching line as batter stats ([#67](https://github.com/johnbr/mlb-live-scoreboard/issues/67)) ([bae7f7c](https://github.com/johnbr/mlb-live-scoreboard/commit/bae7f7c7440a04de43f890a86e62b54857dd913c))
+
 ## [1.22.4](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.3...v1.22.4) (2026-06-10)
 
 
