@@ -558,6 +558,107 @@ def test_normalize_on_deck_prefers_active_substitute_in_shared_slot():
     assert out["short_name"] == "Replacement"
 
 
+def _two_way_pitcher_only_summary(athlete_id, name):
+    """Box score where a two-way player has come up to bat but ESPN still
+    lists him only in the pitching block (no batting line yet).
+
+    Mirrors the real shape from LAD game 401815802 (2026-06-17): Ohtani
+    started as the pitcher, was moved to DH mid-game and grounded out, yet
+    ESPN never added a batting line for him — his sole box-score entry is the
+    pitching block, whose ``hits`` key is hits *allowed* (7).
+    """
+    return {
+        "boxscore": {
+            "players": [
+                {
+                    "team": {"id": "1"},
+                    "statistics": [
+                        {
+                            "type": "pitching",
+                            "keys": [
+                                "fullInnings.partInnings",
+                                "hits",
+                                "runs",
+                                "earnedRuns",
+                                "walks",
+                                "strikeouts",
+                                "homeRuns",
+                                "pitches-strikes",
+                                "ERA",
+                                "pitches",
+                            ],
+                            "athletes": [
+                                {
+                                    "athlete": {"id": athlete_id, "displayName": name, "shortName": name},
+                                    "batOrder": 0,
+                                    "active": True,
+                                    "stats": ["6.2", "7", "4", "3", "3", "6", "1", "102-61", "1.06", "102"],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+
+def test_find_boxscore_athlete_skips_wrong_category_for_two_way_batter():
+    # Asking for batting-preferred keys when the player only has a pitching
+    # line must return nothing, not the pitching block — otherwise the card
+    # surfaces pitching "hits allowed" (7) as the batter's hits ("H 7").
+    summary = _two_way_pitcher_only_summary("39832", "Shohei Ohtani")
+    entry, keys = Coord._find_boxscore_athlete(summary, "39832", preferred_keys=["avg", "atBats"])
+    assert entry == {}
+    assert keys == []
+
+
+def test_find_boxscore_athlete_returns_matching_category_block():
+    # When the same id appears in both a pitching and a batting block, the
+    # batting-preferred lookup returns the batting block, not the first found.
+    summary = {
+        "boxscore": {
+            "players": [
+                {
+                    "team": {"id": "1"},
+                    "statistics": [
+                        {
+                            "type": "pitching",
+                            "keys": ["hits", "ERA", "pitches"],
+                            "athletes": [
+                                {"athlete": {"id": "39832"}, "stats": ["7", "1.06", "102"]},
+                            ],
+                        },
+                        {
+                            "type": "batting",
+                            "keys": ["atBats", "hits", "avg"],
+                            "athletes": [
+                                {"athlete": {"id": "39832"}, "stats": ["4", "1", ".299"]},
+                            ],
+                        },
+                    ],
+                }
+            ]
+        }
+    }
+    entry, keys = Coord._find_boxscore_athlete(summary, "39832", preferred_keys=["avg", "atBats"])
+    assert keys == ["atBats", "hits", "avg"]
+    assert entry["stats"] == ["4", "1", ".299"]
+
+
+def test_normalize_batter_stats_blank_for_two_way_pitcher_only_line():
+    # Regression for the "H 7" bug: a two-way player at the plate with no
+    # batting line yet must render blank hitter stats, never pitching values.
+    summary = _two_way_pitcher_only_summary("39832", "Shohei Ohtani")
+    out = Coord._normalize_batter_stats(summary, "39832")
+    assert out["h"] == ""
+    assert out["ab"] == ""
+    assert out["hits_ab"] == ""
+    assert out["avg"] == ""
+    assert out["hr"] == ""
+    assert out["rbi"] == ""
+
+
 def test_normalize_recent_plays_returns_empty_for_no_plays():
     assert Coord._normalize_recent_plays({}, {"period": 1, "period_prefix": "Top"}) == []
     assert Coord._normalize_recent_plays({"plays": []}, {"period": 1, "period_prefix": "Top"}) == []
