@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.6...v1.23.0) (2026-06-18)
+
+
+### Features
+
+* **card:** prev/next schedule navigation arrows on the non-live card ([#66](https://github.com/johnbr/mlb-live-scoreboard/issues/66)) ([55e52f7](https://github.com/johnbr/mlb-live-scoreboard/commit/55e52f7fea55502627c81975c9d336bbccd83ff0))
+
 ## [1.22.6](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.5...v1.22.6) (2026-06-18)
 
 
