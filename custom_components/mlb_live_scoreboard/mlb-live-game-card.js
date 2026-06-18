@@ -4506,7 +4506,6 @@ white-space: nowrap;
         .compact-final-date {
           font-size: 1em;
           font-weight: 400;
-          opacity: 0.85;
         }
         .compact-pill-postponed {
           display:flex;
