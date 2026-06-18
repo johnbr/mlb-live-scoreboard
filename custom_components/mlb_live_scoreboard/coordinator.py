@@ -1215,8 +1215,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if not athlete_id:
             return {}, []
         preferred = [str(k or "").lower() for k in (preferred_keys or []) if str(k or "").strip()]
-        fallback_entry: dict[str, Any] = {}
-        fallback_keys: list[str] = []
+        best_entry: dict[str, Any] = {}
+        best_keys: list[str] = []
+        best_score = 0
         boxscore = summary.get("boxscore") or {}
         for team_block in boxscore.get("players") or []:
             for stat_block in team_block.get("statistics") or []:
@@ -1226,11 +1227,26 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     athlete = athlete_entry.get("athlete") or {}
                     if str(athlete.get("id") or "") != athlete_id:
                         continue
-                    if not fallback_entry:
-                        fallback_entry, fallback_keys = athlete_entry, keys
                     if not preferred or all(pref in keys_lower for pref in preferred):
                         return athlete_entry, keys
-        return fallback_entry, fallback_keys
+                    # Track the best partial match. A two-way player (Ohtani)
+                    # is listed in several stat blocks; ranking by how many
+                    # preferred keys a block carries keeps us in the right
+                    # category rather than grabbing whichever block came first.
+                    score = sum(pref in keys_lower for pref in preferred)
+                    if score > best_score:
+                        best_score = score
+                        best_entry, best_keys = athlete_entry, keys
+        # Only fall back to a block that shares at least one preferred key with
+        # the request. A block matching none of them is the wrong stat category
+        # — e.g. a two-way player who is pitching but has come up to bat before
+        # ESPN adds his batting line: his only entry is the pitching block, and
+        # reading it would surface pitching "hits allowed" as batter hits
+        # ("H 7" instead of a hitless 0-for). Return nothing so the caller
+        # shows blanks until the correct-category line appears.
+        if best_score >= 1:
+            return best_entry, best_keys
+        return {}, []
 
     @staticmethod
     def _stat_from_entry(entry: dict[str, Any], keys: list[str], *names: str) -> str:
