@@ -3430,7 +3430,7 @@ class MlbLiveGameCard extends HTMLElement {
       when.date
         ? `<div class="compact-date compact-final-date">${when.date}</div>`
         : ""
-    }<div class="compact-pill compact-pill-final">F</div></div>`;
+    }</div>`;
     const postponedMarker = `<div class="compact-final-marker"><div class="compact-pill compact-pill-postponed">PPD</div></div>`;
     const nextRight = when.isToday
       ? `<div class="compact-next-wrap today-only">
@@ -4503,14 +4503,8 @@ white-space: nowrap;
           min-width: 12px;
           text-align:center;
         }
-        .compact-pill-final {
-          display:flex;
-          align-items:center;
-          align-self:center;
-          min-height: 20px;
-        }
         .compact-final-date {
-          font-size: 0.78em;
+          font-size: 1em;
           font-weight: 400;
           opacity: 0.85;
         }
