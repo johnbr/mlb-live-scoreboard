@@ -86,6 +86,7 @@ def _install_homeassistant_stubs() -> None:
     ha_config_entries.ConfigFlow = _Stub
     ha_config_entries.OptionsFlow = _Stub
     ha_const.EVENT_HOMEASSISTANT_STARTED = "homeassistant_started"
+    ha_const.MATCH_ALL = "*"
     ha_core.HomeAssistant = _Stub
     ha_core.Context = _Stub
     ha_core.callback = lambda fn: fn
