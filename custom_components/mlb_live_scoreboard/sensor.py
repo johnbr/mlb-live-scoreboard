@@ -4,6 +4,7 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -25,6 +26,12 @@ async def async_setup_entry(
 class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
     _attr_icon = "mdi:baseball"
     _attr_has_entity_name = False
+    # Live game data is a large, high-churn payload (lineups, leaders, plays,
+    # standings, …) that blows past the recorder's 16 KB attribute cap and is
+    # meaningless as history. Keep it out of the recorder entirely — the card
+    # reads attributes from the live state object, not from history, so this is
+    # purely a storage concern with no effect on the card.
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
     def __init__(self, coordinator: RuntimeData, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
