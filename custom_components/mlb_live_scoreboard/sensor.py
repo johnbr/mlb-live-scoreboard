@@ -23,6 +23,77 @@ async def async_setup_entry(
     async_add_entities([MlbLiveScoreboardSensor(coordinator, entry)])
 
 
+def build_state_attributes(data: Any) -> dict[str, Any]:
+    """Assemble the card-facing attribute dict from a coordinator data object.
+
+    Shared by the sensor's ``extra_state_attributes`` (the live push) and the
+    ``mlb_live_scoreboard/game_at_offset`` WebSocket command (schedule
+    navigation), so a navigated game is delivered to the card in exactly the
+    same shape as the live game.
+    """
+    # Strip plays to only the fields actually needed by the JS card
+    recent_plays = []
+    for play in data.recent_plays or []:
+        recent_plays.append(
+            {
+                "id": play.get("id"),
+                "text": play.get("text"),
+                "outs": play.get("outs"),
+                "away_score": play.get("away_score"),
+                "home_score": play.get("home_score"),
+                "wallclock_ts": play.get("wallclock_ts"),
+                # Needed by the card to flag scoring plays in the play-result
+                # indicator column even when the score didn't change relative
+                # to the immediately-prior play in the (newest-first) list.
+                "scoring_play": play.get("scoring_play"),
+                "score_value": play.get("score_value"),
+                "play_type": play.get("play_type"),
+                "alternative_type": play.get("alternative_type"),
+            }
+        )
+    return {
+        "team_abbr": data.team_abbr,
+        "team_id": data.team_id,
+        "team_name": data.team_name,
+        "mode": data.mode,
+        # True only when the card is currently displaying the live game
+        # (mode == "live", i.e. the displayed event is the live event).
+        # Stable boolean for dashboards/automations to gate on "a game is
+        # on screen right now" without string-comparing `mode`.
+        "game_active": data.mode == "live",
+        "is_live": data.is_live,
+        "is_delayed": data.is_delayed,
+        "status_text": data.status_text,
+        "display_event_id": data.display_event_id,
+        "live_event_id": data.live_event_id,
+        "previous_event_id": data.previous_event_id,
+        "next_event_id": data.next_event_id,
+        "competition": data.selected_competition or {},
+        "inning_context": data.inning_context,
+        "recent_plays": recent_plays,
+        "scoring_plays": data.scoring_plays or [],
+        "current_pitches": data.current_pitches or [],
+        "away_team": data.away_team,
+        "home_team": data.home_team,
+        "current_batter": data.current_batter,
+        "current_pitcher": data.current_pitcher,
+        "batter_stats": data.batter_stats,
+        "pitcher_stats": data.pitcher_stats,
+        "situation": data.situation,
+        "due_up": data.due_up,
+        "third_out_play": data.third_out_play,
+        "third_out_hold_until": data.third_out_hold_until,
+        "on_deck": data.on_deck,
+        "lineups": data.lineups,
+        "probable_pitchers": data.probable_pitchers,
+        "win_probability": data.win_probability,
+        "leaders": data.leaders,
+        "decisions": data.decisions,
+        "division_standings": data.division_standings,
+        "highlights_url": data.highlights_url,
+    }
+
+
 class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
     _attr_icon = "mdi:baseball"
     _attr_has_entity_name = False
@@ -47,68 +118,7 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        data = self.coordinator.data
-        # Strip plays to only the fields actually needed by the JS card
-        recent_plays = []
-        for play in data.recent_plays or []:
-            recent_plays.append(
-                {
-                    "id": play.get("id"),
-                    "text": play.get("text"),
-                    "outs": play.get("outs"),
-                    "away_score": play.get("away_score"),
-                    "home_score": play.get("home_score"),
-                    "wallclock_ts": play.get("wallclock_ts"),
-                    # Needed by the card to flag scoring plays in the play-result
-                    # indicator column even when the score didn't change relative
-                    # to the immediately-prior play in the (newest-first) list.
-                    "scoring_play": play.get("scoring_play"),
-                    "score_value": play.get("score_value"),
-                    "play_type": play.get("play_type"),
-                    "alternative_type": play.get("alternative_type"),
-                }
-            )
-        return {
-            "team_abbr": data.team_abbr,
-            "team_id": data.team_id,
-            "team_name": data.team_name,
-            "mode": data.mode,
-            # True only when the card is currently displaying the live game
-            # (mode == "live", i.e. the displayed event is the live event).
-            # Stable boolean for dashboards/automations to gate on "a game is
-            # on screen right now" without string-comparing `mode`.
-            "game_active": data.mode == "live",
-            "is_live": data.is_live,
-            "is_delayed": data.is_delayed,
-            "status_text": data.status_text,
-            "display_event_id": data.display_event_id,
-            "live_event_id": data.live_event_id,
-            "previous_event_id": data.previous_event_id,
-            "next_event_id": data.next_event_id,
-            "competition": data.selected_competition or {},
-            "inning_context": data.inning_context,
-            "recent_plays": recent_plays,
-            "scoring_plays": data.scoring_plays or [],
-            "current_pitches": data.current_pitches or [],
-            "away_team": data.away_team,
-            "home_team": data.home_team,
-            "current_batter": data.current_batter,
-            "current_pitcher": data.current_pitcher,
-            "batter_stats": data.batter_stats,
-            "pitcher_stats": data.pitcher_stats,
-            "situation": data.situation,
-            "due_up": data.due_up,
-            "third_out_play": data.third_out_play,
-            "third_out_hold_until": data.third_out_hold_until,
-            "on_deck": data.on_deck,
-            "lineups": data.lineups,
-            "probable_pitchers": data.probable_pitchers,
-            "win_probability": data.win_probability,
-            "leaders": data.leaders,
-            "decisions": data.decisions,
-            "division_standings": data.division_standings,
-            "highlights_url": data.highlights_url,
-        }
+        return build_state_attributes(self.coordinator.data)
 
     @property
     def device_info(self) -> dict[str, Any]:

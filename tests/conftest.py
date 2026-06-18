@@ -86,6 +86,7 @@ def _install_homeassistant_stubs() -> None:
     ha_config_entries.ConfigFlow = _Stub
     ha_config_entries.OptionsFlow = _Stub
     ha_const.EVENT_HOMEASSISTANT_STARTED = "homeassistant_started"
+    ha_const.MATCH_ALL = "*"
     ha_core.HomeAssistant = _Stub
     ha_core.Context = _Stub
     ha_core.callback = lambda fn: fn
@@ -97,6 +98,9 @@ def _install_homeassistant_stubs() -> None:
     ha_helpers_script.Script = _Stub
     ha_helpers_selector.ActionSelector = _Stub
     ha_helpers_update.DataUpdateCoordinator = _Stub
+    # Distinct subclass so ``CoordinatorEntity[...], SensorEntity`` don't
+    # collapse to the same base (duplicate-base-class TypeError otherwise).
+    ha_helpers_update.CoordinatorEntity = type("CoordinatorEntity", (_Stub,), {})
     ha_helpers_update.UpdateFailed = type("UpdateFailed", (Exception,), {})
     ha_components_sensor.SensorEntity = _Stub
 

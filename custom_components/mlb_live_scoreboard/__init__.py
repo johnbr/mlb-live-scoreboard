@@ -120,6 +120,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     if not hass.data[DOMAIN].get("_ws_registered"):
         _register_player_card_websocket(hass)
         _register_team_season_stats_websocket(hass)
+        _register_game_at_offset_websocket(hass)
         hass.data[DOMAIN]["_ws_registered"] = True
 
     return True
@@ -193,6 +194,68 @@ def _any_coordinator(hass: HomeAssistant) -> MlbLiveScoreboardCoordinator | None
         if isinstance(value, MlbLiveScoreboardCoordinator):
             return value
     return None
+
+
+def _coordinator_for_entity(hass: HomeAssistant, entity_id: str) -> MlbLiveScoreboardCoordinator | None:
+    """Resolve the coordinator backing a specific scoreboard entity.
+
+    Schedule navigation is team-specific, so — unlike the player-card /
+    season-stats commands — we map the entity to its own config entry's
+    coordinator rather than using any loaded one. Falls back to the sole
+    coordinator when the registry lookup misses but exactly one entry is
+    configured (the common single-team install).
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    domain_data = hass.data.get(DOMAIN) or {}
+    record = er.async_get(hass).async_get(entity_id)
+    if record is not None and record.config_entry_id:
+        candidate = domain_data.get(record.config_entry_id)
+        if isinstance(candidate, MlbLiveScoreboardCoordinator):
+            return candidate
+
+    coordinators = [v for v in domain_data.values() if isinstance(v, MlbLiveScoreboardCoordinator)]
+    if len(coordinators) == 1:
+        return coordinators[0]
+    return None
+
+
+def _register_game_at_offset_websocket(hass: HomeAssistant) -> None:
+    """Register the ``mlb_live_scoreboard/game_at_offset`` WebSocket command.
+
+    The card's schedule-navigation arrows call this with the scoreboard
+    entity id and a signed ``offset`` (steps from the currently-displayed
+    game) to fetch a previous result / upcoming game on demand. The payload is
+    rendered in place of the live game on that one card without disturbing the
+    shared sensor. Imports are local so the pure-helper test harness, which
+    imports this package but stubs Home Assistant, doesn't need
+    ``websocket_api``/``voluptuous``.
+    """
+    import voluptuous as vol
+    from homeassistant.components import websocket_api
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/game_at_offset",
+            vol.Required("entity_id"): cv.entity_id,
+            vol.Required("offset"): vol.All(vol.Coerce(int), vol.Range(min=-400, max=400)),
+        }
+    )
+    @websocket_api.async_response
+    async def _handle_game_at_offset(hass, connection, msg) -> None:
+        coordinator = _coordinator_for_entity(hass, msg["entity_id"])
+        if coordinator is None:
+            connection.send_error(msg["id"], "not_ready", "No MLB Live Scoreboard entry is configured")
+            return
+        try:
+            result = await coordinator.async_get_game_at_offset(int(msg["offset"]))
+        except Exception as err:  # surface any fetch/parse failure to the card
+            _LOGGER.debug("game_at_offset WS request failed: %s", err)
+            connection.send_error(msg["id"], "fetch_failed", str(err))
+            return
+        connection.send_result(msg["id"], result or {})
+
+    websocket_api.async_register_command(hass, _handle_game_at_offset)
 
 
 def _register_player_card_websocket(hass: HomeAssistant) -> None:

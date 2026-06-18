@@ -2,6 +2,11 @@ const CARD_TAG = "mlb-live-game-card";
 const CARD_VERSION = "1.22.6"; // x-release-please-version
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
+// After navigating the schedule away from the default game, auto-snap back to
+// the live/auto-selected view this long after the last arrow tap. Each tap
+// re-arms the timer; returning to the default view cancels it.
+const NAV_IDLE_RETURN_MS = 60000;
+
 // Number of seconds the card keeps showing the third-out play after it occurs,
 // before yielding to the due-up panel for the next half-inning.
 const THIRD_OUT_HOLD_SECONDS = 30;
@@ -66,6 +71,10 @@ const CARD_DEFAULTS = {
   // Which view that popup defaults to: "auto" (Game while the game is
   // live, Season otherwise) or a forced "game" / "season".
   lineup_default_view: "auto",
+  // Left/right arrows on the non-live card to page through this team's
+  // schedule: back through previous results, forward through upcoming
+  // games. Hidden while the displayed game is live. On by default.
+  show_schedule_nav: true,
   // Inline player-headshot size for the matchup portraits, due-up
   // thumbnails, and probable-pitcher portraits. "auto" tracks the card's
   // actual width via a CSS container query (responsive to HA's per-column
@@ -176,6 +185,7 @@ const EDITOR_SCHEMA = [
         },
       },
       { name: "show_lineup_popup", selector: { boolean: {} } },
+      { name: "show_schedule_nav", selector: { boolean: {} } },
     ],
   },
   {
@@ -205,6 +215,7 @@ const EDITOR_LABELS = {
   lineup_default_view: "Lineup popup default view",
   headshot_size: "Headshot size",
   show_lineup_popup: "Enable team lineup popup",
+  show_schedule_nav: "Schedule navigation arrows",
   show_batter: "Batter",
   show_records: "Team records",
   show_linescore: "Linescore",
@@ -224,6 +235,8 @@ const EDITOR_HELPERS = {
   refresh_rate: "0 leaves refreshing to Home Assistant's own state updates.",
   headshot_size:
     "Auto scales headshots with the card's width (responsive to HA's per-column dashboards). Presets pin a fixed pixel size.",
+  show_schedule_nav:
+    "Adds ‹ › arrows beside the date/status on the non-live card to page back through previous results and forward through upcoming games. Hidden while a game is live.",
   show_pitch_zone:
     "Adds a small strike-zone graphic below the base diamond with one colored dot per pitch in the current at-bat. Auto-hides between at-bats.",
   show_highlights:
@@ -1385,8 +1398,17 @@ function renderUpcomingDetails(
       </a>
     </div>`
     : "";
+  // Standings reflect *today's* table, not the table on a past game's date, so
+  // they're misleading on an older final reached via schedule navigation (and
+  // the current game's card already shows them). Only surface standings for an
+  // upcoming game or for the single most-recent final — identifiable because
+  // its own event id equals the schedule's `previous_event_id`.
+  const displayId = String(attrs?.display_event_id || "");
+  const isMostRecentFinal =
+    displayId !== "" && displayId === String(attrs?.previous_event_id || "");
+  const showStandings = kind !== "final" || isMostRecentFinal;
   let standingsHtml = "";
-  if (entries.length) {
+  if (entries.length && showStandings) {
     const rows = entries
       .map((entry) => {
         const isMyTeam =
@@ -1682,6 +1704,27 @@ class MlbLiveGameCard extends HTMLElement {
     this.config = { ...CARD_DEFAULTS, ...(config || {}) };
     // Clear any existing refresh timer when config changes
     this._clearRefreshTimer();
+    // Schedule-navigation view state (card-local; never touches the sensor).
+    this._resetScheduleNav();
+    // Force the anchor-change check on the next render to re-baseline.
+    this._navAnchorId = undefined;
+  }
+
+  // Reset schedule navigation back to the live/auto-selected game. Called on
+  // config change and whenever the underlying live game advances to a new
+  // event so a stale navigated view never sticks.
+  _resetScheduleNav() {
+    this._navOffset = 0;
+    this._navGameData = null;
+    // Optimistic until a fetch tells us otherwise — mid-season a team almost
+    // always has both a previous and an upcoming game, so the arrows show
+    // enabled at offset 0 and only disable once we hit a schedule boundary.
+    this._navHasPrev = true;
+    this._navHasNext = true;
+    this._navInflight = null;
+    if (this._navCache instanceof Map) this._navCache.clear();
+    else this._navCache = new Map();
+    this._clearNavIdleTimer();
   }
 
   _clearRefreshTimer() {
@@ -2561,6 +2604,22 @@ class MlbLiveGameCard extends HTMLElement {
   }
 
   _onContentClick(ev) {
+    // Schedule-nav arrows sit inside the expandable compact wrapper, so handle
+    // them first and stop propagation to keep a tap from also toggling expand.
+    const navBtn =
+      ev.target instanceof Element
+        ? ev.target.closest(".schedule-nav-btn")
+        : null;
+    if (navBtn && this.content.contains(navBtn)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (navBtn.disabled || navBtn.getAttribute("aria-disabled") === "true")
+        return;
+      this._navigateSchedule(
+        navBtn.classList.contains("schedule-nav-next") ? 1 : -1,
+      );
+      return;
+    }
     if (this._openPlayerProfile(ev.target)) return;
     if (this._toggleLineupFromMatchup(ev.target)) return;
     const target =
@@ -2577,6 +2636,13 @@ class MlbLiveGameCard extends HTMLElement {
 
   _onContentKeydown(ev) {
     if (ev.key !== "Enter" && ev.key !== " ") return;
+    // Native <button> arrows already fire a click on Enter/Space; let that
+    // path drive navigation and don't also toggle the surrounding expander.
+    if (
+      ev.target instanceof Element &&
+      ev.target.closest(".schedule-nav-btn")
+    )
+      return;
     const playerLink =
       ev.target instanceof Element ? ev.target.closest(".player-link") : null;
     if (playerLink && this.content.contains(playerLink)) {
@@ -2607,6 +2673,95 @@ class MlbLiveGameCard extends HTMLElement {
     this.render();
   }
 
+  // Step the schedule view by `delta` (-1 = previous game, +1 = next),
+  // fetching the neighbor over WebSocket (cached per offset). Offset 0 is the
+  // live/auto-selected game; a result with offset 0 drops back to the sensor.
+  _navigateSchedule(delta) {
+    const target = this._navOffset + delta;
+    if (target === 0) {
+      // Back to the live/auto-selected game — fall through to the sensor, no
+      // fetch needed. Reset arrows to their offset-0 optimistic state.
+      this._navOffset = 0;
+      this._navGameData = null;
+      this._navHasPrev = true;
+      this._navHasNext = true;
+      this._forceScheduleRerender();
+      return;
+    }
+    if (this._navCache instanceof Map && this._navCache.has(target)) {
+      this._applyNavResult(this._navCache.get(target));
+      return;
+    }
+    if (this._navInflight) return; // de-dupe rapid taps
+    const entity = this.config?.entity;
+    const conn = this._hass?.connection;
+    if (!entity || !conn) return;
+    this._navInflight = conn
+      .sendMessagePromise({
+        type: "mlb_live_scoreboard/game_at_offset",
+        entity_id: entity,
+        offset: target,
+      })
+      .then((res) => {
+        if (!res || !res.game_data) {
+          // No game that direction — we're at a schedule boundary. Disable the
+          // arrow so further taps don't re-hit the backend.
+          if (delta < 0) this._navHasPrev = false;
+          else this._navHasNext = false;
+          this._forceScheduleRerender();
+          return;
+        }
+        if (this._navCache instanceof Map) this._navCache.set(res.offset, res);
+        this._applyNavResult(res);
+      })
+      .catch((err) => {
+        console.debug(`[${CARD_TAG}] game_at_offset fetch failed:`, err);
+      })
+      .finally(() => {
+        this._navInflight = null;
+      });
+  }
+
+  _applyNavResult(res) {
+    this._navOffset = res.offset;
+    // Offset 0 means we've stepped back to the live game — fall through to the
+    // sensor attributes rather than pinning the fetched copy.
+    this._navGameData = res.offset === 0 ? null : res.game_data;
+    this._navHasPrev = res.has_prev !== false;
+    this._navHasNext = res.has_next !== false;
+    this._forceScheduleRerender();
+  }
+
+  // A navigated view can carry the same upstream fingerprint as the live game,
+  // so bust every render memo to guarantee the swap actually paints.
+  _forceScheduleRerender() {
+    this._lastFingerprint = "";
+    this._lastCompactFp = "";
+    this._lastLiveHtml = "";
+    // Off the default view → arm the idle auto-return; back on it → cancel.
+    if (this._navOffset !== 0) this._armNavIdleTimer();
+    else this._clearNavIdleTimer();
+    this.render();
+  }
+
+  _armNavIdleTimer() {
+    this._clearNavIdleTimer();
+    this._navIdleTimer = setTimeout(() => {
+      this._navIdleTimer = null;
+      if (this._navOffset !== 0) {
+        this._resetScheduleNav();
+        this._forceScheduleRerender();
+      }
+    }, NAV_IDLE_RETURN_MS);
+  }
+
+  _clearNavIdleTimer() {
+    if (this._navIdleTimer) {
+      clearTimeout(this._navIdleTimer);
+      this._navIdleTimer = null;
+    }
+  }
+
   _setupRefreshTimer() {
     this._clearRefreshTimer();
     const rate = Number(this.config.refresh_rate);
@@ -2623,6 +2778,7 @@ class MlbLiveGameCard extends HTMLElement {
   disconnectedCallback() {
     this._clearRefreshTimer();
     this._clearHoldExpiryTimer();
+    this._clearNavIdleTimer();
     clearTimeout(this._renderTimer);
     this._destroyPlayerCardPopup();
     this._destroyLineupPopup();
@@ -2786,13 +2942,27 @@ class MlbLiveGameCard extends HTMLElement {
       return;
     }
 
-    const fingerprint = this._computeRenderFingerprint(stateObj);
+    // Schedule navigation: when the live game advances to a new event, the
+    // anchor has moved out from under any navigated view — snap back to live.
+    const liveAttrs = stateObj.attributes || {};
+    const liveDisplayId = String(liveAttrs.display_event_id || "");
+    if (this._navAnchorId === undefined) {
+      this._navAnchorId = liveDisplayId;
+    } else if (this._navAnchorId !== liveDisplayId) {
+      this._navAnchorId = liveDisplayId;
+      this._resetScheduleNav();
+    }
+    // While navigated, render the fetched neighbor in place of the live game.
+    const navActive = this._navOffset !== 0 && !!this._navGameData;
+    const attrs = navActive ? this._navGameData : liveAttrs;
+    const fpSource = navActive
+      ? { state: String(this._navGameData.display_event_id || ""), attributes: this._navGameData }
+      : stateObj;
+    const fingerprint = `nav:${this._navOffset}|${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}|${this._computeRenderFingerprint(fpSource)}`;
     if (fingerprint === this._lastFingerprint) {
       return; // No changes, skip DOM update
     }
     this._lastFingerprint = fingerprint;
-
-    const attrs = stateObj.attributes || {};
     const competition = attrs.competition || {};
     const competitors = competition?.competitors || [];
     const away = competitors.find((c) => c?.homeAway === "away") || {};
@@ -3103,6 +3273,7 @@ class MlbLiveGameCard extends HTMLElement {
         homeRecord,
         expanded ? "exp" : "col",
         canExpand ? this._upcomingDetailsFingerprint(attrs) : "",
+        `nav:${this._navOffset}:${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}`,
       ].join("|");
       if (compactFp !== this._lastCompactFp) {
         // Fingerprint changed, need to re-render
@@ -3205,6 +3376,7 @@ class MlbLiveGameCard extends HTMLElement {
       homeRecord,
       expanded ? "exp" : "col",
       canExpand ? this._upcomingDetailsFingerprint(attrs) : "",
+      `nav:${this._navOffset}:${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}`,
     ].join("|");
     if (compactFp === this._lastCompactFp) {
       return this._lastCompactHtml; // Return cached HTML, don't recreate DOM
@@ -3254,7 +3426,11 @@ class MlbLiveGameCard extends HTMLElement {
       awayScore.num != null &&
       homeScore.num != null &&
       homeScore.num > awayScore.num;
-    const finalMarker = `<div class="compact-final-marker"><div class="compact-pill compact-pill-final">F</div></div>`;
+    const finalMarker = `<div class="compact-final-marker">${
+      when.date
+        ? `<div class="compact-date compact-final-date">${when.date}</div>`
+        : ""
+    }</div>`;
     const postponedMarker = `<div class="compact-final-marker"><div class="compact-pill compact-pill-postponed">PPD</div></div>`;
     const nextRight = when.isToday
       ? `<div class="compact-next-wrap today-only">
@@ -3282,9 +3458,6 @@ class MlbLiveGameCard extends HTMLElement {
             { kind: isUpcoming ? "upcoming" : "final" },
           )
         : "";
-    const chevronHtml = expandable
-      ? `<div class="upcoming-chevron" aria-hidden="true">${expanded ? "▴" : "▾"}</div>`
-      : "";
     const expandTitle = isUpcoming
       ? expanded
         ? "Hide details"
@@ -3292,6 +3465,18 @@ class MlbLiveGameCard extends HTMLElement {
       : expanded
         ? "Hide game summary"
         : "Show game summary";
+    // Prev/next schedule arrows flank the date/status. Hidden via config; the
+    // whole branch is already non-live so no extra live-state guard is needed.
+    // Optimistic-enabled at offset 0 (we don't hold the full schedule
+    // client-side); the backend's has_prev/has_next disable them at the ends.
+    const showScheduleNav = this.config?.show_schedule_nav !== false;
+    const prevDisabled = !this._navHasPrev;
+    const nextDisabled = !this._navHasNext;
+    const markerCore = `<div class="inning-marker-wrap">${rightHtml}</div>`;
+    const innerMarkerSide = showScheduleNav
+      ? `<button class="schedule-nav-btn schedule-nav-prev" type="button" aria-label="Previous game" title="Previous game"${prevDisabled ? " disabled" : ""}>‹</button>${markerCore}<button class="schedule-nav-btn schedule-nav-next" type="button" aria-label="Next game" title="Next game"${nextDisabled ? " disabled" : ""}>›</button>`
+      : markerCore;
+    const markerSide = `<div class="inning-marker-side${showScheduleNav ? " has-schedule-nav" : ""}">${innerMarkerSide}</div>`;
     const wrapperClasses = [
       "wrapper",
       "compact-mode",
@@ -3322,9 +3507,7 @@ class MlbLiveGameCard extends HTMLElement {
               ${isFinal ? `<div class="team-right compact-final-score-right"><div class="score final-score">${homeScore.text || "—"}</div></div>` : ""}
             </div>
           </div>
-          <div class="inning-marker-side">
-            <div class="inning-marker-wrap">${rightHtml}${chevronHtml}</div>
-          </div>
+          ${markerSide}
         </div>
         ${detailsPanel}
       </div>
@@ -3589,6 +3772,40 @@ color: var(--primary-text-color);
           align-self:stretch;
           min-width:28px;
           padding-top: 0;
+        }
+        .inning-marker-side.has-schedule-nav {
+          gap: 2px;
+          min-width: 64px;
+        }
+        .schedule-nav-btn {
+          flex: 0 0 auto;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 22px;
+          height: 28px;
+          padding: 0;
+          margin: 0;
+          border: none;
+          background: none;
+          cursor: pointer;
+          font-size: 1.4em;
+          line-height: 1;
+          color: var(--secondary-text-color);
+          border-radius: 4px;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .schedule-nav-btn:hover:not([disabled]) {
+          color: var(--primary-text-color);
+          background: var(--secondary-background-color);
+        }
+        .schedule-nav-btn:focus-visible {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 1px;
+        }
+        .schedule-nav-btn[disabled] {
+          opacity: 0.25;
+          cursor: default;
         }
         .inning-marker-wrap {
           display: flex;
@@ -4241,7 +4458,7 @@ opacity: 0.92;
         .compact-next-wrap {
           display:flex;
           flex-direction:column;
-          align-items:flex-end;
+          align-items:center;
           gap:0px;
           line-height:1;
         }
@@ -4286,11 +4503,9 @@ white-space: nowrap;
           min-width: 12px;
           text-align:center;
         }
-        .compact-pill-final {
-          display:flex;
-          align-items:center;
-          align-self:center;
-          min-height: 34px;
+        .compact-final-date {
+          font-size: 1em;
+          font-weight: 400;
         }
         .compact-pill-postponed {
           display:flex;
@@ -4302,8 +4517,10 @@ white-space: nowrap;
         }
         .compact-final-marker {
           display:flex;
+          flex-direction:column;
           align-items:center;
           justify-content:center;
+          gap:1px;
           height:100%;
         }
         .compact-final-score-right {
@@ -4330,13 +4547,6 @@ white-space: nowrap;
         .upcoming-expandable:focus-visible {
           box-shadow: 0 0 0 2px var(--primary-color, #03a9f4);
           border-radius: 8px;
-        }
-        .upcoming-chevron {
-          font-size: 0.85em;
-          opacity: 0.7;
-          margin-top: 2px;
-          text-align: right;
-          line-height: 1;
         }
         .upcoming-details-panel {
           display: flex;
