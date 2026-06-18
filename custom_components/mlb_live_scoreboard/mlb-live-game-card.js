@@ -3458,9 +3458,6 @@ class MlbLiveGameCard extends HTMLElement {
             { kind: isUpcoming ? "upcoming" : "final" },
           )
         : "";
-    const chevronHtml = expandable
-      ? `<div class="upcoming-chevron" aria-hidden="true">${expanded ? "▴" : "▾"}</div>`
-      : "";
     const expandTitle = isUpcoming
       ? expanded
         ? "Hide details"
@@ -3475,7 +3472,7 @@ class MlbLiveGameCard extends HTMLElement {
     const showScheduleNav = this.config?.show_schedule_nav !== false;
     const prevDisabled = !this._navHasPrev;
     const nextDisabled = !this._navHasNext;
-    const markerCore = `<div class="inning-marker-wrap">${rightHtml}${chevronHtml}</div>`;
+    const markerCore = `<div class="inning-marker-wrap">${rightHtml}</div>`;
     const innerMarkerSide = showScheduleNav
       ? `<button class="schedule-nav-btn schedule-nav-prev" type="button" aria-label="Previous game" title="Previous game"${prevDisabled ? " disabled" : ""}>‹</button>${markerCore}<button class="schedule-nav-btn schedule-nav-next" type="button" aria-label="Next game" title="Next game"${nextDisabled ? " disabled" : ""}>›</button>`
       : markerCore;
@@ -4461,7 +4458,7 @@ opacity: 0.92;
         .compact-next-wrap {
           display:flex;
           flex-direction:column;
-          align-items:flex-end;
+          align-items:center;
           gap:0px;
           line-height:1;
         }
@@ -4557,13 +4554,6 @@ white-space: nowrap;
         .upcoming-expandable:focus-visible {
           box-shadow: 0 0 0 2px var(--primary-color, #03a9f4);
           border-radius: 8px;
-        }
-        .upcoming-chevron {
-          font-size: 0.85em;
-          opacity: 0.7;
-          margin-top: 2px;
-          text-align: right;
-          line-height: 1;
         }
         .upcoming-details-panel {
           display: flex;
