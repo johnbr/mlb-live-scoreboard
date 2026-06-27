@@ -1667,7 +1667,16 @@ function renderRecentPlays(
         home_score: previousKnownHome,
       });
       const outs = Number(play?.outs);
-      if (Number.isFinite(outs)) previousKnownOuts = outs;
+      // Outs never decrease within a half-inning, so keep the running baseline
+      // monotonic. ESPN intermittently serves a transient low/zero `outs` on an
+      // intervening play (e.g. a mid-inning pitching change), and letting that
+      // clobber the baseline makes the NEXT real play look like it added an
+      // out — surfacing a spurious "Outs" badge on a non-out play (a walk, hit,
+      // etc.). Taking the max keeps the badge tied to actual out-making plays.
+      if (Number.isFinite(outs)) {
+        previousKnownOuts =
+          previousKnownOuts == null ? outs : Math.max(previousKnownOuts, outs);
+      }
       if (play?.away_score != null && play?.away_score !== "")
         previousKnownAway = play.away_score;
       if (play?.home_score != null && play?.home_score !== "")
