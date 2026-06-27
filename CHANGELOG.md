@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.0...v1.23.1) (2026-06-27)
+
+
+### Bug Fixes
+
+* **coordinator:** suppress duplicate game-lifecycle events on status flicker ([f5bd18f](https://github.com/johnbr/mlb-live-scoreboard/commit/f5bd18f284559b9049a3f58d548dfc6b1d1a0908))
+
 ## [1.23.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.22.6...v1.23.0) (2026-06-18)
 
 
