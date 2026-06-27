@@ -312,6 +312,14 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # the brief window after the next half begins but ESPN's
         # ``situation.batter`` still points at the just-ended at-bat.
         self._third_out_batter_id: str | None = None
+        # Once-per-game transition events already fired for the currently
+        # displayed game. ESPN intermittently serves a stale "pre-game"
+        # status between live reads at first pitch, which flickers
+        # ``is_live`` True->False->True and would otherwise re-fire
+        # GAME_STARTED (and likewise ENDED/WON/LOST on a final-status
+        # flicker). Keyed by ``display_event_id`` so a new game resets it.
+        self._fired_once_event_id: str | None = None
+        self._fired_once_events: set[str] = set()
 
         super().__init__(
             hass,
@@ -2464,6 +2472,44 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         return events
 
+    # Game-lifecycle transitions that are meaningful exactly once per game.
+    # Score deltas are intentionally excluded: they legitimately recur and
+    # are already guarded by the score-increase comparison.
+    _ONCE_PER_GAME_EVENTS = frozenset(
+        {EVENT_GAME_STARTED, EVENT_GAME_ENDED, EVENT_GAME_WON, EVENT_GAME_LOST}
+    )
+
+    def _suppress_repeat_once_events(
+        self,
+        events: list[tuple[str, dict[str, Any]]],
+        event_id: str | None,
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """Drop once-per-game transition events that already fired for this game.
+
+        ESPN can flicker ``is_live`` (and final status) at game boundaries by
+        briefly serving a stale status read, which would otherwise re-fire
+        GAME_STARTED/ENDED/WON/LOST. We remember which of these already fired
+        for the current ``display_event_id`` and suppress repeats; a new game
+        id resets the memory so the next game fires normally.
+        """
+        if event_id != self._fired_once_event_id:
+            self._fired_once_event_id = event_id
+            self._fired_once_events = set()
+
+        kept: list[tuple[str, dict[str, Any]]] = []
+        for name, payload in events:
+            if name in self._ONCE_PER_GAME_EVENTS:
+                if name in self._fired_once_events:
+                    _LOGGER.debug(
+                        "Suppressing repeat %s for game %s (already fired)",
+                        name,
+                        event_id,
+                    )
+                    continue
+                self._fired_once_events.add(name)
+            kept.append((name, payload))
+        return kept
+
     def _dispatch_game_events(self, events: list[tuple[str, dict[str, Any]]]) -> None:
         """Fire detector-produced events on the Home Assistant bus and run any
         user-configured action sequences attached to them.
@@ -2755,6 +2801,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # returns [] and we just establish the baseline.
         try:
             game_events = self._detect_game_events(self.data, new_data, self.team_id)
+            game_events = self._suppress_repeat_once_events(
+                game_events, new_data.display_event_id
+            )
             if game_events:
                 self._dispatch_game_events(game_events)
                 # When a game ends, invalidate the standings cache so the very

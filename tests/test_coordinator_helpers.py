@@ -1409,6 +1409,68 @@ def test_dispatch_handles_multiple_events():
 
 
 # ---------------------------------------------------------------------------
+# _suppress_repeat_once_events — once-per-game transition de-duplication
+# ---------------------------------------------------------------------------
+
+
+def _make_coord_for_suppress():
+    """Build a coordinator-like object with just the once-fired state, without
+    running __init__ (which calls into HA APIs)."""
+    coord = Coord.__new__(Coord)
+    coord._fired_once_event_id = None
+    coord._fired_once_events = set()
+    return coord
+
+
+def test_suppress_lets_first_game_started_through():
+    coord = _make_coord_for_suppress()
+    out = coord._suppress_repeat_once_events([(EVENT_GAME_STARTED, {})], "G1")
+    assert [n for n, _ in out] == [EVENT_GAME_STARTED]
+
+
+def test_suppress_drops_repeat_game_started_same_game():
+    coord = _make_coord_for_suppress()
+    # First fire (e.g. at the 1st batter) is kept...
+    coord._suppress_repeat_once_events([(EVENT_GAME_STARTED, {})], "G1")
+    # ...a stale-status flicker re-detects the transition; the repeat is dropped.
+    out = coord._suppress_repeat_once_events([(EVENT_GAME_STARTED, {})], "G1")
+    assert out == []
+
+
+def test_suppress_resets_for_new_game_id():
+    coord = _make_coord_for_suppress()
+    coord._suppress_repeat_once_events([(EVENT_GAME_STARTED, {})], "G1")
+    # A different game starts — the once-fired memory resets so it fires again.
+    out = coord._suppress_repeat_once_events([(EVENT_GAME_STARTED, {})], "G2")
+    assert [n for n, _ in out] == [EVENT_GAME_STARTED]
+
+
+def test_suppress_tracks_each_once_event_independently():
+    coord = _make_coord_for_suppress()
+    coord._suppress_repeat_once_events([(EVENT_GAME_STARTED, {})], "G1")
+    # Game ends later in the same game: GAME_ENDED/WON haven't fired yet, so
+    # they pass even though GAME_STARTED is already spent.
+    out = coord._suppress_repeat_once_events(
+        [(EVENT_GAME_ENDED, {}), (EVENT_GAME_WON, {})], "G1"
+    )
+    assert [n for n, _ in out] == [EVENT_GAME_ENDED, EVENT_GAME_WON]
+    # ...but a final-status flicker won't re-fire them.
+    out = coord._suppress_repeat_once_events(
+        [(EVENT_GAME_ENDED, {}), (EVENT_GAME_WON, {})], "G1"
+    )
+    assert out == []
+
+
+def test_suppress_never_dedupes_score_events():
+    coord = _make_coord_for_suppress()
+    payload = {"team_abbr": "LAD"}
+    coord._suppress_repeat_once_events([(EVENT_TEAM_SCORED, payload)], "G1")
+    # Same team scoring again in the same game must always pass through.
+    out = coord._suppress_repeat_once_events([(EVENT_TEAM_SCORED, payload)], "G1")
+    assert [n for n, _ in out] == [EVENT_TEAM_SCORED]
+
+
+# ---------------------------------------------------------------------------
 # _normalize_probable_pitchers (extended fields)
 # ---------------------------------------------------------------------------
 
