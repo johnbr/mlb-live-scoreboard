@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.1...v1.23.2) (2026-06-27)
+
+
+### Bug Fixes
+
+* **card:** stop showing an outs badge on non-out plays  ([7d0e3cc](https://github.com/johnbr/mlb-live-scoreboard/commit/7d0e3cc045e56031c216f292c6f7d6ec9780d483))
+
 ## [1.23.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.0...v1.23.1) (2026-06-27)
 
 
