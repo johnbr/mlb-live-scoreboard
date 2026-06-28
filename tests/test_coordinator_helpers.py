@@ -225,6 +225,50 @@ def test_normalize_inning_context_ignores_plays_when_half_missing():
     assert ctx["period_prefix"] == "Top 1st"
 
 
+def test_normalize_inning_context_promotes_same_inning_top_to_bottom():
+    # Stale status still pinned to Top 7, but plays have advanced to the
+    # Bottom 7 leadoff at-bat. Same inning number, so the old number-only
+    # check missed it and left the previous (Top 7) half's plays on screen
+    # under the new batter. (inning, half) ordering catches it.
+    summary = {
+        "plays": [
+            {"period": {"number": 7, "type": "Top"}, "text": "Flyout to center."},
+            {"period": {"number": 7, "type": "Bottom"}, "text": "Bogaerts up."},
+        ],
+    }
+    comp = {"status": {"periodPrefix": "Top 7th", "period": 7}}
+    ctx = Coord._normalize_inning_context(summary, comp)
+    assert ctx["period"] == 7
+    assert ctx["period_prefix"] == "Bottom 7"
+    assert ctx["is_between_halves"] is False
+
+
+def test_normalize_inning_context_does_not_demote_half():
+    # Status already at Bottom 7; freshest top/bottom play is still Top 7
+    # (the third out, before any bottom play lands). Must never move backward.
+    summary = {"plays": [{"period": {"number": 7, "type": "Top"}, "text": "Flyout."}]}
+    comp = {"status": {"periodPrefix": "Bottom 7th", "period": 7}}
+    ctx = Coord._normalize_inning_context(summary, comp)
+    assert ctx["period"] == 7
+    assert ctx["period_prefix"] == "Bottom 7th"
+
+
+def test_normalize_inning_context_keeps_mid_marker_during_hold():
+    # During the between-halves hold ESPN status says Mid 7 even though a
+    # Bottom 7 start play may already exist. Don't promote — is_between_halves
+    # must stay True so the third-out hold keeps the Due Up panel up.
+    summary = {
+        "plays": [
+            {"period": {"number": 7, "type": "Top"}, "text": "Flyout."},
+            {"period": {"number": 7, "type": "Bottom"}, "text": "Bottom of the 7th."},
+        ],
+    }
+    comp = {"status": {"periodPrefix": "Mid 7th", "period": 7}}
+    ctx = Coord._normalize_inning_context(summary, comp)
+    assert ctx["is_between_halves"] is True
+    assert ctx["period_prefix"] == "Mid 7th"
+
+
 # ---------------------------------------------------------------------------
 # _resolve_status_info — delay/suspend detection
 # ---------------------------------------------------------------------------
