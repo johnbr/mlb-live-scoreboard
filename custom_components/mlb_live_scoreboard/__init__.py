@@ -121,6 +121,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         _register_player_card_websocket(hass)
         _register_team_season_stats_websocket(hass)
         _register_game_at_offset_websocket(hass)
+        _register_half_inning_at_offset_websocket(hass)
         hass.data[DOMAIN]["_ws_registered"] = True
 
     return True
@@ -256,6 +257,44 @@ def _register_game_at_offset_websocket(hass: HomeAssistant) -> None:
         connection.send_result(msg["id"], result or {})
 
     websocket_api.async_register_command(hass, _handle_game_at_offset)
+
+
+def _register_half_inning_at_offset_websocket(hass: HomeAssistant) -> None:
+    """Register the ``mlb_live_scoreboard/half_inning_at_offset`` WebSocket command.
+
+    The card's inning-pager arrows call this with the scoreboard entity id and a
+    signed ``offset`` (steps back from the live half-inning) to fetch an
+    already-played half-inning's play-by-play on demand. The plays are rendered
+    in the card's play-by-play panel in place of the live half without disturbing
+    the shared sensor. Imports are local so the pure-helper test harness, which
+    imports this package but stubs Home Assistant, doesn't need
+    ``websocket_api``/``voluptuous``.
+    """
+    import voluptuous as vol
+    from homeassistant.components import websocket_api
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/half_inning_at_offset",
+            vol.Required("entity_id"): cv.entity_id,
+            vol.Required("offset"): vol.All(vol.Coerce(int), vol.Range(min=-100, max=0)),
+        }
+    )
+    @websocket_api.async_response
+    async def _handle_half_inning_at_offset(hass, connection, msg) -> None:
+        coordinator = _coordinator_for_entity(hass, msg["entity_id"])
+        if coordinator is None:
+            connection.send_error(msg["id"], "not_ready", "No MLB Live Scoreboard entry is configured")
+            return
+        try:
+            result = await coordinator.async_half_inning_at_offset(int(msg["offset"]))
+        except Exception as err:  # surface any slice failure to the card
+            _LOGGER.debug("half_inning_at_offset WS request failed: %s", err)
+            connection.send_error(msg["id"], "fetch_failed", str(err))
+            return
+        connection.send_result(msg["id"], result or {})
+
+    websocket_api.async_register_command(hass, _handle_half_inning_at_offset)
 
 
 def _register_player_card_websocket(hass: HomeAssistant) -> None:

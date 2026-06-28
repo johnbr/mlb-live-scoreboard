@@ -106,6 +106,21 @@ _AT_BAT_END_KEYWORDS: tuple[str, ...] = (
     "fielder's choice",
 )
 
+# Play ``type.text`` values that count as renderable play-by-play rows (as
+# opposed to per-pitch entries). Shared by ``_normalize_recent_plays`` (what to
+# show for a half) and ``_played_half_innings`` (which halves the inning pager
+# can page to).
+_PLAY_RESULT_PLAY_TYPES: frozenset[str] = frozenset(
+    {
+        "play result",
+        "play-result",
+        "end batter/pitcher",
+        "end batter pitcher",
+        "pitching change",
+        "lineup change",
+    }
+)
+
 # Ordered list of (play-text keyword, abbreviation) used when classifying a
 # completed at-bat for the current batter's game outcomes.
 _BATTER_OUTCOME_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -324,6 +339,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # the brief window after the next half begins but ESPN's
         # ``situation.batter`` still points at the just-ended at-bat.
         self._third_out_batter_id: str | None = None
+        # (event_id, summary, inning_context) snapshot from the most recent live
+        # refresh. Lets the inning pager (``half_inning_at_offset`` WS command)
+        # slice an arbitrary already-played half-inning from the cached
+        # ``summary.plays[]`` without a fresh ESPN fetch on every arrow tap.
+        self._live_summary_cache: tuple[str, dict[str, Any], dict[str, Any]] | None = None
         # Once-per-game transition events already fired for the currently
         # displayed game. ESPN intermittently serves a stale "pre-game"
         # status between live reads at first pitch, which flickers
@@ -694,20 +714,73 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return current
 
     @staticmethod
+    def _resolve_target_half(inning_context: dict[str, Any]) -> tuple[int, str]:
+        """Return ``(inning, half)`` for the half-inning whose plays the card is
+        showing, mapping ESPN's prefix to a ``top``/``bottom`` half and resolving
+        the between-halves case to the just-ended half (``mid`` -> top, ``end`` ->
+        bottom). ``half`` is ``""`` when it can't be determined. Shared by
+        ``_normalize_recent_plays`` and the inning pager so they agree on what
+        "the current half" is.
+        """
+        target_inning = int(inning_context.get("period") or 0)
+        prefix = str(inning_context.get("period_prefix") or "").lower()
+        if prefix.startswith("top"):
+            return target_inning, "top"
+        if prefix.startswith(("bottom", "bot")):
+            return target_inning, "bottom"
+        if inning_context.get("is_between_halves") and target_inning > 0:
+            return target_inning, ("top" if prefix.startswith("mid") else "bottom")
+        return target_inning, ""
+
+    @staticmethod
+    def _played_half_innings(summary: dict[str, Any]) -> list[tuple[int, str]]:
+        """Return the distinct ``(inning, half)`` pairs that contain at least one
+        renderable play-by-play row, in chronological order. These are exactly the
+        half-innings the inning pager can page back to (halves that exist only as
+        start/end markers are skipped so the pager never lands on an empty view).
+        """
+        plays = summary.get("plays") or []
+        if not isinstance(plays, list):
+            return []
+        seen: set[tuple[int, str]] = set()
+        ordered: list[tuple[int, str]] = []
+        for play in plays:
+            if not isinstance(play, dict):
+                continue
+            period = play.get("period") or {}
+            inning = int(period.get("number") or 0)
+            half = str(period.get("type") or "").strip().lower()
+            if inning <= 0 or half not in ("top", "bottom"):
+                continue
+            if not str(play.get("text") or "").strip():
+                continue
+            play_type = str(
+                (play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or ""
+            ).lower()
+            if play_type not in _PLAY_RESULT_PLAY_TYPES:
+                continue
+            key = (inning, half)
+            if key not in seen:
+                seen.add(key)
+                ordered.append(key)
+        return ordered
+
+    @staticmethod
+    def _ordinal(n: int) -> str:
+        """Return ``n`` with its English ordinal suffix (1 -> '1st', 4 -> '4th')."""
+        if 10 <= (n % 100) <= 20:
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix}"
+
+    @staticmethod
     def _normalize_recent_plays(summary: dict[str, Any], inning_context: dict[str, Any]) -> list[dict[str, Any]]:
         """Return play-result entries for the current half-inning in chronological order."""
         plays = summary.get("plays") or []
         if not isinstance(plays, list) or not plays:
             return []
-        target_half = ""
-        target_inning = int(inning_context.get("period") or 0)
-        prefix = str(inning_context.get("period_prefix") or "").lower()
-        if prefix.startswith("top"):
-            target_half = "top"
-        elif prefix.startswith("bottom") or prefix.startswith("bot"):
-            target_half = "bottom"
-        elif inning_context.get("is_between_halves") and target_inning > 0:
-            target_half = "top" if prefix.startswith("mid") else "bottom"
+        target_inning, target_half = MlbLiveScoreboardCoordinator._resolve_target_half(inning_context)
         results = []
         for play in plays:
             period = play.get("period") or {}
@@ -721,14 +794,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 continue
             if target_half and play_half != target_half:
                 continue
-            if play_type not in {
-                "play result",
-                "play-result",
-                "end batter/pitcher",
-                "end batter pitcher",
-                "pitching change",
-                "lineup change",
-            }:
+            if play_type not in _PLAY_RESULT_PLAY_TYPES:
                 continue
             outs = play.get("outs") or ((play.get("result") or {}).get("outs"))
             away_score = play.get("awayScore")
@@ -2683,6 +2749,55 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             "event_id": target_id,
         }
 
+    async def async_half_inning_at_offset(self, offset: int) -> dict[str, Any] | None:
+        """Return the play-by-play for an already-played half-inning of the live
+        game, ``offset`` signed steps back from the current/live half (0 = live,
+        -1 = the previous half, ...). Backs the inning pager so the card can page
+        through past half-innings without disturbing the live sensor or refetching
+        ESPN — it slices the summary cached on the last live refresh.
+
+        Returns ``{plays, inning, half, label, offset (clamped), has_prev,
+        has_next}`` or ``None`` when there's no cached live game or no half to
+        show. ``offset`` is clamped so the pager can never page into a future
+        (unplayed) half or before the first played half.
+        """
+        cache = self._live_summary_cache
+        if not cache:
+            return None
+        _event_id, summary, inning_context = cache
+        halves = self._played_half_innings(summary)
+        if not halves:
+            return None
+
+        # Anchor (offset 0) = the current/live half. When it has plays it's in
+        # the list; when it's brand new (no plays yet) anchor just past the end,
+        # so a single step back lands on the most recent completed half.
+        anchor_inning, anchor_half = self._resolve_target_half(inning_context)
+        try:
+            anchor_idx = halves.index((anchor_inning, anchor_half))
+        except ValueError:
+            anchor_idx = len(halves)
+
+        # Clamp to a real played half no later than the anchor.
+        upper = min(len(halves) - 1, anchor_idx)
+        target_idx = max(0, min(anchor_idx + int(offset), upper))
+        inning, half = halves[target_idx]
+        half_cap = "Top" if half == "top" else "Bottom"
+        synthetic_context = {
+            "period": inning,
+            "period_prefix": f"{half_cap} {inning}",
+            "is_between_halves": False,
+        }
+        return {
+            "plays": self._normalize_recent_plays(summary, synthetic_context),
+            "inning": inning,
+            "half": half,
+            "label": f"{half_cap} {self._ordinal(inning)}",
+            "offset": target_idx - anchor_idx,
+            "has_prev": target_idx > 0,
+            "has_next": target_idx < anchor_idx,
+        }
+
     async def _assemble_game_data(
         self,
         events: list[dict[str, Any]],
@@ -2833,6 +2948,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             away_team_norm["record_summary"] = away_standings_record
         if home_standings_record:
             home_team_norm["record_summary"] = home_standings_record
+
+        if live_bridge:
+            # Snapshot the live summary + final inning context so the inning
+            # pager can slice past half-innings without a fresh ESPN fetch. Only
+            # the live refresh caches this; navigated (final/scheduled) games
+            # don't drive the pager.
+            self._live_summary_cache = (str(display_id), summary, dict(inning_context))
 
         return MlbLiveScoreboardData(
             team_abbr=self.team_abbr,
