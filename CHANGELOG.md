@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.4](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.3...v1.23.4) (2026-06-28)
+
+
+### Bug Fixes
+
+* **coordinator:** suppress impossible score jumps from stale baselines ([#78](https://github.com/johnbr/mlb-live-scoreboard/issues/78)) ([374fcca](https://github.com/johnbr/mlb-live-scoreboard/commit/374fccaa16c0afd5c752dbef74ec151cdffb553e))
+
 ## [1.23.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.2...v1.23.3) (2026-06-28)
 
 
