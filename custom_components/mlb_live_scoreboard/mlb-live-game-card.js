@@ -1,5 +1,5 @@
 const CARD_TAG = "mlb-live-game-card";
-const CARD_VERSION = "1.23.2"; // x-release-please-version
+const CARD_VERSION = "1.23.3"; // x-release-please-version
 console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 
 // After navigating the schedule away from the default game, auto-snap back to
