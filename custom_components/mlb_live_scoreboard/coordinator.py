@@ -540,24 +540,52 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         plays = summary.get("plays") or []
         if isinstance(plays, list) and plays:
             # Plays are chronological; the freshest is at the tail. Scan the
-            # tail backwards for a usable (period, half) pair so we don't get
-            # tripped up if the very last entry is malformed or missing a
-            # half-inning type.
-            max_play_period = 0
-            max_play_half = ""
+            # tail backwards for the newest play carrying an in-progress half
+            # (top/bottom), skipping malformed entries and between-inning
+            # markers (mid/end) that don't name a live half.
+            play_period = 0
+            play_half = ""  # original casing, used for the display prefix
+            play_half_low = ""
             for play in reversed(plays):
                 if not isinstance(play, dict):
                     continue
-                play_period = play.get("period") or {}
-                n = int(play_period.get("number") or 0)
-                half = str(play_period.get("type") or "").strip()
-                if n > 0 and half:
-                    max_play_period = n
-                    max_play_half = half
+                pp = play.get("period") or {}
+                n = int(pp.get("number") or 0)
+                half_raw = str(pp.get("type") or "").strip()
+                if n > 0 and half_raw.lower() in ("top", "bottom"):
+                    play_period = n
+                    play_half = half_raw
+                    play_half_low = half_raw.lower()
                     break
-            if max_play_period > period and max_play_half:
-                period = max_play_period
-                prefix = f"{max_play_half} {max_play_period}"
+            # Promote to the plays' half when ESPN's status block lags behind.
+            # Compare (inning, half) as an ordered pair — top precedes bottom —
+            # so a same-inning top->bottom flip is caught too, not just an
+            # inning-number jump. Without this, a stale "Top N" status keeps the
+            # card filtering plays to the just-ended half while the bottom-half
+            # leadoff batter is already up, leaving the previous half's
+            # play-by-play on screen under the new batter. Only override an
+            # in-progress status half (top/bottom); leave between-halves markers
+            # (mid/end) alone so the third-out hold that depends on them stands.
+            if play_period and play_half_low:
+                rank = {"top": 0, "bottom": 1}
+                status_low = str(prefix).lower()
+                status_half = (
+                    "top"
+                    if status_low.startswith("top")
+                    else "bottom"
+                    if status_low.startswith(("bottom", "bot"))
+                    else ""
+                )
+                play_pos = (play_period, rank[play_half_low])
+                if status_half:
+                    if play_pos > (period, rank[status_half]):
+                        period = play_period
+                        prefix = f"{play_half} {play_period}"
+                elif play_period > period:
+                    # Status is a between-halves/unknown marker — fall back to
+                    # the conservative inning-number-only advance.
+                    period = play_period
+                    prefix = f"{play_half} {play_period}"
         due_up = (summary.get("situation") or {}).get("dueUp") or []
         return {
             "period": period,
