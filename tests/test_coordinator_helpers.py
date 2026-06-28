@@ -1290,6 +1290,40 @@ def test_detect_no_score_events_while_delayed():
     assert Coord._detect_game_events(prev, curr, 19) == []
 
 
+def test_detect_suppresses_implausible_team_score_jump():
+    # Stale baseline (1) corrects to the real score (10) in one poll: a delta of
+    # 9 is impossible for a single play, so no "9 run play" event should fire.
+    prev = _make_data(my_score=1, opp_score=3)
+    curr = _make_data(my_score=10, opp_score=3)
+    assert Coord._detect_game_events(prev, curr, 19) == []
+
+
+def test_detect_allows_grand_slam_delta():
+    # A 4-run jump (grand slam) is the largest plausible single play and must
+    # still fire.
+    prev = _make_data(my_score=0, opp_score=0)
+    curr = _make_data(my_score=4, opp_score=0)
+    out = Coord._detect_game_events(prev, curr, 19)
+    assert [n for n, _ in out] == [EVENT_TEAM_SCORED]
+    assert out[0][1]["score_delta"] == 4
+
+
+def test_detect_suppresses_implausible_opponent_score_jump():
+    prev = _make_data(my_score=2, opp_score=0)
+    curr = _make_data(my_score=2, opp_score=9)
+    assert Coord._detect_game_events(prev, curr, 19) == []
+
+
+def test_detect_rebaselines_after_suppressed_jump():
+    # After a suppressed correction the next poll compares against the corrected
+    # baseline, so a normal +2 still fires.
+    corrected = _make_data(my_score=10, opp_score=3)
+    later = _make_data(my_score=12, opp_score=3)
+    out = Coord._detect_game_events(corrected, later, 19)
+    assert [n for n, _ in out] == [EVENT_TEAM_SCORED]
+    assert out[0][1]["score_delta"] == 2
+
+
 def test_detect_skips_across_event_id_boundary():
     # New game — don't compare scores from yesterday's game
     prev = _make_data(my_score=7, opp_score=2, event_id="G1")

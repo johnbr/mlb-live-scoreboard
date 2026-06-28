@@ -34,6 +34,7 @@ from .const import (
     LEADER_LIMIT,
     LIVE_STATES,
     MAX_LINESCORES,
+    MAX_PLAUSIBLE_SCORE_DELTA,
     MLB_TEAM_MAP,
     PLAYER_CARD_STALE_FALLBACK_SECONDS,
     PLAYER_CARD_TTL_SECONDS,
@@ -2469,21 +2470,48 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         # Score deltas: only fire when scores increase. Skip while delayed
         # because ESPN occasionally flips scores during delay corrections.
+        # An increase larger than a grand slam (MAX_PLAUSIBLE_SCORE_DELTA) in a
+        # single comparison can't be one play; it's a stale-baseline correction
+        # (ESPN under-reporting a score, a post-restart re-baseline, or missed
+        # polls). Suppress it instead of announcing an impossible "N run play";
+        # ``self.data`` updates every refresh, so the next poll re-baselines and
+        # genuine later scoring still fires a normal small delta.
         if not curr.is_delayed:
-            if my_score_curr > my_score_prev:
+            my_delta = my_score_curr - my_score_prev
+            opp_delta = opp_score_curr - opp_score_prev
+            if 0 < my_delta <= MAX_PLAUSIBLE_SCORE_DELTA:
                 payload = {
                     **base_payload,
-                    "score_delta": my_score_curr - my_score_prev,
+                    "score_delta": my_delta,
                     "scoring_play_text": _latest_scoring_play_text(curr),
                 }
                 events.append((EVENT_TEAM_SCORED, payload))
-            if opp_score_curr > opp_score_prev:
+            elif my_delta > MAX_PLAUSIBLE_SCORE_DELTA:
+                _LOGGER.warning(
+                    "Suppressing implausible %s score jump %s->%s (delta %s) for %s; "
+                    "treating as a stale-baseline correction, not a scoring play",
+                    curr.team_abbr,
+                    my_score_prev,
+                    my_score_curr,
+                    my_delta,
+                    curr.display_event_id,
+                )
+            if 0 < opp_delta <= MAX_PLAUSIBLE_SCORE_DELTA:
                 payload = {
                     **base_payload,
-                    "score_delta": opp_score_curr - opp_score_prev,
+                    "score_delta": opp_delta,
                     "scoring_play_text": _latest_scoring_play_text(curr),
                 }
                 events.append((EVENT_OPPONENT_SCORED, payload))
+            elif opp_delta > MAX_PLAUSIBLE_SCORE_DELTA:
+                _LOGGER.warning(
+                    "Suppressing implausible opponent score jump %s->%s (delta %s) "
+                    "for %s; treating as a stale-baseline correction, not a scoring play",
+                    opp_score_prev,
+                    opp_score_curr,
+                    opp_delta,
+                    curr.display_event_id,
+                )
 
         # State transitions
         if not prev.is_live and curr.is_live:
