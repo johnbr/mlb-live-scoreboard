@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.2...v1.23.3) (2026-06-28)
+
+
+### Bug Fixes
+
+* **coordinator:** clear prior half's play-by-play at a same-inning half flip ([a106b9c](https://github.com/johnbr/mlb-live-scoreboard/commit/a106b9c8ca9ec576f5dd5b1357ba84f2af109a1f))
+
 ## [1.23.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.1...v1.23.2) (2026-06-27)
 
 
