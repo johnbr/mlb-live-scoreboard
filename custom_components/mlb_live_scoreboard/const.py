@@ -90,6 +90,14 @@ STANDINGS_STALE_FALLBACK_SECONDS = 60 * 60
 GROUPS_TTL_SECONDS = 24 * 60 * 60
 GROUPS_STALE_FALLBACK_SECONDS = 7 * 24 * 60 * 60
 
+# Largest run increase we'll treat as a single real scoring event. A single
+# play scores at most 4 runs (grand slam), and at the live poll cadence real
+# scoring arrives as successive small deltas — so a larger one-poll jump is a
+# stale-baseline correction (ESPN transiently under-reporting a score, a
+# post-restart re-baseline, or missed polls), not a play. Such jumps are
+# suppressed rather than announced as an impossible "N run play".
+MAX_PLAUSIBLE_SCORE_DELTA = 4
+
 # Game-event names fired on the Home Assistant event bus. Each is prefixed
 # with the integration domain to keep them namespaced from other integrations.
 EVENT_TEAM_SCORED = f"{DOMAIN}_team_scored"
