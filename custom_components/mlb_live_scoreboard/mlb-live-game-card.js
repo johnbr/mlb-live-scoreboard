@@ -1657,18 +1657,22 @@ function totalsThroughHalf(competitor, inning, includeViewedInning) {
   let hasRuns = upto === 0;
   let hasHits = false;
   let hasErrors = false;
+  // ESPN's per-inning entries put runs in displayValue (a string) and often
+  // omit value entirely (null). Number(null) is 0, not NaN — so missing
+  // fields must be screened out before coercion or they count as 0 runs.
+  const num = (v) => (v == null || v === "" ? NaN : Number(v));
   for (let i = 0; i < upto; i++) {
-    const r = Number(lines[i]?.value);
+    const r = num(lines[i]?.value ?? lines[i]?.displayValue);
     if (Number.isFinite(r)) {
       runs += r;
       hasRuns = true;
     }
-    const h = Number(lines[i]?.hits);
+    const h = num(lines[i]?.hits);
     if (Number.isFinite(h)) {
       hits += h;
       hasHits = true;
     }
-    const e = Number(lines[i]?.errors);
+    const e = num(lines[i]?.errors);
     if (Number.isFinite(e)) {
       errors += e;
       hasErrors = true;
