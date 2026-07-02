@@ -2766,7 +2766,7 @@ class MlbLiveGameCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this.card) {
-      ensureCardStyles();
+      ensureCardStyles(this);
       this.card = document.createElement("ha-card");
       this.card.className = "mlb-live-game-card";
       this.content = document.createElement("div");
@@ -4792,12 +4792,17 @@ white-space: nowrap;
         }
 `;
 
-function ensureCardStyles() {
-  if (document.getElementById(CARD_STYLE_ID)) return;
+function ensureCardStyles(host) {
+  // Lovelace nests cards inside shadow roots (hui-root etc.), so a
+  // document.head stylesheet can never reach the card content. A <style>
+  // element applies to whichever tree scope contains it, so attach it
+  // inside the card element itself — one per card instance instead of one
+  // per render like the old inline interpolation.
+  if (host.querySelector(`.${CARD_STYLE_ID}`)) return;
   const style = document.createElement("style");
-  style.id = CARD_STYLE_ID;
+  style.className = CARD_STYLE_ID;
   style.textContent = CARD_CSS;
-  document.head.appendChild(style);
+  host.appendChild(style);
 }
 
 if (!customElements.get(CARD_TAG)) {
