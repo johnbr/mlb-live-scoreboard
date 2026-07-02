@@ -7,6 +7,22 @@ CONF_NAME = "name"
 DEFAULT_NAME = "MLB Live Scoreboard"
 DEFAULT_SCAN_INTERVAL_SECONDS = 5
 
+# Adaptive polling. The 5 s cadence is only needed while a game is actually
+# in progress; the rest of the day the displayed game is a final or a future
+# matchup whose data barely moves. Around first pitch (and through the
+# post-final window, where records / decisions / highlights settle) a 30 s
+# cadence keeps game-start detection prompt without hammering ESPN.
+SCAN_INTERVAL_LIVE_SECONDS = DEFAULT_SCAN_INTERVAL_SECONDS
+SCAN_INTERVAL_NEAR_GAME_SECONDS = 30
+SCAN_INTERVAL_IDLE_SECONDS = 300
+
+# Window around an event's scheduled start treated as "near game": from this
+# long before the scheduled first pitch (covers lineup posts and early status
+# flips) until this long after it (covers a full game plus the post-final
+# window in which ESPN finishes attaching decisions and updating records).
+NEAR_GAME_LEAD_SECONDS = 30 * 60
+NEAR_GAME_LAG_SECONDS = 5 * 60 * 60
+
 # ESPN status state values that indicate a live game.
 LIVE_STATES = frozenset({"in", "live"})
 STATUS_NAME_IN_PROGRESS = "STATUS_IN_PROGRESS"
