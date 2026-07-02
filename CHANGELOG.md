@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.5...v1.24.0) (2026-07-02)
+
+
+### Features
+
+* page back through past innings' play-by-play (live card) ([b296292](https://github.com/johnbr/mlb-live-scoreboard/commit/b296292ac3d4042263bc7f2a90ab2004ed2de380))
+
 ## [1.23.5](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.4...v1.23.5) (2026-07-02)
 
 
