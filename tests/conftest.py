@@ -105,7 +105,34 @@ def _install_homeassistant_stubs() -> None:
     ha_components_sensor.SensorEntity = _Stub
 
 
+def _install_aiohttp_stub() -> None:
+    """Install a minimal ``aiohttp`` stub when the real package is absent.
+
+    The coordinator imports ``aiohttp`` at module level solely for
+    ``ClientTimeout`` (used inside the request path, which these offline
+    tests never exercise). CI runs without aiohttp installed, so satisfy
+    the import the same way the ``homeassistant.*`` stubs do; a real
+    installed aiohttp always wins.
+    """
+    try:
+        import aiohttp
+
+        return
+    except ImportError:
+        pass
+
+    mod = _types.ModuleType("aiohttp")
+
+    class ClientTimeout:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    mod.ClientTimeout = ClientTimeout
+    sys.modules["aiohttp"] = mod
+
+
 _install_homeassistant_stubs()
+_install_aiohttp_stub()
 
 
 # Make `custom_components` importable from the repo root.
