@@ -225,7 +225,7 @@ const EDITOR_LABELS = {
   headshot_size: "Headshot size",
   show_lineup_popup: "Enable team lineup popup",
   show_schedule_nav: "Schedule navigation arrows",
-  show_inning_nav: "Inning play-by-play arrows",
+  show_inning_nav: "Past half-inning pager",
   show_batter: "Batter",
   show_records: "Team records",
   show_linescore: "Linescore",
@@ -248,7 +248,7 @@ const EDITOR_HELPERS = {
   show_schedule_nav:
     "Adds ‹ › arrows beside the date/status on the non-live card to page back through previous results and forward through upcoming games. Hidden while a game is live.",
   show_inning_nav:
-    "Adds ‹ › arrows above the play-by-play on the live card to page back through earlier half-innings. Snaps back to the live half after ~20s of no taps.",
+    "Adds a small ▾ strip below the live play-by-play that swaps the panel to the previous half-inning (one half at a time; the inning marker by the box score shows which). Snaps back to the live half after ~20s of no taps.",
   show_pitch_zone:
     "Adds a small strike-zone graphic below the base diamond with one colored dot per pitch in the current at-bat. Auto-hides between at-bats.",
   show_highlights:
@@ -1619,26 +1619,30 @@ function resolveLiveHalf(inningContext) {
   return null;
 }
 
-// English ordinal for an inning number (4 -> "4th", 21 -> "21st").
-function ordinalInning(n) {
-  const v = Number(n) || 0;
-  if (v % 100 >= 10 && v % 100 <= 20) return `${v}th`;
-  return `${v}${{ 1: "st", 2: "nd", 3: "rd" }[v % 10] || "th"}`;
-}
-
-// Wrap the play-by-play body with the inning-pager header (‹ label ›). The
-// label names the half being viewed; arrows page back (‹) / toward live (›).
-function renderInningNav(body, { label, prevDisabled, nextDisabled }) {
+// Append the inning-pager strip below the play-by-play body: a thin row with
+// a small ▾ that swaps the panel to the previous half-inning. While viewing a
+// past half a ▴ pages back toward live; which half is shown is signalled by
+// the inning marker beside the box score, not here.
+function renderInningStrip(body, { atLive, downDisabled }) {
   const btn = (cls, glyph, aria, disabled) =>
     `<button class="inning-nav-btn ${cls}" type="button" aria-label="${aria}" title="${aria}"${
       disabled ? " disabled" : ""
     }>${glyph}</button>`;
-  return `
-    <div class="inning-nav">
-      ${btn("inning-nav-prev", "‹", "Earlier half-inning", prevDisabled)}
-      <span class="inning-nav-label">${escapeHtml(label || "")}</span>
-      ${btn("inning-nav-next", "›", "Later half-inning", nextDisabled)}
-    </div>${body}`;
+  return `${body}
+    <div class="inning-strip">
+      ${atLive ? "" : btn("inning-nav-next", "▴", "Later half-inning", false)}
+      ${btn("inning-nav-prev", "▾", "Previous half-inning", downDisabled)}
+    </div>`;
+}
+
+// Inning marker (▲/▼ stack) for the past half-inning the pager is viewing —
+// same shape as the live marker so the box-score indicator simply flips to
+// the viewed half while paging.
+function renderPastHalfMarker(view) {
+  const num = Number(view?.inning) || 0;
+  if (String(view?.half) === "top")
+    return `<div class="inning-stack up"><div class="arrow">▲</div><div class="num">${num}</div></div>`;
+  return `<div class="inning-stack down"><div class="num">${num}</div><div class="arrow">▼</div></div>`;
 }
 
 function renderRecentPlays(
@@ -3242,20 +3246,18 @@ class MlbLiveGameCard extends HTMLElement {
       attrs.situation || {},
       this.config,
     );
-    const inningNavLabel = inningActive
-      ? this._inningView.label
-      : liveHalf
-        ? `${liveHalf.half === "top" ? "Top" : "Bottom"} ${ordinalInning(
-            liveHalf.inning,
-          )}`
-        : "";
     const recentPlaysPanel = showInningNav
-      ? renderInningNav(recentPlaysBody, {
-          label: inningNavLabel,
-          prevDisabled: inningActive ? !this._inningHasPrev : !hasPastHalf,
-          nextDisabled: this._inningOffset === 0,
+      ? renderInningStrip(recentPlaysBody, {
+          atLive: !inningActive,
+          downDisabled: inningActive ? !this._inningHasPrev : !hasPastHalf,
         })
       : recentPlaysBody;
+    // While paging, the box-score inning marker flips to the viewed half (in
+    // a distinct color) so it's always clear which half-inning is on screen.
+    const displayMarker = inningActive
+      ? renderPastHalfMarker(this._inningView)
+      : marker;
+    const markerClass = inningActive ? "history" : stateInfo.pillClass;
     const latestRecentPlay =
       Array.isArray(attrs.recent_plays) && attrs.recent_plays.length
         ? attrs.recent_plays[attrs.recent_plays.length - 1]
@@ -3473,7 +3475,7 @@ class MlbLiveGameCard extends HTMLElement {
             ${this.teamRow(homeTeam, homeMeta, "", homeScore, homeWon, true, home, homeTotals)}
           </div>
           <div class="inning-marker-side">
-            <div class="inning-marker-wrap"><div class="inning-marker ${stateInfo.pillClass}">${marker}</div></div>
+            <div class="inning-marker-wrap"><div class="inning-marker ${markerClass}">${displayMarker}</div></div>
           </div>
         </div>
         ${winProbabilityPanel}
@@ -3973,34 +3975,28 @@ color: var(--primary-text-color);
           opacity: 0.25;
           cursor: default;
         }
-        .inning-nav {
+        .inning-strip {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          gap: 6px;
-          margin: 6px 0 2px;
-        }
-        .inning-nav-label {
-          flex: 1 1 auto;
-          text-align: center;
-          font-size: 0.82em;
-          font-weight: 600;
-          letter-spacing: 0.02em;
-          color: var(--secondary-text-color);
+          justify-content: center;
+          gap: 24px;
+          margin: 4px 0 0;
+          padding-top: 2px;
+          border-top: 1px solid var(--divider-color, rgba(127,127,127,0.2));
         }
         .inning-nav-btn {
           flex: 0 0 auto;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 26px;
-          height: 24px;
+          width: 34px;
+          height: 18px;
           padding: 0;
           margin: 0;
           border: none;
           background: none;
           cursor: pointer;
-          font-size: 1.4em;
+          font-size: 0.85em;
           line-height: 1;
           color: var(--secondary-text-color);
           border-radius: 4px;
@@ -4037,6 +4033,7 @@ border-radius: 0;
           color: var(--secondary-text-color);
         }
         .inning-marker.live { color: var(--success-color); }
+        .inning-marker.history { color: var(--info-color, #4a90d9); }
         .inning-marker.delayed { color: var(--warning-color); }
         .inning-marker.final { color: var(--primary-text-color); }
         .inning-marker.postponed { color: var(--warning-color); }
