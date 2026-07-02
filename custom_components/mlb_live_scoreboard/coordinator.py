@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -36,8 +37,13 @@ from .const import (
     MAX_LINESCORES,
     MAX_PLAUSIBLE_SCORE_DELTA,
     MLB_TEAM_MAP,
+    NEAR_GAME_LAG_SECONDS,
+    NEAR_GAME_LEAD_SECONDS,
     PLAYER_CARD_STALE_FALLBACK_SECONDS,
     PLAYER_CARD_TTL_SECONDS,
+    SCAN_INTERVAL_IDLE_SECONDS,
+    SCAN_INTERVAL_LIVE_SECONDS,
+    SCAN_INTERVAL_NEAR_GAME_SECONDS,
     SCHEDULE_STALE_FALLBACK_SECONDS,
     SCHEDULE_TTL_SECONDS,
     SHOW_NEXT_AFTER_PREV_SECONDS,
@@ -134,6 +140,11 @@ _BATTER_OUTCOME_EXCLUDED: frozenset[str] = frozenset({"1B", "GO", "FO", "LO", "P
 
 # Display ordering for the compact batter-outcome string.
 _BATTER_OUTCOME_ORDER: tuple[str, ...] = ("HR", "3B", "2B", "1B", "BB", "IBB", "SF", "SAC", "K", "E")
+
+# Generational suffixes that should stay attached to the last name
+# (e.g. "Guerrero Jr.", "Ripken III") so the on-base indicators don't
+# display just the surname.
+_NAME_SUFFIX_RE = re.compile(r"^(?:[JS]r\.?|I{1,3}|IV|VI{0,3})$", re.IGNORECASE)
 
 
 def _parse_iso_ts(date_raw: Any) -> float | None:
@@ -334,7 +345,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             "User-Agent": "Home Assistant",
             "Accept": "application/json",
         }
-        async with self._session.get(url, headers=headers, timeout=20) as resp:
+        async with self._session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=20)) as resp:
             if resp.status != 200:
                 text = await resp.text()
                 raise UpdateFailed(f"HTTP {resp.status} for {url}: {text[:200]}")
@@ -801,17 +812,27 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return results
 
     @staticmethod
-    def _normalize_third_out_play(summary: dict[str, Any], inning_context: dict[str, Any]) -> dict[str, Any]:
-        """Return the most recent play that produced the third out, or ``{}``."""
-        plays = MlbLiveScoreboardCoordinator._normalize_recent_plays(summary, inning_context)
+    def _third_out_from_plays(plays: list[dict[str, Any]]) -> dict[str, Any]:
+        """Return the most recent play in ``plays`` that produced the third out, or ``{}``."""
         for play in reversed(plays):
-            outs = play.get("outs")
-            if outs == 3:
+            if play.get("outs") == 3:
                 return play
         return {}
 
     @staticmethod
-    def _compute_third_out_hold_until(summary: dict[str, Any], inning_context: dict[str, Any]) -> float | None:
+    def _normalize_third_out_play(summary: dict[str, Any], inning_context: dict[str, Any]) -> dict[str, Any]:
+        """Return the most recent play that produced the third out, or ``{}``.
+
+        Convenience wrapper over :meth:`_third_out_from_plays`; the refresh
+        path normalizes the plays once and calls the plays-based helper
+        directly instead.
+        """
+        return MlbLiveScoreboardCoordinator._third_out_from_plays(
+            MlbLiveScoreboardCoordinator._normalize_recent_plays(summary, inning_context)
+        )
+
+    @staticmethod
+    def _hold_until_for_play(play: dict[str, Any]) -> float | None:
         """Return the wallclock-anchored deadline for the third-out hold UI.
 
         Anchoring the deadline to the play's wallclock (rather than first
@@ -819,7 +840,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         third-out result to the Due Up panel at the same moment, regardless of
         when the dashboard was rendered.
         """
-        play = MlbLiveScoreboardCoordinator._normalize_third_out_play(summary, inning_context)
         if not play:
             return None
         wallclock_ts = play.get("wallclock_ts")
@@ -1897,14 +1917,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     return candidate
             return None
 
-        # Generational suffixes that should stay attached to the last name
-        # (e.g. "Guerrero Jr.", "Ripken III") so the on-base indicators don't
-        # display just the surname.
-        suffix_re = re.compile(r"^(?:[JS]r\.?|I{1,3}|IV|VI{0,3})$", re.IGNORECASE)
-
         def _suffix_from_display_name(display_name: str) -> str:
             parts = str(display_name or "").strip().split()
-            if len(parts) >= 3 and suffix_re.match(parts[-1]):
+            if len(parts) >= 3 and _NAME_SUFFIX_RE.match(parts[-1]):
                 return parts[-1]
             return ""
 
@@ -2693,21 +2708,30 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         summary: dict[str, Any] = {}
         if display_id:
+            # `_=<ts>` busts ESPN's CDN cache so we don't serve a stale status
+            # block that pins our inning filter to a half-inning the game has
+            # already left (observed in the wild as a multi-minute card
+            # freeze). That failure mode only exists while the game is live,
+            # and the buster forces every request through to ESPN's origin —
+            # so only apply it when this (or the previous) refresh looks live,
+            # and let the CDN absorb the idle-day polling.
+            looks_live = bool(live_id and display_id == live_id) or bool(
+                live_bridge and self.data is not None and self.data.is_live
+            )
+            summary_url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event={display_id}"
+            if looks_live:
+                summary_url += f"&_={int(now_ts)}"
             try:
-                # `_=<ts>` busts ESPN's CDN cache so we don't serve a stale
-                # status block that pins our inning filter to a half-inning
-                # the game has already left (observed in the wild as a
-                # multi-minute card freeze).
-                summary = await self._get_json(
-                    f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event={display_id}&_={int(now_ts)}"
-                )
+                summary = await self._get_json(summary_url)
             except Exception as err:
                 _LOGGER.warning("Unable to fetch summary for %s: %s", display_id, err)
 
         display_comp = self._resolve_display_comp(summary, display_id, display_event)
         away_id, home_id = self._resolve_competitor_ids(display_comp)
-        away_team_payload = await self._fetch_team_payload(away_id, "away")
-        home_team_payload = await self._fetch_team_payload(home_id, "home")
+        away_team_payload, home_team_payload = await asyncio.gather(
+            self._fetch_team_payload(away_id, "away"),
+            self._fetch_team_payload(home_id, "home"),
+        )
 
         batter_id, pitcher_id = self._resolve_batter_pitcher_ids(summary)
         status_detail, is_live, is_delayed = self._resolve_status_info(display_comp)
@@ -2727,6 +2751,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # (summary, display_comp), so previously calling it 5x per refresh was wasteful.
         inning_context = self._normalize_inning_context(summary, display_comp)
 
+        effective_between = False
         if live_bridge:
             # Bridge the inning rollover so the card never flashes between Due Up
             # and the matchup view while ESPN's status / situation fields update
@@ -2765,17 +2790,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 self._between_halves_entered_at = None
                 self._third_out_batter_id = None
 
-            third_out_hold_until = self._compute_third_out_hold_until(summary, inning_context)
-            if effective_between and self._between_halves_entered_at is not None:
-                # Anchor the hold to whichever is later: the third-out play's
-                # wallclock (preferred, when it has arrived) or the moment we
-                # observed the inning end. The fallback covers the case where
-                # ESPN flips the inning prefix before the third-out play lands.
-                fallback_until = self._between_halves_entered_at + float(THIRD_OUT_HOLD_SECONDS)
-                third_out_hold_until = (
-                    max(third_out_hold_until, fallback_until) if third_out_hold_until is not None else fallback_until
-                )
-
             due_up = self._normalize_due_up(summary)
             if stale_situation and not due_up and self.data and self.data.due_up:
                 # ESPN occasionally clears ``situation.dueUp`` before
@@ -2784,11 +2798,26 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 due_up = list(self.data.due_up)
         else:
             # Navigated games are finals/scheduled — no inning-rollover bridge.
-            third_out_hold_until = self._compute_third_out_hold_until(summary, inning_context)
             due_up = self._normalize_due_up(summary)
 
-        standings_payload = await self._get_standings()
-        groups_payload = await self._get_groups()
+        # One pass over the summary plays serves the play-by-play list, the
+        # third-out play, and the hold deadline. Previously each was normalized
+        # independently (three full scans of the game's plays per refresh) —
+        # same reasoning as the ``inning_context`` memo above.
+        recent_plays = self._normalize_recent_plays(summary, inning_context)
+        third_out_play = self._third_out_from_plays(recent_plays)
+        third_out_hold_until = self._hold_until_for_play(third_out_play)
+        if effective_between and self._between_halves_entered_at is not None:
+            # Anchor the hold to whichever is later: the third-out play's
+            # wallclock (preferred, when it has arrived) or the moment we
+            # observed the inning end. The fallback covers the case where
+            # ESPN flips the inning prefix before the third-out play lands.
+            fallback_until = self._between_halves_entered_at + float(THIRD_OUT_HOLD_SECONDS)
+            third_out_hold_until = (
+                max(third_out_hold_until, fallback_until) if third_out_hold_until is not None else fallback_until
+            )
+
+        standings_payload, groups_payload = await asyncio.gather(self._get_standings(), self._get_groups())
         division_index = self._team_id_division_index(groups_payload)
         division_standings = self._normalize_standings(standings_payload, division_index, self.team_id)
         # ``records_map`` overrides the per-game ``recordSummary`` (which ESPN
@@ -2815,7 +2844,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             next_event_id=next_id,
             selected_competition=self._compact_competition(display_comp, records_map),
             inning_context=inning_context,
-            recent_plays=self._normalize_recent_plays(summary, inning_context),
+            recent_plays=recent_plays,
             scoring_plays=self._normalize_scoring_plays(summary),
             current_pitches=self._normalize_current_pitches(summary, inning_context),
             away_team=away_team_norm,
@@ -2828,7 +2857,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             probable_pitchers=self._normalize_probable_pitchers(display_comp),
             win_probability=self._normalize_win_probability(summary),
             due_up=due_up,
-            third_out_play=self._normalize_third_out_play(summary, inning_context),
+            third_out_play=third_out_play,
             third_out_hold_until=third_out_hold_until,
             on_deck=self._normalize_on_deck(summary, inning_context, batter_id),
             lineups=self._normalize_lineups(summary, batter_id),
@@ -2842,6 +2871,28 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             is_delayed=is_delayed,
         )
 
+    def _compute_update_interval(self, data: MlbLiveScoreboardData, events: list[dict[str, Any]]) -> timedelta:
+        """Pick the poll interval for the next refresh from the game state.
+
+        Live (or delayed) games keep the fast cadence. Otherwise, when any
+        scheduled event is inside the near-game window — shortly before its
+        first pitch through the post-final settling period — poll at the
+        near-game cadence so the live transition (and the bus events that
+        hang off it) is detected promptly. The rest of the day the card is
+        showing a final or a future matchup whose data barely moves, so the
+        idle cadence is plenty and spares ESPN ~17k requests/day per team.
+        """
+        if data.is_live:
+            return timedelta(seconds=SCAN_INTERVAL_LIVE_SECONDS)
+        now_ts = time.time()
+        for event in events:
+            start_ts = _parse_iso_ts(event.get("date"))
+            if start_ts is None:
+                continue
+            if start_ts - NEAR_GAME_LEAD_SECONDS <= now_ts <= start_ts + NEAR_GAME_LAG_SECONDS:
+                return timedelta(seconds=SCAN_INTERVAL_NEAR_GAME_SECONDS)
+        return timedelta(seconds=SCAN_INTERVAL_IDLE_SECONDS)
+
     async def _async_update_data(self) -> MlbLiveScoreboardData:
         schedule = await self._fetch_schedule()
         events = schedule.get("events") or []
@@ -2850,6 +2901,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         new_data = await self._assemble_game_data(
             events, display_id, prev_id, next_id, live_id, schedule, live_bridge=True
         )
+
+        # Adapt the poll cadence to the game state; the coordinator reads
+        # ``update_interval`` when it schedules the refresh after this one.
+        self.update_interval = self._compute_update_interval(new_data, events)
 
         # Detect and fire game events by comparing against the previously
         # cached coordinator data. ``self.data`` is the last successful

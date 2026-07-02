@@ -58,7 +58,7 @@ class MlbLiveScoreboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> MlbLiveScoreboardOptionsFlow:
-        return MlbLiveScoreboardOptionsFlow(config_entry)
+        return MlbLiveScoreboardOptionsFlow()
 
 
 # Option keys exposed in the options flow. Each maps to an HA action sequence
@@ -79,10 +79,10 @@ class MlbLiveScoreboardOptionsFlow(config_entries.OptionsFlow):
     The selector returns a list of action dicts (the same shape as a
     ``script:`` ``sequence:`` block), which the coordinator runs via
     :class:`homeassistant.helpers.script.Script` when the matching event fires.
-    """
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+    ``self.config_entry`` is provided by the base class (assigning it
+    explicitly was deprecated in HA 2024.11), so no ``__init__`` is needed.
+    """
 
     async def async_step_init(
         self, user_input: dict | None = None
