@@ -4081,7 +4081,11 @@ color: var(--primary-text-color);
           align-items: center;
           justify-content: center;
           gap: 24px;
-          margin: 2px 0 0;
+          /* The card's own bottom padding sits right under this strip and
+             visually pins the arrows against the divider. The negative
+             bottom margin reclaims most of it so the arrows sit centered
+             in the remaining band and the row stays short. */
+          margin: 2px 0 -12px;
           padding: 2px 0;
           border-top: 1px solid var(--divider-color, rgba(127,127,127,0.2));
         }
