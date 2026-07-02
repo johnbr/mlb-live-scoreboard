@@ -84,8 +84,8 @@ const CARD_DEFAULTS = {
   headshot_size: "auto",
 };
 
-// Pixel size for each `headshot_size` preset. Used by the CSS rules at
-// the bottom of styles() to override the "auto" clamp(). Keep these in
+// Pixel size for each `headshot_size` preset. Used by the CSS rules near
+// the bottom of CARD_CSS to override the "auto" clamp(). Keep these in
 // sync with the rule block — there's no single source of truth in
 // CSS since we hand-write each preset's rule for clarity.
 const HEADSHOT_SIZE_PRESETS = {
@@ -573,14 +573,6 @@ function deriveGameState(attrs) {
   };
 }
 
-function buildCountText(situation) {
-  if (!situation) return "";
-  const balls = Number(situation.balls ?? 0);
-  const strikes = Number(situation.strikes ?? 0);
-  const outs = Number(situation.outs ?? 0);
-  return `${balls}-${strikes} • ${outs} out${outs === 1 ? "" : "s"}`;
-}
-
 function renderDots(count, total, klass) {
   return Array.from(
     { length: total },
@@ -588,22 +580,12 @@ function renderDots(count, total, klass) {
   ).join("");
 }
 
-function buildBasesText(situation) {
-  if (!situation) return "";
-  const bases = [];
-  if (situation.on_first) bases.push("1B");
-  if (situation.on_second) bases.push("2B");
-  if (situation.on_third) bases.push("3B");
-  if (!bases.length) return "Bases empty";
-  return `Runners on ${bases.join(", ")}`;
-}
-
 function renderBaseOccupancyRow(situation) {
   const first = situation?.first_last_name || "Empty";
   const second = situation?.second_last_name || "Empty";
   const third = situation?.third_last_name || "Empty";
   const val = (v) =>
-    `<span class="base-value ${v === "Empty" ? "empty-value" : "occupied-value"}">${v}</span>`;
+    `<span class="base-value ${v === "Empty" ? "empty-value" : "occupied-value"}">${escapeHtml(v)}</span>`;
   return `
     <div class="bases-occupancy-row">
       <div class="base-slot"><span class="base-label">1B:</span> ${val(first)}</div>
@@ -621,7 +603,7 @@ function renderOnDeckRow(onDeck) {
     <div class="on-deck-row">
       <span class="on-deck-label">On Deck:</span>
       <span class="on-deck-name">${playerNameMarkup(name, onDeck.id)}</span>
-      ${stats ? `<span class="on-deck-stats">${stats}</span>` : ""}
+      ${stats ? `<span class="on-deck-stats">${escapeHtml(stats)}</span>` : ""}
     </div>`;
 }
 
@@ -802,14 +784,6 @@ function deriveInningState(attrs) {
   return { period, prefixText, lower, pseudoFinal, isTop, isBottom, isMid };
 }
 
-function formatCountDots(situation) {
-  return `
-    <span class="count-pack"><span class="dots-label">B</span><span class="dots">${renderDots(Number(situation?.balls ?? 0), 3, "ball")}</span></span>
-    <span class="count-pack"><span class="dots-label">S</span><span class="dots">${renderDots(Number(situation?.strikes ?? 0), 2, "strike")}</span></span>
-    <span class="count-pack"><span class="dots-label">O</span><span class="dots">${renderDots(Number(situation?.outs ?? 0), 3, "out")}</span></span>
-  `;
-}
-
 function teamTotals(competitor) {
   const lines = Array.isArray(competitor?.linescores)
     ? competitor.linescores
@@ -847,10 +821,10 @@ function shortPersonName(name) {
 // available (ESPN occasionally omits it) so the name is never lost. Click /
 // keyboard activation is handled by the delegated listeners on .card-content.
 function playerNameMarkup(name, athleteId) {
-  const text = String(name == null ? "" : name);
+  const text = escapeHtml(name == null ? "" : name);
   const id = String(athleteId || "").trim();
   if (!id || !text) return text;
-  return `<span class="player-link" role="link" tabindex="0" data-athlete-id="${id}" title="View ${text} on ESPN">${text}</span>`;
+  return `<span class="player-link" role="link" tabindex="0" data-athlete-id="${escapeHtml(id)}" title="View ${text} on ESPN">${text}</span>`;
 }
 
 function renderPlayerHeadshot(card, url, alt = "") {
@@ -1083,7 +1057,7 @@ function renderDueUpCards(card, dueUp, inningDescription = "") {
   ).trim();
   return `
     <div class="dueup-panel">
-      <div class="dueup-title">${desc ? `${desc}&nbsp;&nbsp;Due up` : "Due up"}</div>
+      <div class="dueup-title">${desc ? `${escapeHtml(desc)}&nbsp;&nbsp;Due up` : "Due up"}</div>
       <div class="dueup-grid">
         ${list
           .map(
@@ -1091,7 +1065,7 @@ function renderDueUpCards(card, dueUp, inningDescription = "") {
           <div class="dueup-card">
             ${renderPlayerHeadshot(card, item.headshot || "", item.short_name || item.display_name || "")}
             <div class="dueup-name">${playerNameMarkup(shortPersonName(item.short_name || item.display_name || "—"), item.id)}</div>
-            <div class="dueup-stat">${[item.avg, item.hits_ab].filter(Boolean).join(" • ") || "—"}</div>
+            <div class="dueup-stat">${escapeHtml([item.avg, item.hits_ab].filter(Boolean).join(" • ") || "—")}</div>
           </div>`,
           )
           .join("")}
@@ -1107,21 +1081,6 @@ function renderCompactStatLine(stats, pairs) {
     if (val) out.push(`${label} ${val}`);
   }
   return out.join(" • ");
-}
-
-function renderBasesDiamond(situation) {
-  return "";
-}
-
-function renderLeaderList(items) {
-  const list = Array.isArray(items) ? items.filter(Boolean).slice(0, 3) : [];
-  if (!list.length) return "";
-  return list
-    .map(
-      (item) =>
-        `<div class="leader-item"><span class="leader-cat">${item.category || ""}</span><span class="leader-name">${playerNameMarkup(shortPersonName(item.name || ""), item.id)}</span><span class="leader-val">${item.value || ""}</span></div>`,
-    )
-    .join("");
 }
 
 function renderUpcomingPitcherSide(
@@ -1149,8 +1108,8 @@ function renderUpcomingPitcherSide(
     <div class="upcoming-pitcher-side ${alignRight ? "align-right" : ""}">
       ${portrait}
       <div class="upcoming-pitcher-name">${playerNameMarkup(displayName, safe.id)}</div>
-      <div class="upcoming-pitcher-stat">${recordLine || "—"}</div>
-      <div class="upcoming-pitcher-stat secondary">${eraLine || ""}</div>
+      <div class="upcoming-pitcher-stat">${escapeHtml(recordLine || "—")}</div>
+      <div class="upcoming-pitcher-stat secondary">${escapeHtml(eraLine || "")}</div>
     </div>`;
 }
 
@@ -1419,14 +1378,14 @@ function renderUpcomingDetails(
           String(entry.team_short_name || entry.team_name || "").trim() || "—";
         return `
         <div class="standings-row ${isMyTeam ? "my-team" : ""}">
-          <span class="standings-name">${name}</span>
-          <span class="standings-wl">${wl}</span>
-          <span class="standings-gb">${gb}</span>
+          <span class="standings-name">${escapeHtml(name)}</span>
+          <span class="standings-wl">${escapeHtml(wl)}</span>
+          <span class="standings-gb">${escapeHtml(gb)}</span>
         </div>`;
       })
       .join("");
     const heading = standings.division_name
-      ? `<div class="standings-heading">${standings.division_name}</div>`
+      ? `<div class="standings-heading">${escapeHtml(standings.division_name)}</div>`
       : "";
     standingsHtml = `
       <div class="upcoming-standings">
@@ -1543,9 +1502,12 @@ function prettyPitchType(name) {
 // "Fastball 95 (Strike Looking) · 1" — content first, sequence number
 // trailing after the project's usual middle-dot separator.
 function formatPitchLine(pitch, { html = false } = {}) {
+  // ESPN-sourced strings are escaped only on the HTML path — the plain-text
+  // path feeds SVG <title> tooltips whose caller escapes the whole line.
+  const esc = html ? escapeHtml : (s) => String(s);
   if (!pitch) return "";
-  if (typeof pitch === "string") return pitch.trim();
-  if (typeof pitch !== "object") return String(pitch).trim();
+  if (typeof pitch === "string") return esc(pitch.trim());
+  if (typeof pitch !== "object") return esc(String(pitch).trim());
   const text = String(pitch.text || "").trim();
   const seqMatch = text.match(/^Pitch\s+(\d+)\s*:/i);
   const seqNum = seqMatch ? seqMatch[1] : "";
@@ -1553,7 +1515,7 @@ function formatPitchLine(pitch, { html = false } = {}) {
   const vel = Number(pitch.velocity);
   const result = String(pitch.result || "").trim();
   const pieces = [];
-  if (typeLabel) pieces.push(typeLabel);
+  if (typeLabel) pieces.push(esc(typeLabel));
   if (Number.isFinite(vel) && vel > 0) {
     // Triple-digit velocities get a cosmetic red/bold highlight, but only in
     // the HTML render path — the plain-text path feeds the pitch-zone tooltip
@@ -1565,10 +1527,10 @@ function formatPitchLine(pitch, { html = false } = {}) {
     );
   }
   let line = pieces.join(" ");
-  if (result) line += `${line ? " " : ""}(${result})`;
+  if (result) line += `${line ? " " : ""}(${esc(result)})`;
   // If we have nothing structured to add, the original ESPN text is more
   // informative than just a bare sequence number.
-  if (!pieces.length && !result) return text;
+  if (!pieces.length && !result) return esc(text);
   return seqNum ? `${line} · ${seqNum}` : line;
 }
 
@@ -1602,7 +1564,11 @@ function renderPitchZone(pitches) {
   const VB = { x: 0, y: 80, w: 220, h: 190 };
   const dots = plottable
     .map((p, idx) => {
-      const seq = idx + 1;
+      // Number dots by the pitch's own sequence ("Pitch N: ...") so labels
+      // stay aligned with the pitch list even when a pitch without a
+      // coordinate was filtered out above; fall back to the plot index.
+      const seqMatch = String(p.text || "").match(/^Pitch\s+(\d+)\s*:/i);
+      const seq = seqMatch ? seqMatch[1] : idx + 1;
       const cx = Number(p.pitch_coordinate.x);
       const cy = Number(p.pitch_coordinate.y);
       const abbr = String(p.pitch_type_abbr || "").trim();
@@ -1683,7 +1649,7 @@ function renderRecentPlays(
         previousKnownHome = play.home_score;
       return `
         <div class="play-row">
-          <div class="play-text">${play.text}</div>
+          <div class="play-text">${escapeHtml(play.text)}</div>
           <div class="play-indicator">${indicator}</div>
         </div>`;
     })
@@ -1743,10 +1709,10 @@ class MlbLiveGameCard extends HTMLElement {
     }
   }
 
-  // Returns the wrapper CSS class that drives headshot sizing. The card's
-  // styles() block scopes container-query and fixed-size rules under these
-  // classes. Unknown / unset values fall back to "auto" so a stale or
-  // hand-edited YAML never breaks the layout.
+  // Returns the wrapper CSS class that drives headshot sizing. CARD_CSS
+  // scopes container-query and fixed-size rules under these classes.
+  // Unknown / unset values fall back to "auto" so a stale or hand-edited
+  // YAML never breaks the layout.
   _headshotSizeClass() {
     const v = String(this.config?.headshot_size || "auto").toLowerCase();
     if (v === "auto" || HEADSHOT_SIZE_PRESETS[v] != null) {
@@ -2776,8 +2742,13 @@ class MlbLiveGameCard extends HTMLElement {
     const rate = Number(this.config.refresh_rate);
     if (rate > 0 && this._hass) {
       this._refreshInterval = setInterval(() => {
-        // Force a re-render by triggering state refresh
         if (this._hass && this.config?.entity) {
+          // Bust the render memos first — state-driven repaints already
+          // happen via the hass setter, so without this the fingerprint
+          // short-circuit made every tick a no-op. The periodic repaint
+          // exists to refresh time-derived text ("Today 7:10 PM" etc.).
+          this._lastFingerprint = "";
+          this._lastCompactFp = "";
           this.render();
         }
       }, rate * 1000);
@@ -2788,15 +2759,14 @@ class MlbLiveGameCard extends HTMLElement {
     this._clearRefreshTimer();
     this._clearHoldExpiryTimer();
     this._clearNavIdleTimer();
-    clearTimeout(this._renderTimer);
     this._destroyPlayerCardPopup();
     this._destroyLineupPopup();
   }
 
   set hass(hass) {
-    const firstLoad = !this._hass;
     this._hass = hass;
     if (!this.card) {
+      ensureCardStyles();
       this.card = document.createElement("ha-card");
       this.card.className = "mlb-live-game-card";
       this.content = document.createElement("div");
@@ -2809,15 +2779,13 @@ class MlbLiveGameCard extends HTMLElement {
       );
     }
     this.render();
-    // Setup refresh timer on first load
-    if (firstLoad) {
+    // (Re-)arm the refresh timer whenever it's absent, not only on first
+    // load — setConfig() and disconnectedCallback() both clear it, so the
+    // old first-load-only arming permanently killed refresh_rate after a
+    // card edit or a dashboard tab switch.
+    if (!this._refreshInterval) {
       this._setupRefreshTimer();
     }
-  }
-
-  scheduleRender() {
-    clearTimeout(this._renderTimer);
-    this._renderTimer = setTimeout(() => this.render(), 0);
   }
 
   getCardSize() {
@@ -2839,12 +2807,12 @@ class MlbLiveGameCard extends HTMLElement {
     const awayCells = Array.from(
       { length: innings },
       (_, i) =>
-        `<div class="inning-cell">${awayLines[i]?.displayValue ?? awayLines[i]?.value ?? ""}</div>`,
+        `<div class="inning-cell">${escapeHtml(awayLines[i]?.displayValue ?? awayLines[i]?.value ?? "")}</div>`,
     ).join("");
     const homeCells = Array.from(
       { length: innings },
       (_, i) =>
-        `<div class="inning-cell">${homeLines[i]?.displayValue ?? homeLines[i]?.value ?? ""}</div>`,
+        `<div class="inning-cell">${escapeHtml(homeLines[i]?.displayValue ?? homeLines[i]?.value ?? "")}</div>`,
     ).join("");
     // Compute grid-template-columns inline: team-abbr | N inning cells | R total.
     // Using `repeat(auto-fit, minmax(X, max-content))` is invalid per CSS Grid
@@ -2855,8 +2823,8 @@ class MlbLiveGameCard extends HTMLElement {
       <div class="linescore">
         <div class="linescore-grid" style="grid-template-columns: ${gridCols};">
           <div></div>${headers}<div class="inning-head">R</div>
-          <div class="team-abbr">${away?.team?.abbreviation || "A"}</div>${awayCells}<div class="inning-total">${parseScore(away?.score).text || "—"}</div>
-          <div class="team-abbr">${home?.team?.abbreviation || "H"}</div>${homeCells}<div class="inning-total">${parseScore(home?.score).text || "—"}</div>
+          <div class="team-abbr">${escapeHtml(away?.team?.abbreviation || "A")}</div>${awayCells}<div class="inning-total">${escapeHtml(parseScore(away?.score).text || "—")}</div>
+          <div class="team-abbr">${escapeHtml(home?.team?.abbreviation || "H")}</div>${homeCells}<div class="inning-total">${escapeHtml(parseScore(home?.score).text || "—")}</div>
         </div>
       </div>
     `;
@@ -2888,7 +2856,6 @@ class MlbLiveGameCard extends HTMLElement {
     return [
       stateObj?.state,
       attrs.mode,
-      attrs.game_state,
       // Visible scoreboard inputs
       away.score,
       away.recordSummary,
@@ -2897,7 +2864,6 @@ class MlbLiveGameCard extends HTMLElement {
       status.type?.state,
       status.type?.name,
       status.period,
-      status.displayClock,
       // Matchup
       attrs.current_batter?.display_name,
       attrs.current_pitcher?.display_name,
@@ -2911,13 +2877,18 @@ class MlbLiveGameCard extends HTMLElement {
       ps.ip,
       ps.pitches_strikes,
       ps.strikeouts,
-      // Count + bases
+      // Count + bases. The situation attribute uses snake_case keys — the
+      // camelCase spellings this block once read were always undefined, so
+      // base-runner changes alone never triggered a repaint.
       sit.balls,
       sit.strikes,
       sit.outs,
-      sit.onFirst,
-      sit.onSecond,
-      sit.onThird,
+      sit.on_first,
+      sit.on_second,
+      sit.on_third,
+      sit.first_last_name,
+      sit.second_last_name,
+      sit.third_last_name,
       // Recent plays — only the tail-most play affects rendering thresholds
       plays.length,
       lastPlay?.id,
@@ -2938,7 +2909,7 @@ class MlbLiveGameCard extends HTMLElement {
     if (!this.config.entity) {
       if (this._lastFingerprint !== "__NO_ENTITY__") {
         this._lastFingerprint = "__NO_ENTITY__";
-        this.content.innerHTML = `<div class="empty">Configure this card — choose an MLB Live Scoreboard entity.</div>${this.styles()}`;
+        this.content.innerHTML = `<div class="empty">Configure this card — choose an MLB Live Scoreboard entity.</div>`;
       }
       return;
     }
@@ -2946,7 +2917,7 @@ class MlbLiveGameCard extends HTMLElement {
     if (!stateObj) {
       if (this._lastFingerprint !== "__NOT_FOUND__") {
         this._lastFingerprint = "__NOT_FOUND__";
-        this.content.innerHTML = `<div class="empty">Entity not found: ${this.config.entity}</div>${this.styles()}`;
+        this.content.innerHTML = `<div class="empty">Entity not found: ${escapeHtml(this.config.entity)}</div>`;
       }
       return;
     }
@@ -2984,8 +2955,6 @@ class MlbLiveGameCard extends HTMLElement {
     const homeScore = parseScore(home?.score);
     const stateInfo = deriveGameState(attrs);
     const inningState = deriveInningState(attrs);
-    const title =
-      this.config.title || attrs.team_name || attrs.team_abbr || "MLB Live";
     const batter = currentBatterName(attrs);
     const pitcher =
       attrs.current_pitcher?.display_name ||
@@ -3036,10 +3005,6 @@ class MlbLiveGameCard extends HTMLElement {
     const marker = this.renderInningMarker(stateInfo, inningState);
     const awayTotals = teamTotals(away);
     const homeTotals = teamTotals(home);
-    const countSummary = buildCountText(attrs.situation);
-    const basesSummary = buildBasesText(attrs.situation);
-    const probablePitchers = attrs.probable_pitchers || {};
-    const leaders = attrs.leaders || {};
     const periodLower = String(inningState.lower || "");
     const inningContext = attrs.inning_context || {};
     const ownerAbbr = String(attrs.team_abbr || "").toUpperCase();
@@ -3248,10 +3213,6 @@ class MlbLiveGameCard extends HTMLElement {
       stateInfo.pillClass === "delayed"
         ? `<div class="state-panel delayed-panel"><span class="mini-state warning">DLY</span><span>${escapeHtml(delayedPrimary)}</span></div>`
         : "";
-    const finalExtras =
-      stateInfo.pillClass === "final" && marker === "F"
-        ? `<div class="state-panel final-panel"><span class="mini-state">F</span><span>Final</span><span class="totals-inline">Away H/E ${awayTotals.hits}/${awayTotals.errors} • Home H/E ${homeTotals.hits}/${homeTotals.errors}</span></div>`
-        : "";
     if (
       stateInfo.pillClass === "next" ||
       stateInfo.pillClass === "final" ||
@@ -3270,38 +3231,24 @@ class MlbLiveGameCard extends HTMLElement {
       const isFinalCompact = stateInfo.pillClass === "final";
       const canExpand = isUpcoming || isFinalCompact;
       const expanded = canExpand && this._upcomingExpanded === true;
-      // Compute compact fingerprint to see if we need to update DOM
-      const compactFp = [
-        stateInfo.pillClass,
-        awayTeam?.abbreviation || awayMeta?.abbreviation,
-        homeTeam?.abbreviation || homeMeta?.abbreviation,
-        competition?.date,
-        awayScore.text,
-        homeScore.text,
+      // renderCompactNonLive fingerprints its inputs itself and returns null
+      // when the DOM is already up to date (the same fingerprint used to be
+      // computed twice — here and again inside the method).
+      const compactHtml = this.renderCompactNonLive(
+        stateInfo,
+        competition,
+        awayTeam,
+        awayMeta,
         awayRecord,
+        awayScore,
+        homeTeam,
+        homeMeta,
         homeRecord,
-        expanded ? "exp" : "col",
-        canExpand ? this._upcomingDetailsFingerprint(attrs) : "",
-        `nav:${this._navOffset}:${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}`,
-      ].join("|");
-      if (compactFp !== this._lastCompactFp) {
-        // Fingerprint changed, need to re-render
-        this.content.innerHTML = this.renderCompactNonLive(
-          stateInfo,
-          competition,
-          awayTeam,
-          awayMeta,
-          awayRecord,
-          awayScore,
-          homeTeam,
-          homeMeta,
-          homeRecord,
-          homeScore,
-          attrs,
-          expanded,
-        );
-      }
-      // else: fingerprint unchanged, skip DOM update entirely
+        homeScore,
+        attrs,
+        expanded,
+      );
+      if (compactHtml !== null) this.content.innerHTML = compactHtml;
       return;
     }
 
@@ -3319,10 +3266,8 @@ class MlbLiveGameCard extends HTMLElement {
         ${winProbabilityPanel}
         ${this.config.show_linescore ? this.renderLinescore(competition) : ""}
         ${delayedExtras}
-        ${finalExtras}
         ${liveExtras}
       </div>
-      ${this.styles()}
     `;
     // Only update DOM if HTML actually changed
     if (liveHtml !== this._lastLiveHtml) {
@@ -3388,7 +3333,7 @@ class MlbLiveGameCard extends HTMLElement {
       `nav:${this._navOffset}:${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}`,
     ].join("|");
     if (compactFp === this._lastCompactFp) {
-      return this._lastCompactHtml; // Return cached HTML, don't recreate DOM
+      return null; // DOM already reflects this state — skip the update
     }
     this._lastCompactFp = compactFp;
 
@@ -3501,7 +3446,7 @@ class MlbLiveGameCard extends HTMLElement {
               <div class="team-left">
                 ${awayLogo ? `<img class="logo" src="${awayLogo}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<div class="logo placeholder"></div>`}
                 <div class="meta">
-                  <div class="name">${awayName}${awayRecord ? ` <span class="record-inline">(${awayRecord})</span>` : ""}</div>
+                  <div class="name">${escapeHtml(awayName)}${awayRecord ? ` <span class="record-inline">(${escapeHtml(awayRecord)})</span>` : ""}</div>
                 </div>
               </div>
               ${isFinal ? `<div class="team-right compact-final-score-right"><div class="score final-score">${awayScore.text || "—"}</div></div>` : ""}
@@ -3510,7 +3455,7 @@ class MlbLiveGameCard extends HTMLElement {
               <div class="team-left">
                 ${homeLogo ? `<img class="logo" src="${homeLogo}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<div class="logo placeholder"></div>`}
                 <div class="meta">
-                  <div class="name">${homeName}${homeRecord ? ` <span class="record-inline">(${homeRecord})</span>` : ""}</div>
+                  <div class="name">${escapeHtml(homeName)}${homeRecord ? ` <span class="record-inline">(${escapeHtml(homeRecord)})</span>` : ""}</div>
                 </div>
               </div>
               ${isFinal ? `<div class="team-right compact-final-score-right"><div class="score final-score">${homeScore.text || "—"}</div></div>` : ""}
@@ -3519,19 +3464,12 @@ class MlbLiveGameCard extends HTMLElement {
           ${markerSide}
         </div>
         ${detailsPanel}
-      </div>
-      ${this.styles()}`;
+      </div>`;
+    // Identical output (e.g. a forced repaint whose time-derived text didn't
+    // actually change) — skip the DOM write but keep the new fingerprint.
+    if (html === this._lastCompactHtml) return null;
     this._lastCompactHtml = html;
     return html;
-  }
-
-  renderRheHeader() {
-    return `
-      <div class="rhe-header" aria-hidden="true">
-        <div class="rhe-spacer"></div>
-        <div class="rhe-cols"><span class="rhe-col score">R</span><span class="rhe-col">H</span><span class="rhe-col">E</span></div>
-      </div>
-    `;
   }
 
   renderInningMarker(stateInfo, inningState) {
@@ -3578,7 +3516,7 @@ class MlbLiveGameCard extends HTMLElement {
         <div class="team-left">
           ${logo ? `<img class="logo" src="${logo}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<div class="logo placeholder"></div>`}
           <div class="meta">
-            <div class="name">${displayName}${record ? ` <span class="record-inline">(${record})</span>` : ""}</div>
+            <div class="name">${escapeHtml(displayName)}${record ? ` <span class="record-inline">(${escapeHtml(record)})</span>` : ""}</div>
           </div>
         </div>
         <div class="team-right rhe-values">
@@ -3590,9 +3528,15 @@ class MlbLiveGameCard extends HTMLElement {
     `;
   }
 
-  styles() {
-    return `
-      <style>
+}
+
+// Card styles, injected once into document.head (guarded by id) instead of
+// being re-parsed on every render and duplicated per card instance. The card
+// renders in light DOM, so a <style> tag is document-global wherever it
+// lives — this is behavior-identical to the previous per-render inline
+// injection, minus the repeated parse cost.
+const CARD_STYLE_ID = "mlb-live-game-card-style";
+const CARD_CSS = `
         .wrapper {
           padding: 0 1px 0;
           /* Make the card its own size-query container so headshots (and any
@@ -4204,7 +4148,7 @@ line-height: 1.15;
         .base-value {
 }
         .base-value.empty-value {
-          color: rgba(255,255,255,0.38); color: var(--secondary-text-color); }
+          color: var(--secondary-text-color); }
         .base-value.occupied-value {
 color: var(--primary-text-color); }
         .count-dots-row.prominent {
@@ -4334,10 +4278,8 @@ line-height: 1.03;
           color: var(--warning-color);
         }
         .dueup-stat {
-color: var(--primary-text-color);
           margin-top: 1px;
-
-color: var(--secondary-text-color);
+          color: var(--secondary-text-color);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -4848,10 +4790,14 @@ white-space: nowrap;
           text-align: right;
           font-variant-numeric: tabular-nums;
         }
+`;
 
-      </style>
-    `;
-  }
+function ensureCardStyles() {
+  if (document.getElementById(CARD_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = CARD_STYLE_ID;
+  style.textContent = CARD_CSS;
+  document.head.appendChild(style);
 }
 
 if (!customElements.get(CARD_TAG)) {
