@@ -1638,6 +1638,49 @@ function renderInningStrip(body, { atLive, downDisabled }) {
     </div>`;
 }
 
+// Scoreboard totals as they stood at the end of a viewed past half-inning,
+// reconstructed from the per-inning linescores (final once a half ends).
+// Pass includeViewedInning=false for the home side while viewing a top half
+// (it hadn't batted that inning yet). Hits/errors only sum when ESPN provides
+// a per-inning breakdown; null means "not reconstructable" (render as "—").
+function totalsThroughHalf(competitor, inning, includeViewedInning) {
+  const lines = Array.isArray(competitor?.linescores)
+    ? competitor.linescores
+    : [];
+  const upto = Math.min(
+    includeViewedInning ? inning : inning - 1,
+    lines.length,
+  );
+  let runs = 0;
+  let hits = 0;
+  let errors = 0;
+  let hasRuns = upto === 0;
+  let hasHits = false;
+  let hasErrors = false;
+  for (let i = 0; i < upto; i++) {
+    const r = Number(lines[i]?.value);
+    if (Number.isFinite(r)) {
+      runs += r;
+      hasRuns = true;
+    }
+    const h = Number(lines[i]?.hits);
+    if (Number.isFinite(h)) {
+      hits += h;
+      hasHits = true;
+    }
+    const e = Number(lines[i]?.errors);
+    if (Number.isFinite(e)) {
+      errors += e;
+      hasErrors = true;
+    }
+  }
+  return {
+    runs: hasRuns ? runs : null,
+    hits: hasHits ? hits : null,
+    errors: hasErrors ? errors : null,
+  };
+}
+
 // Inning marker (▲/▼ stack) for the past half-inning the pager is viewing —
 // same shape as the live marker so the box-score indicator simply flips to
 // the viewed half while paging.
@@ -2969,14 +3012,21 @@ class MlbLiveGameCard extends HTMLElement {
     return 4;
   }
 
-  renderLinescore(competition) {
+  renderLinescore(competition, viewedHalf = null) {
     const competitors = competition?.competitors || [];
     const away = competitors.find((c) => c?.homeAway === "away") || {};
     const home = competitors.find((c) => c?.homeAway === "home") || {};
     const awayLines = Array.isArray(away?.linescores) ? away.linescores : [];
     const homeLines = Array.isArray(home?.linescores) ? home.linescores : [];
-    const innings = Math.max(awayLines.length, homeLines.length);
+    let innings = Math.max(awayLines.length, homeLines.length);
     if (!innings) return "";
+    // While the inning pager views a past half, truncate to that point in
+    // the game: no columns past the viewed inning, and the home cell of the
+    // viewed inning stays blank when viewing its top half (home hadn't
+    // batted yet). Totals roll back the same way.
+    if (viewedHalf && viewedHalf.inning > 0) {
+      innings = Math.min(innings, viewedHalf.inning);
+    }
     const headers = Array.from(
       { length: innings },
       (_, i) => `<div class="inning-head">${i + 1}</div>`,
@@ -2989,8 +3039,28 @@ class MlbLiveGameCard extends HTMLElement {
     const homeCells = Array.from(
       { length: innings },
       (_, i) =>
-        `<div class="inning-cell">${escapeHtml(homeLines[i]?.displayValue ?? homeLines[i]?.value ?? "")}</div>`,
+        `<div class="inning-cell">${
+          viewedHalf && viewedHalf.half === "top" && i + 1 === viewedHalf.inning
+            ? ""
+            : escapeHtml(homeLines[i]?.displayValue ?? homeLines[i]?.value ?? "")
+        }</div>`,
     ).join("");
+    const awayTotalText = viewedHalf
+      ? (() => {
+          const t = totalsThroughHalf(away, viewedHalf.inning, true);
+          return t.runs != null ? String(t.runs) : "—";
+        })()
+      : parseScore(away?.score).text || "—";
+    const homeTotalText = viewedHalf
+      ? (() => {
+          const t = totalsThroughHalf(
+            home,
+            viewedHalf.inning,
+            viewedHalf.half === "bottom",
+          );
+          return t.runs != null ? String(t.runs) : "—";
+        })()
+      : parseScore(home?.score).text || "—";
     // Compute grid-template-columns inline: team-abbr | N inning cells | R total.
     // Using `repeat(auto-fit, minmax(X, max-content))` is invalid per CSS Grid
     // spec and causes browsers to collapse to a single column, which stacks
@@ -3000,8 +3070,8 @@ class MlbLiveGameCard extends HTMLElement {
       <div class="linescore">
         <div class="linescore-grid" style="grid-template-columns: ${gridCols};">
           <div></div>${headers}<div class="inning-head">R</div>
-          <div class="team-abbr">${escapeHtml(away?.team?.abbreviation || "A")}</div>${awayCells}<div class="inning-total">${escapeHtml(parseScore(away?.score).text || "—")}</div>
-          <div class="team-abbr">${escapeHtml(home?.team?.abbreviation || "H")}</div>${homeCells}<div class="inning-total">${escapeHtml(parseScore(home?.score).text || "—")}</div>
+          <div class="team-abbr">${escapeHtml(away?.team?.abbreviation || "A")}</div>${awayCells}<div class="inning-total">${escapeHtml(awayTotalText)}</div>
+          <div class="team-abbr">${escapeHtml(home?.team?.abbreviation || "H")}</div>${homeCells}<div class="inning-total">${escapeHtml(homeTotalText)}</div>
         </div>
       </div>
     `;
@@ -3261,6 +3331,30 @@ class MlbLiveGameCard extends HTMLElement {
       ? renderPastHalfMarker(this._inningView)
       : marker;
     const markerClass = inningActive ? "history" : stateInfo.pillClass;
+    // ...and the scoreboard numbers roll back to their values at the end of
+    // the viewed half, so the score agrees with the plays on screen.
+    const viewedHalf = inningActive
+      ? {
+          inning: Number(this._inningView.inning) || 0,
+          half: String(this._inningView.half || ""),
+        }
+      : null;
+    let dispAwayScore = awayScore;
+    let dispHomeScore = homeScore;
+    let dispAwayTotals = awayTotals;
+    let dispHomeTotals = homeTotals;
+    if (viewedHalf && viewedHalf.inning > 0) {
+      const a = totalsThroughHalf(away, viewedHalf.inning, true);
+      const h = totalsThroughHalf(
+        home,
+        viewedHalf.inning,
+        viewedHalf.half === "bottom",
+      );
+      dispAwayScore = { text: a.runs != null ? String(a.runs) : "—", num: a.runs };
+      dispHomeScore = { text: h.runs != null ? String(h.runs) : "—", num: h.runs };
+      dispAwayTotals = { hits: a.hits ?? "—", errors: a.errors ?? "—" };
+      dispHomeTotals = { hits: h.hits ?? "—", errors: h.errors ?? "—" };
+    }
     const latestRecentPlay =
       Array.isArray(attrs.recent_plays) && attrs.recent_plays.length
         ? attrs.recent_plays[attrs.recent_plays.length - 1]
@@ -3474,15 +3568,15 @@ class MlbLiveGameCard extends HTMLElement {
       <div class="wrapper ${this._headshotSizeClass()}">
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
-            ${this.teamRow(awayTeam, awayMeta, "", awayScore, awayWon, false, away, awayTotals)}
-            ${this.teamRow(homeTeam, homeMeta, "", homeScore, homeWon, true, home, homeTotals)}
+            ${this.teamRow(awayTeam, awayMeta, "", dispAwayScore, awayWon, false, away, dispAwayTotals)}
+            ${this.teamRow(homeTeam, homeMeta, "", dispHomeScore, homeWon, true, home, dispHomeTotals)}
           </div>
           <div class="inning-marker-side">
             <div class="inning-marker-wrap"><div class="inning-marker ${markerClass}">${displayMarker}</div></div>
           </div>
         </div>
         ${winProbabilityPanel}
-        ${this.config.show_linescore ? this.renderLinescore(competition) : ""}
+        ${this.config.show_linescore ? this.renderLinescore(competition, viewedHalf) : ""}
         ${delayedExtras}
         ${liveExtras}
       </div>
@@ -3984,7 +4078,7 @@ color: var(--primary-text-color);
           justify-content: center;
           gap: 24px;
           margin: 2px 0 0;
-          padding-top: 1px;
+          padding: 2px 0;
           border-top: 1px solid var(--divider-color, rgba(127,127,127,0.2));
         }
         .inning-nav-btn {
