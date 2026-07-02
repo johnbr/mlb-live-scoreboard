@@ -7,6 +7,7 @@ helpers actually read, not full ESPN responses.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -2548,3 +2549,115 @@ def test_extract_highlights_url_returns_empty_for_missing_header():
     assert Coord._extract_highlights_url({}) == ""
     assert Coord._extract_highlights_url({"header": {}}) == ""
     assert Coord._extract_highlights_url({"header": {"links": "not a list"}}) == ""
+
+
+# ---------------------------------------------------------------------------
+# Inning pager — _resolve_target_half / _played_half_innings / _ordinal /
+# async_half_inning_at_offset
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_target_half_top_bottom():
+    assert Coord._resolve_target_half({"period": 3, "period_prefix": "Top 3"}) == (3, "top")
+    assert Coord._resolve_target_half({"period": 5, "period_prefix": "Bottom 5th"}) == (5, "bottom")
+
+
+def test_resolve_target_half_between_halves():
+    # Mid -> the just-ended top; End -> the just-ended bottom.
+    assert Coord._resolve_target_half(
+        {"period": 7, "period_prefix": "Mid 7", "is_between_halves": True}
+    ) == (7, "top")
+    assert Coord._resolve_target_half(
+        {"period": 7, "period_prefix": "End 7", "is_between_halves": True}
+    ) == (7, "bottom")
+
+
+def test_resolve_target_half_unknown_returns_blank():
+    assert Coord._resolve_target_half({"period": 0, "period_prefix": ""}) == (0, "")
+
+
+def test_ordinal():
+    assert Coord._ordinal(1) == "1st"
+    assert Coord._ordinal(2) == "2nd"
+    assert Coord._ordinal(3) == "3rd"
+    assert Coord._ordinal(4) == "4th"
+    assert Coord._ordinal(11) == "11th"
+    assert Coord._ordinal(21) == "21st"
+
+
+def _summary_three_innings():
+    # Top 1 .. Top 3, each half with one renderable play.
+    return {
+        "plays": [
+            _make_play(period=1, half="Top", text="Top1 single."),
+            _make_play(period=1, half="Bottom", text="Bot1 walk."),
+            _make_play(period=2, half="Top", text="Top2 homered."),
+            _make_play(period=2, half="Bottom", text="Bot2 flied out."),
+            _make_play(period=3, half="Top", text="Top3 doubled."),
+        ]
+    }
+
+
+def test_played_half_innings_orders_and_dedupes():
+    summary = _summary_three_innings()
+    # add a duplicate-half play + a marker-only (no text) play that must be ignored
+    summary["plays"].insert(1, _make_play(period=1, half="Top", text="Top1 grounded out."))
+    summary["plays"].append(_make_play(period=3, half="Bottom", text="", play_type="end batter/pitcher"))
+    assert Coord._played_half_innings(summary) == [
+        (1, "top"),
+        (1, "bottom"),
+        (2, "top"),
+        (2, "bottom"),
+        (3, "top"),
+    ]
+
+
+def test_played_half_innings_skips_pitch_only_types():
+    summary = {
+        "plays": [
+            _make_play(period=1, half="Top", text="Pitch 1: Ball", play_type="ball"),
+            _make_play(period=1, half="Top", text="Top1 singled."),
+        ]
+    }
+    assert Coord._played_half_innings(summary) == [(1, "top")]
+
+
+def _pager(summary, inning_context, offset):
+    coord = Coord.__new__(Coord)
+    coord._live_summary_cache = ("E1", summary, inning_context)
+    return asyncio.run(coord.async_half_inning_at_offset(offset))
+
+
+def test_half_inning_at_offset_returns_none_without_cache():
+    coord = Coord.__new__(Coord)
+    coord._live_summary_cache = None
+    assert asyncio.run(coord.async_half_inning_at_offset(-1)) is None
+
+
+def test_half_inning_at_offset_steps_back_one_half():
+    ctx = {"period": 3, "period_prefix": "Top 3", "is_between_halves": False}
+    res = _pager(_summary_three_innings(), ctx, -1)
+    # One step back from Top 3 -> Bottom 2.
+    assert res["inning"] == 2 and res["half"] == "bottom"
+    assert res["label"] == "Bottom 2nd"
+    assert res["offset"] == -1
+    assert res["has_prev"] is True and res["has_next"] is True
+    assert [p["text"] for p in res["plays"]] == ["Bot2 flied out."]
+
+
+def test_half_inning_at_offset_clamps_at_oldest():
+    ctx = {"period": 3, "period_prefix": "Top 3", "is_between_halves": False}
+    res = _pager(_summary_three_innings(), ctx, -99)
+    assert (res["inning"], res["half"]) == (1, "top")
+    assert res["offset"] == -4  # anchor idx 4 -> idx 0
+    assert res["has_prev"] is False and res["has_next"] is True
+
+
+def test_half_inning_at_offset_anchor_not_yet_in_plays():
+    # Live half is Bottom 3 with no plays yet -> anchor just past the end, so a
+    # single step back lands on the most recent completed half (Top 3).
+    ctx = {"period": 3, "period_prefix": "Bottom 3", "is_between_halves": False}
+    res = _pager(_summary_three_innings(), ctx, -1)
+    assert (res["inning"], res["half"]) == (3, "top")
+    assert res["offset"] == -1
+    assert res["has_next"] is True

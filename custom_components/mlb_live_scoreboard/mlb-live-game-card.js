@@ -7,6 +7,10 @@ console.info(`[${CARD_TAG}] ${CARD_VERSION} loaded`);
 // re-arms the timer; returning to the default view cancels it.
 const NAV_IDLE_RETURN_MS = 60000;
 
+// Same idea for the inning pager: after paging the play-by-play back to an
+// earlier half-inning, snap back to the live half this long after the last tap.
+const INNING_IDLE_RETURN_MS = 20000;
+
 // Number of seconds the card keeps showing the third-out play after it occurs,
 // before yielding to the due-up panel for the next half-inning.
 const THIRD_OUT_HOLD_SECONDS = 30;
@@ -75,6 +79,10 @@ const CARD_DEFAULTS = {
   // schedule: back through previous results, forward through upcoming
   // games. Hidden while the displayed game is live. On by default.
   show_schedule_nav: true,
+  // Left/right arrows above the play-by-play on the live card to page back
+  // through earlier half-innings ("what happened in the 4th?"). Snaps back to
+  // the live half after a short idle. On by default.
+  show_inning_nav: true,
   // Inline player-headshot size for the matchup portraits, due-up
   // thumbnails, and probable-pitcher portraits. "auto" tracks the card's
   // actual width via a CSS container query (responsive to HA's per-column
@@ -186,6 +194,7 @@ const EDITOR_SCHEMA = [
       },
       { name: "show_lineup_popup", selector: { boolean: {} } },
       { name: "show_schedule_nav", selector: { boolean: {} } },
+      { name: "show_inning_nav", selector: { boolean: {} } },
     ],
   },
   {
@@ -216,6 +225,7 @@ const EDITOR_LABELS = {
   headshot_size: "Headshot size",
   show_lineup_popup: "Enable team lineup popup",
   show_schedule_nav: "Schedule navigation arrows",
+  show_inning_nav: "Past half-inning pager",
   show_batter: "Batter",
   show_records: "Team records",
   show_linescore: "Linescore",
@@ -237,6 +247,8 @@ const EDITOR_HELPERS = {
     "Auto scales headshots with the card's width (responsive to HA's per-column dashboards). Presets pin a fixed pixel size.",
   show_schedule_nav:
     "Adds ‹ › arrows beside the date/status on the non-live card to page back through previous results and forward through upcoming games. Hidden while a game is live.",
+  show_inning_nav:
+    "Adds a small ▾ strip below the live play-by-play that swaps the panel to the previous half-inning (one half at a time; the inning marker by the box score shows which). Snaps back to the live half after ~20s of no taps.",
   show_pitch_zone:
     "Adds a small strike-zone graphic below the base diamond with one colored dot per pitch in the current at-bat. Auto-hides between at-bats.",
   show_highlights:
@@ -1592,6 +1604,97 @@ function renderPitchZone(pitches) {
     </div>`;
 }
 
+// Resolve the live half-inning ({inning, half}) the card is showing from the
+// inning_context, mirroring the backend's _resolve_target_half (top/bottom,
+// with the between-halves case mapped to the just-ended half). Returns null
+// when it can't be determined (e.g. pregame).
+function resolveLiveHalf(inningContext) {
+  const inning = Number(inningContext?.period || 0);
+  if (!(inning > 0)) return null;
+  const prefix = String(inningContext?.period_prefix || "").toLowerCase();
+  if (prefix.startsWith("top")) return { inning, half: "top" };
+  if (prefix.startsWith("bot")) return { inning, half: "bottom" };
+  if (inningContext?.is_between_halves)
+    return { inning, half: prefix.startsWith("mid") ? "top" : "bottom" };
+  return null;
+}
+
+// Append the inning-pager strip below the play-by-play body: a thin row with
+// a small ▾ that swaps the panel to the previous half-inning. While viewing a
+// past half a ▴ pages back toward live; which half is shown is signalled by
+// the inning marker beside the box score, not here.
+function renderInningStrip(body, { atLive, downDisabled }) {
+  // CSS border-triangles, not text glyphs — a glyph's em box is mostly
+  // whitespace, so the strip height and visible arrow size can't be
+  // controlled independently with a character.
+  const btn = (cls, tri, aria, disabled) =>
+    `<button class="inning-nav-btn ${cls}" type="button" aria-label="${aria}" title="${aria}"${
+      disabled ? " disabled" : ""
+    }><span class="tri ${tri}"></span></button>`;
+  return `${body}
+    <div class="inning-strip">
+      ${atLive ? "" : btn("inning-nav-next", "tri-up", "Later half-inning", false)}
+      ${btn("inning-nav-prev", "tri-down", "Previous half-inning", downDisabled)}
+    </div>`;
+}
+
+// Scoreboard totals as they stood at the end of a viewed past half-inning,
+// reconstructed from the per-inning linescores (final once a half ends).
+// Pass includeViewedInning=false for the home side while viewing a top half
+// (it hadn't batted that inning yet). Hits/errors only sum when ESPN provides
+// a per-inning breakdown; null means "not reconstructable" (render as "—").
+function totalsThroughHalf(competitor, inning, includeViewedInning) {
+  const lines = Array.isArray(competitor?.linescores)
+    ? competitor.linescores
+    : [];
+  const upto = Math.min(
+    includeViewedInning ? inning : inning - 1,
+    lines.length,
+  );
+  let runs = 0;
+  let hits = 0;
+  let errors = 0;
+  let hasRuns = upto === 0;
+  let hasHits = false;
+  let hasErrors = false;
+  // ESPN's per-inning entries put runs in displayValue (a string) and often
+  // omit value entirely (null). Number(null) is 0, not NaN — so missing
+  // fields must be screened out before coercion or they count as 0 runs.
+  const num = (v) => (v == null || v === "" ? NaN : Number(v));
+  for (let i = 0; i < upto; i++) {
+    const r = num(lines[i]?.value ?? lines[i]?.displayValue);
+    if (Number.isFinite(r)) {
+      runs += r;
+      hasRuns = true;
+    }
+    const h = num(lines[i]?.hits);
+    if (Number.isFinite(h)) {
+      hits += h;
+      hasHits = true;
+    }
+    const e = num(lines[i]?.errors);
+    if (Number.isFinite(e)) {
+      errors += e;
+      hasErrors = true;
+    }
+  }
+  return {
+    runs: hasRuns ? runs : null,
+    hits: hasHits ? hits : null,
+    errors: hasErrors ? errors : null,
+  };
+}
+
+// Inning marker (▲/▼ stack) for the past half-inning the pager is viewing —
+// same shape as the live marker so the box-score indicator simply flips to
+// the viewed half while paging.
+function renderPastHalfMarker(view) {
+  const num = Number(view?.inning) || 0;
+  if (String(view?.half) === "top")
+    return `<div class="inning-stack up"><div class="arrow">▲</div><div class="num">${num}</div></div>`;
+  return `<div class="inning-stack down"><div class="num">${num}</div><div class="arrow">▼</div></div>`;
+}
+
 function renderRecentPlays(
   plays,
   currentPitches = [],
@@ -1681,8 +1784,11 @@ class MlbLiveGameCard extends HTMLElement {
     this._clearRefreshTimer();
     // Schedule-navigation view state (card-local; never touches the sensor).
     this._resetScheduleNav();
-    // Force the anchor-change check on the next render to re-baseline.
+    // Inning-pager view state (card-local; live play-by-play only).
+    this._resetInningNav();
+    // Force the anchor-change checks on the next render to re-baseline.
     this._navAnchorId = undefined;
+    this._inningAnchorKey = undefined;
   }
 
   // Reset schedule navigation back to the live/auto-selected game. Called on
@@ -1700,6 +1806,20 @@ class MlbLiveGameCard extends HTMLElement {
     if (this._navCache instanceof Map) this._navCache.clear();
     else this._navCache = new Map();
     this._clearNavIdleTimer();
+  }
+
+  // Reset the inning pager back to the live half-inning. Called on config
+  // change and whenever the live half advances so a stale past-inning view
+  // (and its now-misaligned per-offset cache) never sticks.
+  _resetInningNav() {
+    this._inningOffset = 0;
+    this._inningView = null;
+    this._inningHasPrev = true;
+    this._inningHasNext = true;
+    this._inningInflight = null;
+    if (this._inningCache instanceof Map) this._inningCache.clear();
+    else this._inningCache = new Map();
+    this._clearInningIdleTimer();
   }
 
   _clearRefreshTimer() {
@@ -2595,6 +2715,23 @@ class MlbLiveGameCard extends HTMLElement {
       );
       return;
     }
+    const inningBtn =
+      ev.target instanceof Element
+        ? ev.target.closest(".inning-nav-btn")
+        : null;
+    if (inningBtn && this.content.contains(inningBtn)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (
+        inningBtn.disabled ||
+        inningBtn.getAttribute("aria-disabled") === "true"
+      )
+        return;
+      this._navigateInning(
+        inningBtn.classList.contains("inning-nav-next") ? 1 : -1,
+      );
+      return;
+    }
     if (this._openPlayerProfile(ev.target)) return;
     if (this._toggleLineupFromMatchup(ev.target)) return;
     const target =
@@ -2615,7 +2752,7 @@ class MlbLiveGameCard extends HTMLElement {
     // path drive navigation and don't also toggle the surrounding expander.
     if (
       ev.target instanceof Element &&
-      ev.target.closest(".schedule-nav-btn")
+      ev.target.closest(".schedule-nav-btn, .inning-nav-btn")
     )
       return;
     const playerLink =
@@ -2737,6 +2874,92 @@ class MlbLiveGameCard extends HTMLElement {
     }
   }
 
+  // Step the play-by-play view by `delta` half-innings (-1 = one half earlier,
+  // +1 = toward live). The view never goes past the live half (offset capped at
+  // 0); offset 0 falls through to the live `recent_plays`. Past halves are
+  // fetched over WebSocket and cached per offset.
+  _navigateInning(delta) {
+    const target = Math.min(0, this._inningOffset + delta);
+    if (target === this._inningOffset) return; // already at the live half
+    if (target === 0) {
+      this._inningOffset = 0;
+      this._inningView = null;
+      this._inningHasPrev = true;
+      this._forceInningRerender();
+      return;
+    }
+    if (this._inningCache instanceof Map && this._inningCache.has(target)) {
+      this._applyInningResult(this._inningCache.get(target));
+      return;
+    }
+    if (this._inningInflight) return; // de-dupe rapid taps
+    const entity = this.config?.entity;
+    const conn = this._hass?.connection;
+    if (!entity || !conn) return;
+    this._inningInflight = conn
+      .sendMessagePromise({
+        type: "mlb_live_scoreboard/half_inning_at_offset",
+        entity_id: entity,
+        offset: target,
+      })
+      .then((res) => {
+        if (!res || !Array.isArray(res.plays)) {
+          // Nothing further back — we're at the oldest played half. Disable the
+          // back arrow so further taps don't re-hit the backend.
+          if (delta < 0) this._inningHasPrev = false;
+          this._forceInningRerender();
+          return;
+        }
+        if (this._inningCache instanceof Map)
+          this._inningCache.set(res.offset, res);
+        this._applyInningResult(res);
+      })
+      .catch((err) => {
+        console.debug(`[${CARD_TAG}] half_inning_at_offset fetch failed:`, err);
+      })
+      .finally(() => {
+        this._inningInflight = null;
+      });
+  }
+
+  _applyInningResult(res) {
+    this._inningOffset = res.offset;
+    // Offset 0 means we've paged back up to the live half — fall through to the
+    // live recent_plays rather than pinning the fetched copy.
+    this._inningView = res.offset === 0 ? null : res;
+    this._inningHasPrev = res.has_prev !== false;
+    this._inningHasNext = res.has_next !== false;
+    this._forceInningRerender();
+  }
+
+  _forceInningRerender() {
+    this._lastFingerprint = "";
+    this._lastCompactFp = "";
+    this._lastLiveHtml = "";
+    // Viewing a past half → arm the idle auto-return; back on live → cancel.
+    if (this._inningOffset !== 0) this._armInningIdleTimer();
+    else this._clearInningIdleTimer();
+    this.render();
+  }
+
+  _armInningIdleTimer() {
+    this._clearInningIdleTimer();
+    this._inningIdleTimer = setTimeout(() => {
+      this._inningIdleTimer = null;
+      if (this._inningOffset !== 0) {
+        this._resetInningNav();
+        this._forceInningRerender();
+      }
+    }, INNING_IDLE_RETURN_MS);
+  }
+
+  _clearInningIdleTimer() {
+    if (this._inningIdleTimer) {
+      clearTimeout(this._inningIdleTimer);
+      this._inningIdleTimer = null;
+    }
+  }
+
   _setupRefreshTimer() {
     this._clearRefreshTimer();
     const rate = Number(this.config.refresh_rate);
@@ -2759,6 +2982,7 @@ class MlbLiveGameCard extends HTMLElement {
     this._clearRefreshTimer();
     this._clearHoldExpiryTimer();
     this._clearNavIdleTimer();
+    this._clearInningIdleTimer();
     this._destroyPlayerCardPopup();
     this._destroyLineupPopup();
   }
@@ -2792,14 +3016,21 @@ class MlbLiveGameCard extends HTMLElement {
     return 4;
   }
 
-  renderLinescore(competition) {
+  renderLinescore(competition, viewedHalf = null) {
     const competitors = competition?.competitors || [];
     const away = competitors.find((c) => c?.homeAway === "away") || {};
     const home = competitors.find((c) => c?.homeAway === "home") || {};
     const awayLines = Array.isArray(away?.linescores) ? away.linescores : [];
     const homeLines = Array.isArray(home?.linescores) ? home.linescores : [];
-    const innings = Math.max(awayLines.length, homeLines.length);
+    let innings = Math.max(awayLines.length, homeLines.length);
     if (!innings) return "";
+    // While the inning pager views a past half, truncate to that point in
+    // the game: no columns past the viewed inning, and the home cell of the
+    // viewed inning stays blank when viewing its top half (home hadn't
+    // batted yet). Totals roll back the same way.
+    if (viewedHalf && viewedHalf.inning > 0) {
+      innings = Math.min(innings, viewedHalf.inning);
+    }
     const headers = Array.from(
       { length: innings },
       (_, i) => `<div class="inning-head">${i + 1}</div>`,
@@ -2812,8 +3043,28 @@ class MlbLiveGameCard extends HTMLElement {
     const homeCells = Array.from(
       { length: innings },
       (_, i) =>
-        `<div class="inning-cell">${escapeHtml(homeLines[i]?.displayValue ?? homeLines[i]?.value ?? "")}</div>`,
+        `<div class="inning-cell">${
+          viewedHalf && viewedHalf.half === "top" && i + 1 === viewedHalf.inning
+            ? ""
+            : escapeHtml(homeLines[i]?.displayValue ?? homeLines[i]?.value ?? "")
+        }</div>`,
     ).join("");
+    const awayTotalText = viewedHalf
+      ? (() => {
+          const t = totalsThroughHalf(away, viewedHalf.inning, true);
+          return t.runs != null ? String(t.runs) : "—";
+        })()
+      : parseScore(away?.score).text || "—";
+    const homeTotalText = viewedHalf
+      ? (() => {
+          const t = totalsThroughHalf(
+            home,
+            viewedHalf.inning,
+            viewedHalf.half === "bottom",
+          );
+          return t.runs != null ? String(t.runs) : "—";
+        })()
+      : parseScore(home?.score).text || "—";
     // Compute grid-template-columns inline: team-abbr | N inning cells | R total.
     // Using `repeat(auto-fit, minmax(X, max-content))` is invalid per CSS Grid
     // spec and causes browsers to collapse to a single column, which stacks
@@ -2823,8 +3074,8 @@ class MlbLiveGameCard extends HTMLElement {
       <div class="linescore">
         <div class="linescore-grid" style="grid-template-columns: ${gridCols};">
           <div></div>${headers}<div class="inning-head">R</div>
-          <div class="team-abbr">${escapeHtml(away?.team?.abbreviation || "A")}</div>${awayCells}<div class="inning-total">${escapeHtml(parseScore(away?.score).text || "—")}</div>
-          <div class="team-abbr">${escapeHtml(home?.team?.abbreviation || "H")}</div>${homeCells}<div class="inning-total">${escapeHtml(parseScore(home?.score).text || "—")}</div>
+          <div class="team-abbr">${escapeHtml(away?.team?.abbreviation || "A")}</div>${awayCells}<div class="inning-total">${escapeHtml(awayTotalText)}</div>
+          <div class="team-abbr">${escapeHtml(home?.team?.abbreviation || "H")}</div>${homeCells}<div class="inning-total">${escapeHtml(homeTotalText)}</div>
         </div>
       </div>
     `;
@@ -2932,13 +3183,30 @@ class MlbLiveGameCard extends HTMLElement {
       this._navAnchorId = liveDisplayId;
       this._resetScheduleNav();
     }
+    // Inning pager anchors to the live half-inning. When the live half advances
+    // (or the live game changes), snap the pager back so a stale past-inning
+    // view and its per-offset cache never linger.
+    const liveHalf = resolveLiveHalf(liveAttrs.inning_context || {});
+    const inningAnchorKey = `${liveDisplayId}|${
+      liveHalf ? `${liveHalf.inning}-${liveHalf.half}` : ""
+    }`;
+    if (this._inningAnchorKey === undefined) {
+      this._inningAnchorKey = inningAnchorKey;
+    } else if (this._inningAnchorKey !== inningAnchorKey) {
+      this._inningAnchorKey = inningAnchorKey;
+      this._resetInningNav();
+    }
     // While navigated, render the fetched neighbor in place of the live game.
     const navActive = this._navOffset !== 0 && !!this._navGameData;
     const attrs = navActive ? this._navGameData : liveAttrs;
     const fpSource = navActive
       ? { state: String(this._navGameData.display_event_id || ""), attributes: this._navGameData }
       : stateObj;
-    const fingerprint = `nav:${this._navOffset}|${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}|${this._computeRenderFingerprint(fpSource)}`;
+    // The inning pager swaps only the play-by-play panel (live game otherwise
+    // unchanged), so its offset/flags must be in the fingerprint or the swap
+    // won't paint when the upstream data is otherwise unchanged.
+    const inningFp = `inn:${this._inningOffset}:${this._inningHasPrev ? 1 : 0}${this._inningHasNext ? 1 : 0}`;
+    const fingerprint = `nav:${this._navOffset}|${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}|${inningFp}|${this._computeRenderFingerprint(fpSource)}`;
     if (fingerprint === this._lastFingerprint) {
       return; // No changes, skip DOM update
     }
@@ -3037,12 +3305,60 @@ class MlbLiveGameCard extends HTMLElement {
             opponentLabel,
           )
         : "";
-    const recentPlaysPanel = renderRecentPlays(
-      attrs.recent_plays || [],
-      attrs.current_pitches || [],
+    // Inning pager: while live, page the play-by-play back through earlier
+    // half-innings. Swaps only this panel (rest of the card stays live).
+    const isLiveCard = stateInfo.pillClass === "live";
+    const inningActive =
+      !navActive && this._inningOffset !== 0 && !!this._inningView;
+    const hasPastHalf =
+      !!liveHalf && !(liveHalf.inning <= 1 && liveHalf.half === "top");
+    const showInningNav =
+      isLiveCard &&
+      this.config.show_inning_nav !== false &&
+      !navActive &&
+      (inningActive || hasPastHalf);
+    const recentPlaysBody = renderRecentPlays(
+      inningActive ? this._inningView.plays || [] : attrs.recent_plays || [],
+      inningActive ? [] : attrs.current_pitches || [],
       attrs.situation || {},
       this.config,
     );
+    const recentPlaysPanel = showInningNav
+      ? renderInningStrip(recentPlaysBody, {
+          atLive: !inningActive,
+          downDisabled: inningActive ? !this._inningHasPrev : !hasPastHalf,
+        })
+      : recentPlaysBody;
+    // While paging, the box-score inning marker flips to the viewed half (in
+    // a distinct color) so it's always clear which half-inning is on screen.
+    const displayMarker = inningActive
+      ? renderPastHalfMarker(this._inningView)
+      : marker;
+    const markerClass = inningActive ? "history" : stateInfo.pillClass;
+    // ...and the scoreboard numbers roll back to their values at the end of
+    // the viewed half, so the score agrees with the plays on screen.
+    const viewedHalf = inningActive
+      ? {
+          inning: Number(this._inningView.inning) || 0,
+          half: String(this._inningView.half || ""),
+        }
+      : null;
+    let dispAwayScore = awayScore;
+    let dispHomeScore = homeScore;
+    let dispAwayTotals = awayTotals;
+    let dispHomeTotals = homeTotals;
+    if (viewedHalf && viewedHalf.inning > 0) {
+      const a = totalsThroughHalf(away, viewedHalf.inning, true);
+      const h = totalsThroughHalf(
+        home,
+        viewedHalf.inning,
+        viewedHalf.half === "bottom",
+      );
+      dispAwayScore = { text: a.runs != null ? String(a.runs) : "—", num: a.runs };
+      dispHomeScore = { text: h.runs != null ? String(h.runs) : "—", num: h.runs };
+      dispAwayTotals = { hits: a.hits ?? "—", errors: a.errors ?? "—" };
+      dispHomeTotals = { hits: h.hits ?? "—", errors: h.errors ?? "—" };
+    }
     const latestRecentPlay =
       Array.isArray(attrs.recent_plays) && attrs.recent_plays.length
         ? attrs.recent_plays[attrs.recent_plays.length - 1]
@@ -3256,15 +3572,15 @@ class MlbLiveGameCard extends HTMLElement {
       <div class="wrapper ${this._headshotSizeClass()}">
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
-            ${this.teamRow(awayTeam, awayMeta, "", awayScore, awayWon, false, away, awayTotals)}
-            ${this.teamRow(homeTeam, homeMeta, "", homeScore, homeWon, true, home, homeTotals)}
+            ${this.teamRow(awayTeam, awayMeta, "", dispAwayScore, awayWon, false, away, dispAwayTotals)}
+            ${this.teamRow(homeTeam, homeMeta, "", dispHomeScore, homeWon, true, home, dispHomeTotals)}
           </div>
           <div class="inning-marker-side">
-            <div class="inning-marker-wrap"><div class="inning-marker ${stateInfo.pillClass}">${marker}</div></div>
+            <div class="inning-marker-wrap"><div class="inning-marker ${markerClass}">${displayMarker}</div></div>
           </div>
         </div>
         ${winProbabilityPanel}
-        ${this.config.show_linescore ? this.renderLinescore(competition) : ""}
+        ${this.config.show_linescore ? this.renderLinescore(competition, viewedHalf) : ""}
         ${delayedExtras}
         ${liveExtras}
       </div>
@@ -3760,6 +4076,55 @@ color: var(--primary-text-color);
           opacity: 0.25;
           cursor: default;
         }
+        .inning-strip {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 24px;
+          /* The card's own bottom padding sits right under this strip and
+             visually pins the arrows against the divider. The negative
+             bottom margin reclaims most of it so the arrows sit centered
+             in the remaining band and the row stays short. */
+          margin: 2px 0 -12px;
+          padding: 2px 0;
+          border-top: 1px solid var(--divider-color, rgba(127,127,127,0.2));
+        }
+        .inning-nav-btn {
+          flex: 0 0 auto;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 9px;
+          padding: 0;
+          margin: 0;
+          border: none;
+          background: none;
+          cursor: pointer;
+          color: var(--secondary-text-color);
+          border-radius: 4px;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .inning-nav-btn .tri {
+          width: 0;
+          height: 0;
+          border-left: 6px solid transparent;
+          border-right: 6px solid transparent;
+        }
+        .inning-nav-btn .tri-down { border-top: 7px solid currentColor; }
+        .inning-nav-btn .tri-up { border-bottom: 7px solid currentColor; }
+        .inning-nav-btn:hover:not([disabled]) {
+          color: var(--primary-text-color);
+          background: var(--secondary-background-color);
+        }
+        .inning-nav-btn:focus-visible {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 1px;
+        }
+        .inning-nav-btn[disabled] {
+          opacity: 0.25;
+          cursor: default;
+        }
         .inning-marker-wrap {
           display: flex;
           flex-direction: column;
@@ -3779,6 +4144,7 @@ border-radius: 0;
           color: var(--secondary-text-color);
         }
         .inning-marker.live { color: var(--success-color); }
+        .inning-marker.history { color: var(--info-color, #4a90d9); }
         .inning-marker.delayed { color: var(--warning-color); }
         .inning-marker.final { color: var(--primary-text-color); }
         .inning-marker.postponed { color: var(--warning-color); }
