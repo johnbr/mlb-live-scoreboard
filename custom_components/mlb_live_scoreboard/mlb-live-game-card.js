@@ -1624,14 +1624,17 @@ function resolveLiveHalf(inningContext) {
 // past half a ▴ pages back toward live; which half is shown is signalled by
 // the inning marker beside the box score, not here.
 function renderInningStrip(body, { atLive, downDisabled }) {
-  const btn = (cls, glyph, aria, disabled) =>
+  // CSS border-triangles, not text glyphs — a glyph's em box is mostly
+  // whitespace, so the strip height and visible arrow size can't be
+  // controlled independently with a character.
+  const btn = (cls, tri, aria, disabled) =>
     `<button class="inning-nav-btn ${cls}" type="button" aria-label="${aria}" title="${aria}"${
       disabled ? " disabled" : ""
-    }>${glyph}</button>`;
+    }><span class="tri ${tri}"></span></button>`;
   return `${body}
     <div class="inning-strip">
-      ${atLive ? "" : btn("inning-nav-next", "▴", "Later half-inning", false)}
-      ${btn("inning-nav-prev", "▾", "Previous half-inning", downDisabled)}
+      ${atLive ? "" : btn("inning-nav-next", "tri-up", "Later half-inning", false)}
+      ${btn("inning-nav-prev", "tri-down", "Previous half-inning", downDisabled)}
     </div>`;
 }
 
@@ -3990,18 +3993,24 @@ color: var(--primary-text-color);
           align-items: center;
           justify-content: center;
           width: 34px;
-          height: 11px;
+          height: 9px;
           padding: 0;
           margin: 0;
           border: none;
           background: none;
           cursor: pointer;
-          font-size: 0.7em;
-          line-height: 1;
           color: var(--secondary-text-color);
           border-radius: 4px;
           -webkit-tap-highlight-color: transparent;
         }
+        .inning-nav-btn .tri {
+          width: 0;
+          height: 0;
+          border-left: 6px solid transparent;
+          border-right: 6px solid transparent;
+        }
+        .inning-nav-btn .tri-down { border-top: 7px solid currentColor; }
+        .inning-nav-btn .tri-up { border-bottom: 7px solid currentColor; }
         .inning-nav-btn:hover:not([disabled]) {
           color: var(--primary-text-color);
           background: var(--secondary-background-color);
