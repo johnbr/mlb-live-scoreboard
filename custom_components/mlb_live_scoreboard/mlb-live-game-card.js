@@ -3980,8 +3980,8 @@ color: var(--primary-text-color);
           align-items: center;
           justify-content: center;
           gap: 24px;
-          margin: 4px 0 0;
-          padding-top: 2px;
+          margin: 2px 0 0;
+          padding-top: 1px;
           border-top: 1px solid var(--divider-color, rgba(127,127,127,0.2));
         }
         .inning-nav-btn {
@@ -3990,13 +3990,13 @@ color: var(--primary-text-color);
           align-items: center;
           justify-content: center;
           width: 34px;
-          height: 18px;
+          height: 11px;
           padding: 0;
           margin: 0;
           border: none;
           background: none;
           cursor: pointer;
-          font-size: 0.85em;
+          font-size: 0.7em;
           line-height: 1;
           color: var(--secondary-text-color);
           border-radius: 4px;
