@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.23.5](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.4...v1.23.5) (2026-07-02)
+
+
+### Bug Fixes
+
+* **card:** repair render fingerprint and refresh_rate, escape ESPN strings, scope stylesheet to the card element ([#81](https://github.com/johnbr/mlb-live-scoreboard/issues/81)) ([5baa2f0](https://github.com/johnbr/mlb-live-scoreboard/commit/5baa2f0a85f94fee93ff721ab26a71ea3c708dcd))
+* **config_flow:** stop assigning OptionsFlow.config_entry explicitly ([#81](https://github.com/johnbr/mlb-live-scoreboard/issues/81)) ([c2eda25](https://github.com/johnbr/mlb-live-scoreboard/commit/c2eda251d114d43c35f98f9ad6467b8d782810dd))
+
+
+### Performance Improvements
+
+* **coordinator:** adapt poll cadence to game state and cut redundant per-refresh work ([#81](https://github.com/johnbr/mlb-live-scoreboard/issues/81)) ([db62481](https://github.com/johnbr/mlb-live-scoreboard/commit/db6248191ad460665bf28cd90cfcf20f7e036c09))
+
 ## [1.23.4](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.3...v1.23.4) (2026-06-28)
 
 
