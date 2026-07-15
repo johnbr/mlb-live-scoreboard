@@ -312,6 +312,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # athlete_id -> (fetched_at_ts, payload). Avoids repeat fetches for the
         # same batter during a single at-bat.
         self._batter_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # athlete_id -> (fetched_at_ts, payload) for the current pitcher's season
+        # line (used for the displayed ERA). Same short-TTL semantics as the
+        # batter cache — the pitcher rarely changes within the window.
+        self._pitcher_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         # athlete_id -> (fetched_at_ts, parsed PlayerCard). Backs the player
         # career-stats popup; opened interactively, so a long TTL keeps repeat
         # opens instant and a stale entry is reused if ESPN is briefly down.
@@ -1548,7 +1552,14 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 display_rbi = game_rbi
 
         return {
-            "avg": avg or season_stats.get("avg") or "",
+            # Prefer the season AVG from the athlete stats endpoint over the
+            # boxscore's ``avg``. In regular games ESPN's boxscore ``avg`` is
+            # already the season figure, so this is a no-op there; in the
+            # All-Star Game the boxscore ``avg`` is the *game* average (e.g.
+            # ".000" / "1.000" for a 0-1 line), so the season value is what we
+            # actually want to show. Falls back to the boxscore value when the
+            # season endpoint has no line (rookies, two-way edge cases).
+            "avg": season_stats.get("avg") or avg or "",
             "ab": ab,
             "h": h,
             "hr": display_hr,
@@ -1562,13 +1573,26 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             "game_outcomes_display": outcomes_display,
         }
 
+    # Boxscore key aliases for a pitcher's innings pitched. The All-Star Game
+    # boxscore uses ``fullInnings.partInnings`` (e.g. "0.1") where regular-game
+    # boxscores use ``ip`` / ``IP``, so include it or IP renders blank there.
+    _IP_KEYS: tuple[str, ...] = ("ip", "inningsPitched", "IP", "fullInnings.partInnings")
+
     @classmethod
-    def _normalize_pitcher_stats(cls, summary: dict[str, Any], pitcher_id: str) -> dict[str, Any]:
-        """Extract IP / ERA / SO / pitch count for the pitcher of record."""
+    def _normalize_pitcher_stats(
+        cls, summary: dict[str, Any], pitcher_id: str, season_era: str = ""
+    ) -> dict[str, Any]:
+        """Extract IP / ERA / SO / pitch count for the pitcher of record.
+
+        ``season_era`` (from the athlete stats endpoint) is preferred for the
+        displayed ERA. In regular games the boxscore ``ERA`` is already the
+        season figure, so this is a no-op; in the All-Star Game the boxscore
+        ``ERA`` is the *game* ERA ("0.00"), so the season value is what we want.
+        """
         entry, keys = cls._find_boxscore_athlete(summary, pitcher_id, preferred_keys=["era", "pitches"])
         pitches = cls._stat_from_entry(entry, keys, "pitches")
         strikes = cls._stat_from_entry(entry, keys, "strikes")
-        innings_pitched = cls._stat_from_entry(entry, keys, "ip", "inningsPitched", "IP")
+        innings_pitched = cls._stat_from_entry(entry, keys, *cls._IP_KEYS)
         era = cls._stat_from_entry(entry, keys, "era", "earnedRunAverage", "ERA")
         strikeouts = cls._stat_from_entry(entry, keys, "so", "strikeouts", "SO")
 
@@ -1581,7 +1605,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                         if str(athlete.get("id") or "") != pitcher_id:
                             continue
                         innings_pitched = innings_pitched or cls._stat_from_entry(
-                            athlete_entry, block_keys, "ip", "inningsPitched", "IP"
+                            athlete_entry, block_keys, *cls._IP_KEYS
                         )
                         era = era or cls._stat_from_entry(athlete_entry, block_keys, "era", "earnedRunAverage", "ERA")
                         strikeouts = strikeouts or cls._stat_from_entry(
@@ -1591,7 +1615,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                         strikes = strikes or cls._stat_from_entry(athlete_entry, block_keys, "strikes")
 
         return {
-            "era": era,
+            "era": season_era or era,
             "innings_pitched": innings_pitched,
             "ip": innings_pitched,
             "pitches_strikes": f"{pitches}-{strikes}" if pitches and strikes else (pitches or ""),
@@ -1659,6 +1683,33 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             _LOGGER.debug("Unable to fetch batter season stats for %s: %s", athlete_id, err)
             return cached[1] if cached is not None else {}
         self._batter_stats_cache[athlete_id] = (now_ts, payload)
+        return payload
+
+    async def _get_public_pitcher_stats(self, athlete_id: str) -> dict[str, Any]:
+        """Fetch an athlete's season *pitching* stats payload, TTL-cached.
+
+        Mirror of :meth:`_get_public_batter_stats`; the ``category=pitching``
+        query forces the pitching line (so a two-way player yields their own
+        pitching stats rather than the batting line). Used to source the
+        displayed season ERA, which the All-Star boxscore reports as a game
+        value. Falls back to a stale cache entry on fetch failure.
+        """
+        if not athlete_id:
+            return {}
+        cached = self._pitcher_stats_cache.get(athlete_id)
+        now_ts = time.time()
+        if cached is not None and (now_ts - cached[0]) < BATTER_SEASON_STATS_TTL_SECONDS:
+            return cached[1]
+        url = (
+            "https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/"
+            f"athletes/{athlete_id}/stats?region=us&lang=en&contentorigin=espn&category=pitching"
+        )
+        try:
+            payload = await self._get_json(url)
+        except Exception as err:
+            _LOGGER.debug("Unable to fetch pitcher season stats for %s: %s", athlete_id, err)
+            return cached[1] if cached is not None else {}
+        self._pitcher_stats_cache[athlete_id] = (now_ts, payload)
         return payload
 
     # Categories that actually represent the *player's own* hitting line.
@@ -2963,9 +3014,21 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         mode = "live" if live_id and display_id == live_id else ("previous" if display_id == prev_id else "next")
 
-        batter_season_payload = await self._get_public_batter_stats(batter_id) if batter_id else {}
+        # Season lines for the current batter (AVG/HR/RBI) and pitcher (ERA).
+        # ESPN's boxscore carries these as season figures in regular games but
+        # as *game* figures in the All-Star Game, so we source them from the
+        # athlete stats endpoint (fetched in parallel, per-athlete TTL cached).
+        batter_season_payload, pitcher_season_payload = await asyncio.gather(
+            self._get_public_batter_stats(batter_id),
+            self._get_public_pitcher_stats(pitcher_id),
+        )
         batter_season_stats = (
             self._extract_current_season_batter_stats(batter_season_payload) if batter_season_payload else {}
+        )
+        pitcher_season_era = (
+            (self._extract_season_line(pitcher_season_payload).get("pitching") or {}).get("era", "")
+            if pitcher_season_payload
+            else ""
         )
 
         team_name = self.team_abbr
@@ -3084,7 +3147,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             current_batter=self._normalize_current_batter(summary, batter_id),
             current_pitcher=self._normalize_current_pitcher(summary, pitcher_id),
             batter_stats=self._normalize_batter_stats(summary, batter_id, batter_season_stats, is_live=is_live),
-            pitcher_stats=self._normalize_pitcher_stats(summary, pitcher_id),
+            pitcher_stats=self._normalize_pitcher_stats(summary, pitcher_id, season_era=pitcher_season_era),
             situation=self._normalize_situation(summary),
             probable_pitchers=self._normalize_probable_pitchers(display_comp),
             win_probability=self._normalize_win_probability(summary),

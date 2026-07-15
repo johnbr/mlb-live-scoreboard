@@ -750,6 +750,93 @@ def test_find_boxscore_athlete_returns_matching_category_block():
     assert entry["stats"] == ["4", "1", ".299"]
 
 
+def _allstar_batting_summary(athlete_id, name, game_avg):
+    """Box score whose batting line carries a GAME avg (as the All-Star Game
+    does) rather than the season avg regular-game boxscores report.
+    """
+    return {
+        "boxscore": {
+            "players": [
+                {
+                    "team": {"id": "1"},
+                    "statistics": [
+                        {
+                            "type": "batting",
+                            "keys": ["hits", "atBats", "avg", "homeRuns", "RBIs"],
+                            "athletes": [
+                                {
+                                    "athlete": {"id": athlete_id, "displayName": name, "shortName": name},
+                                    "stats": ["1", "1", game_avg, "0", "0"],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+
+def _allstar_pitching_summary(athlete_id, name, game_era):
+    """Box score whose pitching line carries a GAME ERA and the All-Star
+    Game's ``fullInnings.partInnings`` innings key.
+    """
+    return {
+        "boxscore": {
+            "players": [
+                {
+                    "team": {"id": "1"},
+                    "statistics": [
+                        {
+                            "type": "pitching",
+                            "keys": ["fullInnings.partInnings", "ERA", "strikeouts", "pitches", "strikes"],
+                            "athletes": [
+                                {
+                                    "athlete": {"id": athlete_id, "displayName": name, "shortName": name},
+                                    "stats": ["0.1", game_era, "1", "10", "6"],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+
+def test_normalize_batter_stats_prefers_season_avg_over_game_avg():
+    # All-Star boxscore reports a game avg ("1.000" for 1-for-1); the season
+    # AVG from the athlete endpoint must win so the card shows ".318".
+    summary = _allstar_batting_summary("36018", "Yordan Alvarez", "1.000")
+    out = Coord._normalize_batter_stats(
+        summary, "36018", {"avg": ".318", "hr": "31", "rbi": "70"}, is_live=True
+    )
+    assert out["avg"] == ".318"
+    assert out["hits_ab"] == "1-1"  # game line still surfaced separately
+
+
+def test_normalize_batter_stats_falls_back_to_boxscore_avg_without_season():
+    # Regular games (and any case where the season endpoint has no line) keep
+    # using the boxscore avg, which there is already the season figure.
+    summary = _allstar_batting_summary("36018", "Yordan Alvarez", ".243")
+    out = Coord._normalize_batter_stats(summary, "36018", {}, is_live=False)
+    assert out["avg"] == ".243"
+
+
+def test_normalize_pitcher_stats_prefers_season_era_and_reads_allstar_ip_key():
+    summary = _allstar_pitching_summary("42359", "Cristopher Sanchez", "0.00")
+    out = Coord._normalize_pitcher_stats(summary, "42359", season_era="2.62")
+    assert out["era"] == "2.62"  # season preferred over the game "0.00"
+    assert out["ip"] == "0.1"  # resolved from fullInnings.partInnings
+    assert out["strikeouts"] == "1"
+
+
+def test_normalize_pitcher_stats_falls_back_to_boxscore_era():
+    summary = _allstar_pitching_summary("42359", "Cristopher Sanchez", "3.10")
+    out = Coord._normalize_pitcher_stats(summary, "42359")
+    assert out["era"] == "3.10"
+
+
 def test_normalize_batter_stats_blank_for_two_way_pitcher_only_line():
     # Regression for the "H 7" bug: a two-way player at the plate with no
     # batting line yet must render blank hitter stats, never pitching values.
