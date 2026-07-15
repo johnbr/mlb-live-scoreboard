@@ -90,6 +90,17 @@ SCHEDULE_TTL_SECONDS = 30 * 60
 # coordinator raise UpdateFailed so the sensor goes unavailable.
 SCHEDULE_STALE_FALLBACK_SECONDS = 5 * 60
 
+# The All-Star Game is auto-displayed by every entry on the local calendar day
+# it's played (no club plays that day), regardless of which team the entry
+# follows. ``teams/al/schedule`` returns just the single mid-July All-Star
+# event; either league's slug works, so we pick one. The schedule id/date barely
+# changes, so a day-long TTL keeps this to ~one extra request/day/team year-round
+# (the date gate that decides whether to override is recomputed every poll, so a
+# long cache doesn't delay activation); the stale fallback rides out ESPN blips.
+ALLSTAR_TEAM_SLUG = "al"
+ALLSTAR_SCHEDULE_TTL_SECONDS = 24 * 60 * 60
+ALLSTAR_SCHEDULE_STALE_FALLBACK_SECONDS = 7 * 24 * 60 * 60
+
 # How long to cache the division-standings payload. Standings change at most
 # a few times per day, so a 10-minute TTL eliminates per-poll calls without
 # making the displayed standings feel stale.
@@ -144,6 +155,14 @@ EVENT_OPTION_KEYS: dict[str, str] = {
 }
 
 MLB_TEAM_MAP = {
+  # All-Star pseudo-teams. ESPN models the mid-July All-Star Game as a matchup
+  # between two league "teams" with their own team IDs and schedule endpoints
+  # (``teams/al/schedule`` -> 31, ``teams/nl/schedule`` -> 32), so picking one
+  # of these makes the existing schedule -> summary -> card pipeline follow the
+  # All-Star Game with no special-casing. Their schedule carries only the single
+  # All-Star event, so the card is live around the game and idle otherwise.
+  "AL": 31,  # American League All-Stars
+  "NL": 32,  # National League All-Stars
   "ARI": 29,
   "ATH": 11,
   "ATL": 15,
