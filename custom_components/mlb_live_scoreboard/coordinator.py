@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
@@ -16,6 +17,9 @@ from homeassistant.helpers.script import Script
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    ALLSTAR_SCHEDULE_STALE_FALLBACK_SECONDS,
+    ALLSTAR_SCHEDULE_TTL_SECONDS,
+    ALLSTAR_TEAM_SLUG,
     BATTER_SEASON_STATS_TTL_SECONDS,
     BATTING_ORDER_SIZE,
     CONF_NAME,
@@ -321,6 +325,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # short-lived fallback when ESPN's schedule endpoint has a transient
         # failure, so a one-poll hiccup doesn't blank the card.
         self._schedule_cache: tuple[float, dict[str, Any]] | None = None
+        # (fetched_at_ts, payload) for the All-Star Game schedule endpoint.
+        # Fetched year-round behind a day-long TTL so that on the one local
+        # calendar day the game is played, every entry can display it in place
+        # of its own (mid-break, gameless) schedule. See ``_allstar_override``.
+        self._allstar_schedule_cache: tuple[float, dict[str, Any]] | None = None
         # (fetched_at_ts, payload) for the league standings endpoint.
         # Standings change a few times per day at most, so we re-fetch lazily
         # once TTL expires and reuse the prior payload as a stale fallback if
@@ -484,6 +493,22 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         )
 
     @staticmethod
+    def _team_display_name(team: dict[str, Any]) -> str:
+        """Return the team's display name, disambiguating the two All-Star squads.
+
+        ESPN names *both* the AL and NL All-Star teams "All-Stars" (they differ
+        only by logo, abbreviation, and ``displayName``), so the card's matchup —
+        which prefers ``team.name`` — would show "All-Stars" on both sides.
+        Prefix the league abbreviation ("AL All-Stars" / "NL All-Stars") so the
+        two are distinguishable. Regular teams pass through unchanged.
+        """
+        name = str(team.get("name") or team.get("displayName") or "")
+        abbr = str(team.get("abbreviation") or "")
+        if name == "All-Stars" and abbr in ("AL", "NL"):
+            return f"{abbr} All-Stars"
+        return name
+
+    @staticmethod
     def _compact_competition(
         display_comp: dict[str, Any] | None,
         records_map: dict[str, str] | None = None,
@@ -524,7 +549,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     "team": {
                         "id": team.get("id"),
                         "abbreviation": team.get("abbreviation"),
-                        "name": team.get("name") or team.get("displayName"),
+                        "name": MlbLiveScoreboardCoordinator._team_display_name(team) or team.get("displayName"),
                         "displayName": team.get("displayName") or team.get("name"),
                         "shortDisplayName": team.get("shortDisplayName") or team.get("abbreviation"),
                         "logo": team.get("logo")
@@ -2719,6 +2744,92 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 return cached_schedule[1]
             raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
 
+    def _local_now(self) -> datetime:
+        """Return a timezone-aware 'now' in the Home Assistant local time zone.
+
+        Falls back to the system local zone when HA's configured zone is
+        missing or unrecognized, so the All-Star day comparison always has an
+        aware reference to work from.
+        """
+        tzname = getattr(getattr(self.hass, "config", None), "time_zone", None)
+        if tzname:
+            try:
+                return datetime.now(ZoneInfo(tzname))
+            except Exception:
+                # Unknown/invalid tz name; fall back to the system local zone.
+                pass
+        return datetime.now().astimezone()
+
+    @staticmethod
+    def _event_on_local_day(event_date_raw: Any, now_local: datetime) -> bool:
+        """Return True if the ESPN event's start falls on the same local calendar
+        day as ``now_local`` (a timezone-aware datetime). ESPN dates are UTC; we
+        convert into ``now_local``'s zone before comparing so an ~8 PM ET first
+        pitch (stored as the next day's 00:00 UTC) still counts as "today".
+        """
+        ts = _parse_iso_ts(event_date_raw)
+        if ts is None:
+            return False
+        tz = now_local.tzinfo
+        return datetime.fromtimestamp(ts, tz).date() == now_local.date()
+
+    async def _fetch_allstar_schedule(self) -> dict[str, Any] | None:
+        """Fetch the All-Star Game schedule (a single event), day-TTL cached.
+
+        Best-effort: on a fetch failure with no usable cache it returns None so
+        a hiccup here never disrupts the normal team refresh (the caller simply
+        falls through to the configured team's schedule).
+        """
+        now_ts = time.time()
+        cached = self._allstar_schedule_cache
+        if cached is not None and (now_ts - cached[0]) < ALLSTAR_SCHEDULE_TTL_SECONDS:
+            return cached[1]
+        url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{ALLSTAR_TEAM_SLUG}/schedule"
+        try:
+            payload = await self._get_json(url)
+        except Exception as err:
+            # Best-effort: a failed fetch must never break the normal refresh.
+            _LOGGER.debug("All-Star schedule fetch failed: %s", err)
+            if cached is not None and (now_ts - cached[0]) < ALLSTAR_SCHEDULE_STALE_FALLBACK_SECONDS:
+                return cached[1]
+            return None
+        self._allstar_schedule_cache = (now_ts, payload)
+        return payload
+
+    async def _allstar_override(self) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+        """Return ``(schedule, events)`` for the All-Star Game when it is played
+        on today's local calendar day, else None.
+
+        This is what lets every entry surface the All-Star Game on that one day
+        regardless of which club it follows — no team plays during the break, so
+        the club's own schedule has nothing current to show. The configured
+        ``team_id`` is left untouched, so ``_detect_game_events`` (which bails
+        when the team isn't a competitor) fires no bus events for the exhibition.
+        """
+        schedule = await self._fetch_allstar_schedule()
+        if not schedule:
+            return None
+        events = schedule.get("events") or []
+        if not events:
+            return None
+        now_local = self._local_now()
+        if not any(self._event_on_local_day(e.get("date"), now_local) for e in events):
+            return None
+        return schedule, events
+
+    async def _resolve_schedule(self) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Return the ``(schedule, events)`` the coordinator should display now:
+        the All-Star Game on the day it's played, otherwise the configured team's
+        schedule. Shared by the live refresh and schedule navigation so both
+        agree on which schedule is in effect (and the prev/next arrows correctly
+        find nothing to page to on the single-event All-Star schedule).
+        """
+        override = await self._allstar_override()
+        if override is not None:
+            return override
+        schedule = await self._fetch_schedule()
+        return schedule, (schedule.get("events") or [])
+
     async def async_get_game_at_offset(self, offset: int) -> dict[str, Any] | None:
         """Return a neighboring game's full card payload for schedule navigation.
 
@@ -2729,8 +2840,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         without disturbing the shared live sensor. Returns ``None`` when there
         is no game at the (clamped) offset.
         """
-        schedule = await self._fetch_schedule()
-        events = schedule.get("events") or []
+        schedule, events = await self._resolve_schedule()
         prev_id, next_id, live_id, display_id, _ = self._select_event(events)
         target_id, clamped_offset, has_prev, has_next = self._event_at_offset(events, display_id, offset)
         if not target_id:
@@ -3016,8 +3126,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return timedelta(seconds=SCAN_INTERVAL_IDLE_SECONDS)
 
     async def _async_update_data(self) -> MlbLiveScoreboardData:
-        schedule = await self._fetch_schedule()
-        events = schedule.get("events") or []
+        schedule, events = await self._resolve_schedule()
         prev_id, next_id, live_id, display_id, _ = self._select_event(events)
 
         new_data = await self._assemble_game_data(

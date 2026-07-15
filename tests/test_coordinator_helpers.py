@@ -58,6 +58,65 @@ def test_parse_iso_ts_returns_none_for_garbage():
 
 
 # ---------------------------------------------------------------------------
+# All-Star Game day override (_event_on_local_day / _local_now)
+# ---------------------------------------------------------------------------
+
+
+def test_event_on_local_day_matches_same_local_day():
+    from zoneinfo import ZoneInfo
+
+    et = ZoneInfo("America/New_York")
+    # 2026 All-Star Game: 8 PM ET on 2026-07-14, stored by ESPN as the next
+    # day's midnight UTC. It must still register as "today" in ET.
+    now_local = datetime(2026, 7, 14, 12, 0, tzinfo=et)
+    assert Coord._event_on_local_day("2026-07-15T00:00Z", now_local) is True
+
+
+def test_event_on_local_day_rejects_other_days():
+    from zoneinfo import ZoneInfo
+
+    et = ZoneInfo("America/New_York")
+    # Same UTC instant, but "now" is the day before / after in ET.
+    assert Coord._event_on_local_day("2026-07-15T00:00Z", datetime(2026, 7, 13, 12, 0, tzinfo=et)) is False
+    assert Coord._event_on_local_day("2026-07-15T00:00Z", datetime(2026, 7, 15, 12, 0, tzinfo=et)) is False
+
+
+def test_event_on_local_day_handles_missing_date():
+    now_local = datetime(2026, 7, 14, 12, 0, tzinfo=UTC)
+    assert Coord._event_on_local_day(None, now_local) is False
+    assert Coord._event_on_local_day("", now_local) is False
+    assert Coord._event_on_local_day("not-a-date", now_local) is False
+
+
+def test_team_display_name_disambiguates_allstar_squads():
+    # ESPN names both squads "All-Stars"; the league abbr must be prefixed.
+    assert Coord._team_display_name({"name": "All-Stars", "abbreviation": "AL"}) == "AL All-Stars"
+    assert Coord._team_display_name({"name": "All-Stars", "abbreviation": "NL"}) == "NL All-Stars"
+
+
+def test_team_display_name_passes_regular_teams_through():
+    assert Coord._team_display_name({"name": "Dodgers", "abbreviation": "LAD"}) == "Dodgers"
+    # Only the exact "All-Stars"/AL-NL combo is rewritten.
+    assert Coord._team_display_name({"name": "All-Stars", "abbreviation": "XX"}) == "All-Stars"
+    assert Coord._team_display_name({"displayName": "American All-Stars", "abbreviation": "AL"}) == "American All-Stars"
+
+
+def test_local_now_uses_ha_timezone():
+    fake = SimpleNamespace(hass=SimpleNamespace(config=SimpleNamespace(time_zone="America/New_York")))
+    now_local = Coord._local_now(fake)
+    assert now_local.tzinfo is not None
+    assert now_local.utcoffset() is not None
+
+
+def test_local_now_falls_back_on_bad_timezone():
+    # An unknown/missing zone must still yield an aware datetime rather than raise.
+    for bad in ("Not/AZone", None):
+        fake = SimpleNamespace(hass=SimpleNamespace(config=SimpleNamespace(time_zone=bad)))
+        now_local = Coord._local_now(fake)
+        assert now_local.tzinfo is not None
+
+
+# ---------------------------------------------------------------------------
 # _format_batter_outcomes
 # ---------------------------------------------------------------------------
 
