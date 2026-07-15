@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.25.0...v1.25.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* show season AVG/ERA (not game values) on the All-Star card ([#86](https://github.com/johnbr/mlb-live-scoreboard/issues/86)) ([5030002](https://github.com/johnbr/mlb-live-scoreboard/commit/503000282defcb141c578a5ae92776438ebba384))
+
 ## [1.25.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.24.0...v1.25.0) (2026-07-15)
 
 
