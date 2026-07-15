@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.24.0...v1.25.0) (2026-07-15)
+
+
+### Features
+
+* auto-display the All-Star Game on every card on game day ([2bb9fd8](https://github.com/johnbr/mlb-live-scoreboard/commit/2bb9fd8f963cf35af07dbe0284db290271d35eb0))
+
 ## [1.24.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.23.5...v1.24.0) (2026-07-02)
 
 
