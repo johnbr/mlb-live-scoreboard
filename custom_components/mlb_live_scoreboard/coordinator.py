@@ -493,6 +493,22 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         )
 
     @staticmethod
+    def _team_display_name(team: dict[str, Any]) -> str:
+        """Return the team's display name, disambiguating the two All-Star squads.
+
+        ESPN names *both* the AL and NL All-Star teams "All-Stars" (they differ
+        only by logo, abbreviation, and ``displayName``), so the card's matchup —
+        which prefers ``team.name`` — would show "All-Stars" on both sides.
+        Prefix the league abbreviation ("AL All-Stars" / "NL All-Stars") so the
+        two are distinguishable. Regular teams pass through unchanged.
+        """
+        name = str(team.get("name") or team.get("displayName") or "")
+        abbr = str(team.get("abbreviation") or "")
+        if name == "All-Stars" and abbr in ("AL", "NL"):
+            return f"{abbr} All-Stars"
+        return name
+
+    @staticmethod
     def _compact_competition(
         display_comp: dict[str, Any] | None,
         records_map: dict[str, str] | None = None,
@@ -533,7 +549,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     "team": {
                         "id": team.get("id"),
                         "abbreviation": team.get("abbreviation"),
-                        "name": team.get("name") or team.get("displayName"),
+                        "name": MlbLiveScoreboardCoordinator._team_display_name(team) or team.get("displayName"),
                         "displayName": team.get("displayName") or team.get("name"),
                         "shortDisplayName": team.get("shortDisplayName") or team.get("abbreviation"),
                         "logo": team.get("logo")

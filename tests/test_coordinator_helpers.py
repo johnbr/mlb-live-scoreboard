@@ -88,6 +88,19 @@ def test_event_on_local_day_handles_missing_date():
     assert Coord._event_on_local_day("not-a-date", now_local) is False
 
 
+def test_team_display_name_disambiguates_allstar_squads():
+    # ESPN names both squads "All-Stars"; the league abbr must be prefixed.
+    assert Coord._team_display_name({"name": "All-Stars", "abbreviation": "AL"}) == "AL All-Stars"
+    assert Coord._team_display_name({"name": "All-Stars", "abbreviation": "NL"}) == "NL All-Stars"
+
+
+def test_team_display_name_passes_regular_teams_through():
+    assert Coord._team_display_name({"name": "Dodgers", "abbreviation": "LAD"}) == "Dodgers"
+    # Only the exact "All-Stars"/AL-NL combo is rewritten.
+    assert Coord._team_display_name({"name": "All-Stars", "abbreviation": "XX"}) == "All-Stars"
+    assert Coord._team_display_name({"displayName": "American All-Stars", "abbreviation": "AL"}) == "American All-Stars"
+
+
 def test_local_now_uses_ha_timezone():
     fake = SimpleNamespace(hass=SimpleNamespace(config=SimpleNamespace(time_zone="America/New_York")))
     now_local = Coord._local_now(fake)
