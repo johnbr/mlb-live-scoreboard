@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.25.1...v1.25.2) (2026-07-31)
+
+
+### Bug Fixes
+
+* cut a release so the docs updates reach HACS users ([82ed338](https://github.com/johnbr/mlb-live-scoreboard/commit/82ed3382b03e6c2b485387bed7302b2ceda05485))
+
 ## [1.25.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.25.0...v1.25.1) (2026-07-15)
 
 
