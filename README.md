@@ -2,8 +2,8 @@
 
 A Home Assistant custom integration and Lovelace card for displaying live MLB game data from ESPN.
 
-![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)
-![Version](https://img.shields.io/badge/version-1.8.7-blue.svg)
+![HACS](https://img.shields.io/badge/HACS-Default-blue.svg)
+![Version](https://img.shields.io/github/v/release/johnbr/mlb-live-scoreboard?label=version&color=blue)
 
 ## Features
 
@@ -51,11 +51,12 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 
 ### HACS (Recommended)
 
+This integration is available in the [HACS](https://hacs.xyz/) default store — no custom repository needed.
+
 1. Open HACS in Home Assistant
-2. Click the three dots in the top right and select "Custom repositories"
-3. Add this repository URL and select "Integration" as the category
-4. Click "Install"
-5. Restart Home Assistant
+2. Search for "MLB Live Scoreboard"
+3. Click "Install"
+4. Restart Home Assistant
 
 The JavaScript card is automatically served by the integration - no manual file copying needed!
 
