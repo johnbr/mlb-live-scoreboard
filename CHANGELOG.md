@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.25.2...v1.25.3) (2026-08-04)
+
+
+### Bug Fixes
+
+* restore ESPN fetches rejected with HTTP 403 by Akamai ([#90](https://github.com/johnbr/mlb-live-scoreboard/issues/90)) ([6cc78ee](https://github.com/johnbr/mlb-live-scoreboard/commit/6cc78eeef3a6c3094a3b52a3628d59fec8b6b913))
+
 ## [1.25.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.25.1...v1.25.2) (2026-07-31)
 
 
