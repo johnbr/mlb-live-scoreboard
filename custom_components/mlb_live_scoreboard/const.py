@@ -17,8 +17,9 @@ except Exception:  # pragma: no cover - manifest is always shipped alongside
 # whose User-Agent it doesn't recognize as a well-formed, self-identifying
 # client. A bare product token is not enough — the previous "Home Assistant"
 # value, and even "mlb-live-scoreboard/<version>" on its own, are both denied.
-# Identifying the project with a contact URL, plus the real underlying client
-# tokens, is both honest about who we are and accepted by the edge.
+# Naming the project and pairing it with a contact URL is both honest about who
+# we are and accepted by the edge; the "(+url)" comment is the part that matters,
+# so don't "simplify" this back down to a bare token.
 USER_AGENT = (
     f"mlb-live-scoreboard/{INTEGRATION_VERSION} "
     "(+https://github.com/johnbr/mlb-live-scoreboard)"
