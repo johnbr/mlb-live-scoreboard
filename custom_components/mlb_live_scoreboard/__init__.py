@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import shutil
 from pathlib import Path
@@ -11,7 +10,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN, PLATFORMS
+from .const import DOMAIN, INTEGRATION_VERSION, PLATFORMS
 from .coordinator import MlbLiveScoreboardCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,13 +19,9 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type RuntimeData = MlbLiveScoreboardCoordinator
 
-# Read version from manifest.json for cache busting
-_MANIFEST_PATH = Path(__file__).parent / "manifest.json"
-try:
-    with open(_MANIFEST_PATH) as f:
-        _VERSION = json.load(f).get("version", "0.0.0")
-except Exception:
-    _VERSION = "0.0.0"
+# Version comes from manifest.json (read once in const.py) and is used here for
+# Lovelace cache busting.
+_VERSION = INTEGRATION_VERSION
 
 # Cache buster: convert 1.5.0 -> 150
 _VERSION_NUM = _VERSION.replace(".", "")
