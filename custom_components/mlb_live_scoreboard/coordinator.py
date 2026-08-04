@@ -59,6 +59,7 @@ from .const import (
     TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS,
     TEAM_SEASON_STATS_TTL_SECONDS,
     THIRD_OUT_HOLD_SECONDS,
+    USER_AGENT,
 )
 from .types import (
     BatterStats,
@@ -375,7 +376,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     async def _get_json(self, url: str) -> dict[str, Any]:
         headers = {
-            "User-Agent": "Home Assistant",
+            "User-Agent": USER_AGENT,
             "Accept": "application/json",
         }
         async with self._session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=20)) as resp:

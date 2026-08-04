@@ -19,8 +19,10 @@ from custom_components.mlb_live_scoreboard.const import (
     EVENT_GAME_WON,
     EVENT_OPPONENT_SCORED,
     EVENT_TEAM_SCORED,
+    INTEGRATION_VERSION,
     OPT_ON_GAME_WON,
     OPT_ON_TEAM_SCORED,
+    USER_AGENT,
 )
 from custom_components.mlb_live_scoreboard.coordinator import (
     MlbLiveScoreboardCoordinator as Coord,
@@ -2807,3 +2809,14 @@ def test_half_inning_at_offset_anchor_not_yet_in_plays():
     assert (res["inning"], res["half"]) == (3, "top")
     assert res["offset"] == -1
     assert res["has_next"] is True
+
+
+def test_user_agent_is_self_identifying():
+    # ESPN sits behind Akamai, which 403s User-Agents it doesn't recognize as a
+    # well-formed, self-identifying client. A bare product token (the old
+    # "Home Assistant", or even "mlb-live-scoreboard/<version>" alone) is
+    # rejected; the project name, version and contact URL together are not.
+    assert USER_AGENT.startswith(f"mlb-live-scoreboard/{INTEGRATION_VERSION}")
+    assert "(+https://github.com/johnbr/mlb-live-scoreboard)" in USER_AGENT
+    # Version must be resolved from the manifest, not left at the fallback.
+    assert INTEGRATION_VERSION != "0.0.0"

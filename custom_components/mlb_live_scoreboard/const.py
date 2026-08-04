@@ -1,5 +1,28 @@
+import json
+from pathlib import Path
+
 DOMAIN = "mlb_live_scoreboard"
 PLATFORMS = ["sensor"]
+
+# Single source of truth for the shipped version: manifest.json. Used both for
+# Lovelace cache busting and for the outbound User-Agent below.
+_MANIFEST_PATH = Path(__file__).parent / "manifest.json"
+try:
+    with open(_MANIFEST_PATH) as _f:
+        INTEGRATION_VERSION = json.load(_f).get("version", "0.0.0")
+except Exception:  # pragma: no cover - manifest is always shipped alongside
+    INTEGRATION_VERSION = "0.0.0"
+
+# ESPN sits behind Akamai, which rejects (HTTP 403 "Access Denied") requests
+# whose User-Agent it doesn't recognize as a well-formed, self-identifying
+# client. A bare product token is not enough — the previous "Home Assistant"
+# value, and even "mlb-live-scoreboard/<version>" on its own, are both denied.
+# Identifying the project with a contact URL, plus the real underlying client
+# tokens, is both honest about who we are and accepted by the edge.
+USER_AGENT = (
+    f"mlb-live-scoreboard/{INTEGRATION_VERSION} "
+    "(+https://github.com/johnbr/mlb-live-scoreboard)"
+)
 
 CONF_TEAM = "team"
 CONF_NAME = "name"
