@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.25.3...v1.26.0) (2026-08-11)
+
+
+### Features
+
+* collapse the live card to the score line until clicked ([#93](https://github.com/johnbr/mlb-live-scoreboard/issues/93)) ([4663212](https://github.com/johnbr/mlb-live-scoreboard/commit/4663212d8a728d2a26b3feab37e6f1bc41ece44f))
+
 ## [1.25.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.25.2...v1.25.3) (2026-08-04)
 
 
