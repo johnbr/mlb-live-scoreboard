@@ -83,6 +83,12 @@ const CARD_DEFAULTS = {
   // through earlier half-innings ("what happened in the 4th?"). Snaps back to
   // the live half after a short idle. On by default.
   show_inning_nav: true,
+  // How much of the live card is showing when a game goes live:
+  // "collapsed" (default) shows only the two score rows + inning marker —
+  // clicking that header expands to the fully configured live view;
+  // "expanded" starts fully open (the pre-collapse behavior). Either way the
+  // toggle is card-local and re-baselines to this value on a new game.
+  live_default_view: "collapsed",
   // Inline player-headshot size for the matchup portraits, due-up
   // thumbnails, and probable-pitcher portraits. "auto" tracks the card's
   // actual width via a CSS container query (responsive to HA's per-column
@@ -178,6 +184,18 @@ const EDITOR_SCHEMA = [
         },
       },
       {
+        name: "live_default_view",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "collapsed", label: "Collapsed (score line only)" },
+              { value: "expanded", label: "Expanded (full live card)" },
+            ],
+          },
+        },
+      },
+      {
         name: "headshot_size",
         selector: {
           select: {
@@ -222,6 +240,7 @@ const EDITOR_LABELS = {
   refresh_rate: "Refresh rate (s, 0 = HA updates)",
   player_link_target: "Player name click",
   lineup_default_view: "Lineup popup default view",
+  live_default_view: "Live game default view",
   headshot_size: "Headshot size",
   show_lineup_popup: "Enable team lineup popup",
   show_schedule_nav: "Schedule navigation arrows",
@@ -243,6 +262,8 @@ const EDITOR_LABELS = {
 const EDITOR_HELPERS = {
   entity: "Pick the sensor created by the MLB Live Scoreboard integration.",
   refresh_rate: "0 leaves refreshing to Home Assistant's own state updates.",
+  live_default_view:
+    "Collapsed keeps the live card at just the two score rows + inning marker; click that header (or the ⌄ strip under it) to expand to the full live view. Expanded starts fully open. Resets to this choice when a new game starts.",
   headshot_size:
     "Auto scales headshots with the card's width (responsive to HA's per-column dashboards). Presets pin a fixed pixel size.",
   show_schedule_nav:
@@ -1786,9 +1807,23 @@ class MlbLiveGameCard extends HTMLElement {
     this._resetScheduleNav();
     // Inning-pager view state (card-local; live play-by-play only).
     this._resetInningNav();
+    // Live collapse/expand view state — re-seeded from the (possibly new)
+    // `live_default_view` on the next render via the game-key check.
+    this._liveExpanded = this._liveDefaultExpanded();
+    this._liveExpandedGameKey = undefined;
     // Force the anchor-change checks on the next render to re-baseline.
     this._navAnchorId = undefined;
     this._inningAnchorKey = undefined;
+  }
+
+  // The state a freshly-displayed live game starts in. Anything other than an
+  // explicit "expanded" collapses, so a typo in hand-written YAML lands on the
+  // documented default rather than silently opening the card.
+  _liveDefaultExpanded() {
+    return (
+      String(this.config?.live_default_view || "collapsed").toLowerCase() ===
+      "expanded"
+    );
   }
 
   // Reset schedule navigation back to the live/auto-selected game. Called on
@@ -2732,6 +2767,18 @@ class MlbLiveGameCard extends HTMLElement {
       );
       return;
     }
+    // Live header (score rows + chevron strip) toggles the details below it.
+    // It holds no player links or lineup targets of its own, so it can be
+    // handled ahead of those without swallowing their clicks.
+    const liveHeader =
+      ev.target instanceof Element
+        ? ev.target.closest(".live-expandable")
+        : null;
+    if (liveHeader && this.content.contains(liveHeader)) {
+      ev.preventDefault();
+      this._toggleLiveExpand();
+      return;
+    }
     if (this._openPlayerProfile(ev.target)) return;
     if (this._toggleLineupFromMatchup(ev.target)) return;
     const target =
@@ -2743,6 +2790,23 @@ class MlbLiveGameCard extends HTMLElement {
     // Force a re-render even if the upstream fingerprint is otherwise unchanged.
     this._lastFingerprint = "";
     this._lastCompactFp = "";
+    this.render();
+  }
+
+  // Flip the live card between "score rows only" and the fully configured
+  // view. Card-local: nothing is written back to the sensor or the config, so
+  // the next new game re-baselines to `live_default_view`.
+  _toggleLiveExpand() {
+    this._liveExpanded = this._liveExpanded !== true;
+    // Collapsing hides the inning pager, and a paged-back view rolls the
+    // header's score/marker to that half — leaving it engaged would strand a
+    // stale score on the one row still on screen. Exiting the paged view on
+    // collapse keeps the collapsed header honest about the live score.
+    if (!this._liveExpanded) this._resetInningNav();
+    // The upstream data hasn't changed, so bust both render memos or the
+    // toggle would be a no-op paint.
+    this._lastFingerprint = "";
+    this._lastLiveHtml = "";
     this.render();
   }
 
@@ -2771,6 +2835,15 @@ class MlbLiveGameCard extends HTMLElement {
     ) {
       ev.preventDefault();
       this._toggleLineupFromMatchup(luSide);
+      return;
+    }
+    const liveHeader =
+      ev.target instanceof Element
+        ? ev.target.closest(".live-expandable")
+        : null;
+    if (liveHeader && this.content.contains(liveHeader)) {
+      ev.preventDefault();
+      this._toggleLiveExpand();
       return;
     }
     const target =
@@ -3199,6 +3272,17 @@ class MlbLiveGameCard extends HTMLElement {
     // While navigated, render the fetched neighbor in place of the live game.
     const navActive = this._navOffset !== 0 && !!this._navGameData;
     const attrs = navActive ? this._navGameData : liveAttrs;
+    // Live collapse/expand is card-local view state that re-baselines to the
+    // configured default whenever the displayed game changes — an expand for
+    // yesterday's game shouldn't carry into tonight's first pitch. Resolved
+    // before the fingerprint so the flag below reflects this render's game.
+    const liveExpandKey = String(
+      attrs.display_event_id || attrs.competition?.id || "",
+    );
+    if (this._liveExpandedGameKey !== liveExpandKey) {
+      this._liveExpandedGameKey = liveExpandKey;
+      this._liveExpanded = this._liveDefaultExpanded();
+    }
     const fpSource = navActive
       ? { state: String(this._navGameData.display_event_id || ""), attributes: this._navGameData }
       : stateObj;
@@ -3206,7 +3290,7 @@ class MlbLiveGameCard extends HTMLElement {
     // unchanged), so its offset/flags must be in the fingerprint or the swap
     // won't paint when the upstream data is otherwise unchanged.
     const inningFp = `inn:${this._inningOffset}:${this._inningHasPrev ? 1 : 0}${this._inningHasNext ? 1 : 0}`;
-    const fingerprint = `nav:${this._navOffset}|${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}|${inningFp}|${this._computeRenderFingerprint(fpSource)}`;
+    const fingerprint = `nav:${this._navOffset}|${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}|${inningFp}|lx:${this._liveExpanded ? 1 : 0}|${this._computeRenderFingerprint(fpSource)}`;
     if (fingerprint === this._lastFingerprint) {
       return; // No changes, skip DOM update
     }
@@ -3223,6 +3307,12 @@ class MlbLiveGameCard extends HTMLElement {
     const homeScore = parseScore(home?.score);
     const stateInfo = deriveGameState(attrs);
     const inningState = deriveInningState(attrs);
+    // Collapsed live card = score rows + inning marker only; everything below
+    // (win probability, linescore, matchup, play-by-play…) waits for a tap on
+    // the header. Only the live view collapses — a delayed game still needs to
+    // show its banner, and the non-live views have their own expander.
+    const isLiveCard = stateInfo.pillClass === "live";
+    const liveCollapsed = isLiveCard && this._liveExpanded !== true;
     const batter = currentBatterName(attrs);
     const pitcher =
       attrs.current_pitcher?.display_name ||
@@ -3297,7 +3387,8 @@ class MlbLiveGameCard extends HTMLElement {
     const opponentLabel = ownerSide === "home" ? awayAbbr : homeAbbr;
     const winProbabilityPanel =
       this.config.show_win_probability !== false &&
-      stateInfo.pillClass === "live"
+      isLiveCard &&
+      !liveCollapsed
         ? renderWinProbabilityRow(
             attrs.win_probability || {},
             ownerSide,
@@ -3307,13 +3398,13 @@ class MlbLiveGameCard extends HTMLElement {
         : "";
     // Inning pager: while live, page the play-by-play back through earlier
     // half-innings. Swaps only this panel (rest of the card stays live).
-    const isLiveCard = stateInfo.pillClass === "live";
     const inningActive =
       !navActive && this._inningOffset !== 0 && !!this._inningView;
     const hasPastHalf =
       !!liveHalf && !(liveHalf.inning <= 1 && liveHalf.half === "top");
     const showInningNav =
       isLiveCard &&
+      !liveCollapsed &&
       this.config.show_inning_nav !== false &&
       !navActive &&
       (inningActive || hasPastHalf);
@@ -3415,13 +3506,19 @@ class MlbLiveGameCard extends HTMLElement {
     // the card flips to Due Up without waiting for the next HA state update.
     if (
       holdThirdOut &&
+      !liveCollapsed &&
       Number.isFinite(serverHoldUntil) &&
       serverHoldUntil > nowTs
     ) {
       this._scheduleHoldExpiryRender(serverHoldUntil);
     }
+    // Skipped while collapsed — this one pulls player headshots, so building
+    // markup we'd only throw away would kick off pointless image fetches.
     const dueUpPanel =
-      betweenHalves && !holdThirdOut && !inningState.pseudoFinal
+      betweenHalves &&
+      !holdThirdOut &&
+      !inningState.pseudoFinal &&
+      !liveCollapsed
         ? renderDueUpCards(this, dueUpList, dueUpDesc)
         : "";
     const countDotsPanel =
@@ -3473,8 +3570,10 @@ class MlbLiveGameCard extends HTMLElement {
     const centerColumnHtml = stackCenter
       ? `<div class="matchup-center stack-center">${diamondHtml}${pitchZoneHtml}</div>`
       : diamondHtml || pitchZoneHtml;
-    const matchupPanel = this.config.show_batter
-      ? `
+    // Also headshot-bearing, so it too stays unbuilt while collapsed.
+    const matchupPanel =
+      this.config.show_batter && !liveCollapsed
+        ? `
             <div class="matchup-block ${batter || pitcher ? "" : "muted-block"}">
               <div class="matchup-grid enhanced productionish ${this.config.show_diamond !== false ? "with-diamond" : ""} ${pitchZoneHtml ? "with-pitch-zone" : ""}">
                 <div class="matchup-side with-headshot stacked centered-half"${luSideAttrs(luPitcherSide)}>
@@ -3506,7 +3605,7 @@ class MlbLiveGameCard extends HTMLElement {
         ? renderBaseOccupancyRow(attrs.situation || {})
         : "";
     const liveExtras =
-      stateInfo.pillClass === "live"
+      isLiveCard && !liveCollapsed
         ? `
         <div class="live-panel productionish">
           ${
@@ -3568,8 +3667,11 @@ class MlbLiveGameCard extends HTMLElement {
       return;
     }
 
-    const liveHtml = `
-      <div class="wrapper ${this._headshotSizeClass()}">
+    // The score rows double as the live card's expander. The chevron strip
+    // underneath is the visible affordance (without it a collapsed card looks
+    // like a card that's simply missing its details) and shares the same click
+    // target, so tapping either one toggles.
+    const scoreboardMain = `
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
             ${this.teamRow(awayTeam, awayMeta, "", dispAwayScore, awayWon, false, away, dispAwayTotals)}
@@ -3578,9 +3680,19 @@ class MlbLiveGameCard extends HTMLElement {
           <div class="inning-marker-side">
             <div class="inning-marker-wrap"><div class="inning-marker ${markerClass}">${displayMarker}</div></div>
           </div>
-        </div>
+        </div>`;
+    const headerHtml = isLiveCard
+      ? `
+      <div class="live-expandable${liveCollapsed ? "" : " expanded"}" role="button" tabindex="0" aria-expanded="${liveCollapsed ? "false" : "true"}" title="${liveCollapsed ? "Show game details" : "Hide game details"}">
+        ${scoreboardMain}
+        <div class="live-expand-strip"><span class="tri ${liveCollapsed ? "tri-down" : "tri-up"}"></span></div>
+      </div>`
+      : scoreboardMain;
+    const liveHtml = `
+      <div class="wrapper ${this._headshotSizeClass()}">
+        ${headerHtml}
         ${winProbabilityPanel}
-        ${this.config.show_linescore ? this.renderLinescore(competition, viewedHalf) : ""}
+        ${this.config.show_linescore && !liveCollapsed ? this.renderLinescore(competition, viewedHalf) : ""}
         ${delayedExtras}
         ${liveExtras}
       </div>
@@ -4105,14 +4217,20 @@ color: var(--primary-text-color);
           border-radius: 4px;
           -webkit-tap-highlight-color: transparent;
         }
-        .inning-nav-btn .tri {
+        /* Selectors stay scoped to their container: the card renders in light
+           DOM, so an unqualified .tri rule would both leak out to the
+           dashboard and be overridable by it. */
+        .inning-nav-btn .tri,
+        .live-expand-strip .tri {
           width: 0;
           height: 0;
           border-left: 6px solid transparent;
           border-right: 6px solid transparent;
         }
-        .inning-nav-btn .tri-down { border-top: 7px solid currentColor; }
-        .inning-nav-btn .tri-up { border-bottom: 7px solid currentColor; }
+        .inning-nav-btn .tri-down,
+        .live-expand-strip .tri-down { border-top: 7px solid currentColor; }
+        .inning-nav-btn .tri-up,
+        .live-expand-strip .tri-up { border-bottom: 7px solid currentColor; }
         .inning-nav-btn:hover:not([disabled]) {
           color: var(--primary-text-color);
           background: var(--secondary-background-color);
@@ -4854,6 +4972,38 @@ white-space: nowrap;
         }
         .compact-mode .team-row.winner .final-score {
           color: var(--primary-color, #03a9f4);
+        }
+
+        /* Live-card collapse/expand. The header (score rows + chevron strip)
+           is one click target; the strip reuses the inning-pager's triangle
+           glyphs so the two affordances read as the same language. */
+        .live-expandable {
+          cursor: pointer;
+          outline: none;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .live-expandable:focus-visible {
+          box-shadow: 0 0 0 2px var(--primary-color, #03a9f4);
+          border-radius: 8px;
+        }
+        .live-expand-strip {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 11px;
+          margin: 2px 0 0;
+          color: var(--secondary-text-color);
+        }
+        /* Expanded, the strip sits directly above the first panel's own
+           divider, so drop its reserved band to avoid a double gap. */
+        .live-expandable.expanded .live-expand-strip {
+          height: 9px;
+          margin-bottom: -2px;
+          opacity: 0.55;
+        }
+        .live-expandable:hover .live-expand-strip {
+          color: var(--primary-text-color);
+          opacity: 1;
         }
 
         /* Upcoming-game expandable details */

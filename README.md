@@ -119,6 +119,7 @@ Add the card to your dashboard — either way:
 | `show_lineup_popup`    | boolean | `true`       | Allow clicking a team's side of the matchup to open the team-lineup popup. Set `false` to make the matchup sides inert (player-name links still work)                                                                                                                                                    |
 | `show_schedule_nav`    | boolean | `true`       | Show `‹ ›` arrows beside the date/status on the non-live card to page back through previous results and forward through upcoming games (as many taps as needed). Hidden while a game is live; set `false` to hide entirely                                                                                |
 | `lineup_default_view`  | string  | `auto`       | Which view the lineup popup opens to: `auto` (Game while the game is live, Season otherwise), or force `game` / `season`                                                                                                                                                                                 |
+| `live_default_view`    | string  | `collapsed`  | How much of the live card shows by default: `collapsed` (just the two score rows + inning marker) or `expanded` (the full live view). Either way, clicking the score rows — or the `⌄` strip under them — toggles between the two; the choice is per-browser and re-baselines when a new game starts     |
 | `headshot_size`        | string  | `auto`       | Size of inline headshots (matchup, due-up, probable pitchers). `auto` scales them with the card's actual width via a CSS container query — responsive to HA's per-column dashboards. Fixed presets: `small` (40px), `medium` (56px), `large` (72px), `xlarge` (88px). Modal-popup avatars are unaffected |
 
 ### Example with all options
@@ -143,6 +144,7 @@ player_link_target: popup
 show_lineup_popup: true
 show_schedule_nav: true
 lineup_default_view: auto
+live_default_view: collapsed
 headshot_size: auto
 ```
 
