@@ -115,6 +115,14 @@ A plain ES module custom element (not Lit). It:
   (from the existing `leaders` attribute) above the same standings block.
   Leader names route through the player-link path, so they open the
   career popup like every other yellow name.
+- The `live` layout has its own collapse: by default it renders only the
+  score rows + inning marker (`.live-expandable` header, with a chevron
+  strip as the affordance) and clicking that header expands to the fully
+  configured live view. `live_default_view` sets the state each new game
+  starts in. The flag (`_liveExpanded`) is card-local view state — it never
+  touches the sensor or the stored config — and re-baselines whenever the
+  displayed `display_event_id` changes. While collapsed the headshot-bearing
+  panels (matchup, due-up) are not built at all, so no image fetches fire.
 
 ## Player career popup (on-demand path)
 
@@ -237,7 +245,8 @@ returns a `<mlb-live-game-card-editor>` element (also defined in
 `mlb-live-game-card.js`) that wraps Home Assistant's native `<ha-form>`
 against an `EDITOR_SCHEMA` derived from the table below — entity selector
 filtered to `integration: mlb_live_scoreboard`, booleans for the `show_*`
-flags, dropdowns for `player_link_target` / `lineup_default_view`, a number
+flags, dropdowns for `player_link_target` / `lineup_default_view` /
+`live_default_view`, a number
 field for `refresh_rate`. The picker entry sets `preview: true` and a
 `getStubConfig()` hook auto-selects the first MLB sensor it finds, so
 "Add card" lands on a working preview with no YAML edits. Defaults live
@@ -261,6 +270,7 @@ and the editor so unset toggles still reflect their true on/off state.
 | `player_link_target`   | `popup`    | clicking a player name: `popup` (in-card career popup) or `espn` (open ESPN's player page)                                             |
 | `show_lineup_popup`    | `true`     | allow the matchup sides to open the team lineup popup (`false` = inert)                                                                |
 | `lineup_default_view`  | `auto`     | lineup popup default view: `auto` (Game while live, else Season) / `game` / `season`                                                   |
+| `live_default_view`    | `collapsed`| live card's default depth: `collapsed` (score rows + inning marker only) or `expanded` (full live view); click the header to toggle    |
 | `headshot_size`        | `auto`     | inline headshot sizing: `auto` (CSS container query — scales with card width) or fixed presets `small` / `medium` / `large` / `xlarge` |
 | `refresh_rate`         | `0`        | seconds; `0` disables (rely on HA state updates)                                                                                       |
 
