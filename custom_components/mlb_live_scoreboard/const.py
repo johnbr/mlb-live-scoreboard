@@ -219,3 +219,14 @@ MLB_TEAM_MAP = {
   "TOR": 14,
   "WSH": 20,
 }
+
+# ESPN team IDs of the two All-Star squads, as strings (the summary payload
+# carries competitor IDs as strings). Derived from MLB_TEAM_MAP so the two
+# cannot drift apart.
+#
+# This is the *only* reliable in-payload signal that a summary is the All-Star
+# Game: ``header.season.type`` is 2 for the All-Star Game exactly as it is for a
+# regular-season game (verified live against both), so it cannot be used to tell
+# them apart. The distinction matters because ESPN reports player AVG/ERA
+# differently in the two — see ``_is_allstar_summary``.
+ALLSTAR_TEAM_IDS = frozenset({str(MLB_TEAM_MAP["AL"]), str(MLB_TEAM_MAP["NL"])})

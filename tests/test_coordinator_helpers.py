@@ -752,11 +752,40 @@ def test_find_boxscore_athlete_returns_matching_category_block():
     assert entry["stats"] == ["4", "1", ".299"]
 
 
+# ESPN identifies the All-Star Game only by its AL/NL pseudo-team IDs (31/32);
+# ``season.type`` is 2 there just as in a regular-season game. The All-Star
+# fixtures below therefore have to carry this header for the code under test to
+# recognise them — without it they are indistinguishable from a regular game.
+_ALLSTAR_HEADER = {
+    "competitions": [
+        {
+            "competitors": [
+                {"team": {"id": "31", "abbreviation": "AL"}},
+                {"team": {"id": "32", "abbreviation": "NL"}},
+            ]
+        }
+    ]
+}
+
+# A regular-season matchup (LAD vs KC), for the contrasting case.
+_REGULAR_HEADER = {
+    "competitions": [
+        {
+            "competitors": [
+                {"team": {"id": "19", "abbreviation": "LAD"}},
+                {"team": {"id": "7", "abbreviation": "KC"}},
+            ]
+        }
+    ]
+}
+
+
 def _allstar_batting_summary(athlete_id, name, game_avg):
     """Box score whose batting line carries a GAME avg (as the All-Star Game
     does) rather than the season avg regular-game boxscores report.
     """
     return {
+        "header": _ALLSTAR_HEADER,
         "boxscore": {
             "players": [
                 {
@@ -784,6 +813,7 @@ def _allstar_pitching_summary(athlete_id, name, game_era):
     Game's ``fullInnings.partInnings`` innings key.
     """
     return {
+        "header": _ALLSTAR_HEADER,
         "boxscore": {
             "players": [
                 {
@@ -818,8 +848,9 @@ def test_normalize_batter_stats_prefers_season_avg_over_game_avg():
 
 
 def test_normalize_batter_stats_falls_back_to_boxscore_avg_without_season():
-    # Regular games (and any case where the season endpoint has no line) keep
-    # using the boxscore avg, which there is already the season figure.
+    # When the season endpoint has no line at all (rookies, two-way edge cases)
+    # the boxscore avg is used even in the All-Star Game, where it is only a
+    # game figure — a game average beats showing nothing.
     summary = _allstar_batting_summary("36018", "Yordan Alvarez", ".243")
     out = Coord._normalize_batter_stats(summary, "36018", {}, is_live=False)
     assert out["avg"] == ".243"
@@ -837,6 +868,56 @@ def test_normalize_pitcher_stats_falls_back_to_boxscore_era():
     summary = _allstar_pitching_summary("42359", "Cristopher Sanchez", "3.10")
     out = Coord._normalize_pitcher_stats(summary, "42359")
     assert out["era"] == "3.10"
+
+
+def _regular_batting_summary(athlete_id, name, live_avg):
+    """Regular-game box score, whose ``avg`` is the season average recomputed
+    live to include this game's at-bats.
+    """
+    summary = _allstar_batting_summary(athlete_id, name, live_avg)
+    summary["header"] = _REGULAR_HEADER
+    return summary
+
+
+def _regular_pitching_summary(athlete_id, name, live_era):
+    """Regular-game box score, whose ``ERA`` is the season ERA recomputed live
+    to include the in-progress outing.
+    """
+    summary = _allstar_pitching_summary(athlete_id, name, live_era)
+    summary["header"] = _REGULAR_HEADER
+    return summary
+
+
+def test_is_allstar_summary_detects_by_team_id():
+    # season.type is 2 for BOTH kinds of game, so team ID is the only tell.
+    assert Coord._is_allstar_summary(_allstar_pitching_summary("42359", "Cristopher Sanchez", "0.00")) is True
+    assert Coord._is_allstar_summary(_regular_pitching_summary("33748", "Blake Snell", "6.00")) is False
+    assert Coord._is_allstar_summary({}) is False
+
+
+def test_normalize_pitcher_stats_prefers_live_boxscore_era_in_regular_game():
+    # Regression for the stale pre-game ERA. Real values, captured mid-game:
+    # Snell entered on a 3.0 IP / 4 ER season (12.00) and had thrown 3 scoreless,
+    # so ESPN's own lineup showed 6.00 while the athlete endpoint still said
+    # 12.00. The card must show the live 6.00.
+    summary = _regular_pitching_summary("33748", "Blake Snell", "6.00")
+    out = Coord._normalize_pitcher_stats(summary, "33748", season_era="12.00")
+    assert out["era"] == "6.00"
+
+
+def test_normalize_pitcher_stats_uses_season_era_when_boxscore_absent_pregame():
+    # Before first pitch there is no boxscore line, so the season ERA is all
+    # there is — the pre-game card must still show it.
+    out = Coord._normalize_pitcher_stats({"header": _REGULAR_HEADER}, "33748", season_era="12.00")
+    assert out["era"] == "12.00"
+
+
+def test_normalize_batter_stats_prefers_live_boxscore_avg_in_regular_game():
+    # Same staleness on the hitter side: Betts was 1-for-1 on the day, so the
+    # boxscore carried .231 while the athlete endpoint still served .229.
+    summary = _regular_batting_summary("33039", "Mookie Betts", ".231")
+    out = Coord._normalize_batter_stats(summary, "33039", {"avg": ".229"}, is_live=True)
+    assert out["avg"] == ".231"
 
 
 def test_normalize_batter_stats_blank_for_two_way_pitcher_only_line():

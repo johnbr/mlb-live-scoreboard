@@ -19,6 +19,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import (
     ALLSTAR_SCHEDULE_STALE_FALLBACK_SECONDS,
     ALLSTAR_SCHEDULE_TTL_SECONDS,
+    ALLSTAR_TEAM_IDS,
     ALLSTAR_TEAM_SLUG,
     BATTER_SEASON_STATS_TTL_SECONDS,
     BATTING_ORDER_SIZE,
@@ -1510,10 +1511,33 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return ", ".join(parts)
 
     @classmethod
+    def _is_allstar_summary(cls, summary: dict[str, Any]) -> bool:
+        """Return True when this summary is the All-Star Game.
+
+        ESPN reports a player's displayed AVG / ERA differently in the two kinds
+        of game, and the difference is not cosmetic (see ``_normalize_batter_stats``
+        and ``_normalize_pitcher_stats``), so the two paths must be told apart.
+
+        Detection is by competitor team ID against the AL/NL pseudo-teams.
+        ``header.season.type`` is **not** usable: it is ``2`` for the All-Star
+        Game exactly as for a regular-season game (verified live against both the
+        2026 ASG and a regular-season game on the same day). Neither is the
+        innings-pitched key — ESPN now emits ``fullInnings.partInnings`` in
+        regular-game boxscores too, so that old tell is gone.
+        """
+        competitions = (summary.get("header") or {}).get("competitions") or []
+        for competition in competitions:
+            for competitor in competition.get("competitors") or []:
+                if str((competitor.get("team") or {}).get("id") or "") in ALLSTAR_TEAM_IDS:
+                    return True
+        return False
+
+    @classmethod
     def _normalize_batter_stats(
         cls, summary: dict[str, Any], batter_id: str, season_stats: dict[str, Any] | None = None, is_live: bool = False
     ) -> dict[str, Any]:
         entry, keys = cls._find_boxscore_athlete(summary, batter_id, preferred_keys=["avg", "atBats"])
+        is_allstar = cls._is_allstar_summary(summary)
         avg = cls._stat_from_entry(entry, keys, "avg", "battingAverage")
         ab = cls._stat_from_entry(entry, keys, "ab", "atBats")
         h = cls._stat_from_entry(entry, keys, "h", "hits")
@@ -1553,14 +1577,22 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 display_rbi = game_rbi
 
         return {
-            # Prefer the season AVG from the athlete stats endpoint over the
-            # boxscore's ``avg``. In regular games ESPN's boxscore ``avg`` is
-            # already the season figure, so this is a no-op there; in the
-            # All-Star Game the boxscore ``avg`` is the *game* average (e.g.
-            # ".000" / "1.000" for a 0-1 line), so the season value is what we
-            # actually want to show. Falls back to the boxscore value when the
-            # season endpoint has no line (rookies, two-way edge cases).
-            "avg": season_stats.get("avg") or avg or "",
+            # AVG source differs by game kind, and the two must not be unified:
+            #
+            # Regular game — the boxscore ``avg`` is the season average
+            # RECOMPUTED LIVE to include this game's at-bats, while the athlete
+            # stats endpoint still serves the PRE-GAME season line. Measured
+            # mid-game: Betts boxscore .231 vs endpoint .229, Edman .283 vs
+            # .278. The boxscore is the number ESPN itself shows in the lineup,
+            # so it is what we display; the endpoint is the fallback.
+            #
+            # All-Star Game — the boxscore ``avg`` is the *game* average
+            # (".000" / "1.000" off a 0-1 line), so the season value wins there.
+            # That inversion is the whole point of ``_is_allstar_summary``.
+            #
+            # Either way we fall back to the other source when the preferred one
+            # is absent (rookies, two-way edge cases).
+            "avg": (season_stats.get("avg") or avg or "") if is_allstar else (avg or season_stats.get("avg") or ""),
             "ab": ab,
             "h": h,
             "hr": display_hr,
@@ -1585,12 +1617,23 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
     ) -> dict[str, Any]:
         """Extract IP / ERA / SO / pitch count for the pitcher of record.
 
-        ``season_era`` (from the athlete stats endpoint) is preferred for the
-        displayed ERA. In regular games the boxscore ``ERA`` is already the
-        season figure, so this is a no-op; in the All-Star Game the boxscore
-        ``ERA`` is the *game* ERA ("0.00"), so the season value is what we want.
+        The displayed ERA source differs by game kind, and the two must not be
+        unified:
+
+        Regular game — the boxscore ``ERA`` is the season ERA RECOMPUTED LIVE to
+        include the in-progress outing, while ``season_era`` (the athlete stats
+        endpoint) still serves the PRE-GAME season line. Measured mid-game:
+        Snell had thrown 3.0 scoreless innings on top of a 3.0 IP / 4 ER season,
+        so the boxscore read 6.00 while the endpoint still read 12.00. The
+        boxscore is the number ESPN itself shows in the lineup, so it is what we
+        display; ``season_era`` is the fallback.
+
+        All-Star Game — the boxscore ``ERA`` is the *game* ERA ("0.00" off a
+        clean inning), so ``season_era`` wins there. That inversion is the whole
+        point of ``_is_allstar_summary``.
         """
         entry, keys = cls._find_boxscore_athlete(summary, pitcher_id, preferred_keys=["era", "pitches"])
+        is_allstar = cls._is_allstar_summary(summary)
         pitches = cls._stat_from_entry(entry, keys, "pitches")
         strikes = cls._stat_from_entry(entry, keys, "strikes")
         innings_pitched = cls._stat_from_entry(entry, keys, *cls._IP_KEYS)
@@ -1616,7 +1659,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                         strikes = strikes or cls._stat_from_entry(athlete_entry, block_keys, "strikes")
 
         return {
-            "era": season_era or era,
+            "era": (season_era or era) if is_allstar else (era or season_era),
             "innings_pitched": innings_pitched,
             "ip": innings_pitched,
             "pitches_strikes": f"{pitches}-{strikes}" if pitches and strikes else (pitches or ""),
