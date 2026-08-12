@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.26.0...v1.26.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* show the live in-play ERA/AVG instead of the pre-game season line ([#95](https://github.com/johnbr/mlb-live-scoreboard/issues/95)) ([be00f20](https://github.com/johnbr/mlb-live-scoreboard/commit/be00f2013630c08efc5d8fd01ac726de72c25b80))
+
 ## [1.26.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.25.3...v1.26.0) (2026-08-11)
 
 
