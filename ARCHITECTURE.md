@@ -227,7 +227,7 @@ Top-level `extra_state_attributes` exposed on the sensor:
 | `batter_stats`                       | dict         | `avg`, `hits_ab`, `hr`, `rbi`, `game_outcomes_display`, …                                                                                                                                                                                       |
 | `pitcher_stats`                      | dict         | `era`, `ip`, `pitches_strikes`, `strikeouts`, …                                                                                                                                                                                                 |
 | `situation`                          | dict         | `balls`, `strikes`, `outs`, `onFirst/Second/Third`                                                                                                                                                                                              |
-| `due_up`                             | list[dict]   | up to `DUE_UP_LIMIT` next batters                                                                                                                                                                                                               |
+| `due_up`                             | list[dict]   | up to `DUE_UP_LIMIT` next batters, **re-anchored to the batting order** — see below                                                                                                                                                             |
 | `third_out_play`                     | dict \| None | the play that produced the 3rd out (when ESPN flags it)                                                                                                                                                                                         |
 | `on_deck`                            | dict         | next batter info                                                                                                                                                                                                                                |
 | `lineups`                            | dict         | `{away, home}`, each: team meta + `is_batting`, `hitters[]` (Game box-score line), `pitchers[]`; drives the team lineup popup's Game view                                                                                                       |
@@ -235,6 +235,55 @@ Top-level `extra_state_attributes` exposed on the sensor:
 `competition` contains the fields the card reads:
 `competitors[]` (each with `team`, `score`, `homeAway`, `linescores`, totals),
 `status.type.{state,name,displayClock}`, `status.period`, `date`, `id`.
+
+### `due_up` — ESPN's list is not reliably anchored
+
+**ESPN's `situation.dueUp` restarts at the top of the lineup when the order
+wraps past the 9-hole.** Observed live 2026-08-13 (MIL @ LAD, event
+`401816515`): the bottom of the 6th ended on slot 7, so the bottom of the 7th
+was due to open 8-9-1 — and did — but ESPN published slots 1-2-3, so the panel
+led with Ohtani when he was actually due third. Two breaks sampled from that
+same game at slots 5 and 7 (no wrap) were correct, so the failure tracks the
+wrap, not the game. ESPN's entries carry **only** `playerId` + `batOrder` (no
+names), so a bad anchor means genuinely wrong players, not a mislabel.
+
+`_due_up_in_batting_order` therefore recomputes the anchor from data already in
+the summary rather than trusting the list's order: `period_prefix` says which
+side bats next (`Mid…` → home, `End…` → away), `_last_batter_of_half` finds
+that side's most recent plate appearance in `plays`, and `DUE_UP_LIMIT` slots
+are walked from there with `% BATTING_ORDER_SIZE` wrap. Each slot reuses ESPN's
+own entry when one carries that `batOrder`, and is otherwise resolved from the
+box score via `_batting_slot_entry` (which prefers the `active` player in a
+slot double-filled by a substitution — the same rule `_normalize_on_deck` uses;
+both now share these helpers).
+
+**The anchor is not simply "last slot + 1".** Two corrections, both of which a
+naive walk gets wrong and both of which occurred in that one game:
+
+- **A carry-over at-bat.** When the third out is made *on the bases* — a caught
+  stealing or pickoff — the batter at the plate keeps his at-bat and leads off
+  the next half with a fresh count, so the anchor is his own slot. ESPN marks
+  this by emitting that at-bat's `Start Batter/Pitcher` with no matching `End
+  Batter/Pitcher`, which is what `_last_batter_of_half` returns as
+  `at_bat_completed=False`. It happened in the top of the 3rd (Chourio caught
+  stealing on Sánchez's 2-0 count; Sánchez opened the 4th). A payload carrying
+  neither marker reads as completed — the ordinary case, so the degradation is
+  safe.
+- **Plays logged into the half that hasn't started.** ESPN files the break's
+  roster moves under the upcoming half ("Hall relieved Senzatela" lands in
+  Bottom 7 while the top of the 7th is still live), so the scan is bounded to
+  innings actually played. Those plays carry no `batter` participant in the
+  payloads we've seen; the bound means we don't depend on that.
+
+Two guards matter. **An empty `situation.dueUp` stays empty** — the repair only
+ever *reorders* a list ESPN sent, because emptiness is load-bearing downstream
+(the card gates the panel on it and the coordinator's stale-situation bridge
+reuses the prior snapshot when it comes back empty), so synthesizing one from
+the box score would put a Due Up panel on screen where ESPN publishes none.
+And **every failure to establish the anchor falls back to ESPN's list
+verbatim** (not a break, the side hasn't batted yet, a slot the box score can't
+fill), so an unrecognized payload shape degrades to the old behaviour rather
+than to an empty or truncated panel.
 
 ## Card configuration
 

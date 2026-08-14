@@ -664,6 +664,165 @@ def test_normalize_on_deck_prefers_active_substitute_in_shared_slot():
     assert out["short_name"] == "Replacement"
 
 
+# ---------------------------------------------------------------------------
+# _normalize_due_up — re-anchoring ESPN's `situation.dueUp`
+# ---------------------------------------------------------------------------
+
+# Slot -> player for the side under test. Ids are the slot number so the
+# assertions read as batting-order positions.
+_ORDER = (
+    ("1", "Ohtani", 1, True),
+    ("2", "Pages", 2, True),
+    ("3", "Edman", 3, True),
+    ("4", "Freeman", 4, True),
+    ("5", "THernandez", 5, True),
+    ("6", "Muncy", 6, True),
+    ("7", "Tucker", 7, True),
+    ("8", "EHernandez", 8, True),
+    ("9", "Rortvedt", 9, True),
+)
+
+
+def _due_up_entries(*slots):
+    """ESPN's `situation.dueUp` shape: playerId + batOrder, no names."""
+    return [{"playerId": str(slot), "batOrder": slot} for slot in slots]
+
+
+def _due_up_summary(due_up, plays, *athletes):
+    """A minimal payload for :meth:`_normalize_due_up`.
+
+    ``plays`` is a list of ``(half, inning, athlete_id)`` plate appearances in
+    chronological order, optionally with a 4th element carrying the ESPN
+    ``type.text`` (the at-bat boundary marker); each athlete is
+    ``(id, name, bat_order, active)``.
+    """
+    summary = _on_deck_summary(*(athletes or _ORDER))
+    summary["situation"] = {"dueUp": due_up}
+    summary["plays"] = [
+        {
+            "period": {"type": play[0], "number": play[1]},
+            "type": {"text": play[3] if len(play) > 3 else ""},
+            "participants": [{"type": "batter", "athlete": {"id": play[2]}}],
+        }
+        for play in plays
+    ]
+    return summary
+
+
+def test_normalize_due_up_reanchors_when_espn_restarts_the_order():
+    # Live regression, MIL @ LAD 2026-08-13 (event 401816515). The bottom of
+    # the 6th ended on slot 7, so the bottom of the 7th was due to open
+    # 8-9-1 (and did). ESPN published 1-2-3, so the panel led with Ohtani
+    # when he was actually due third.
+    summary = _due_up_summary(_due_up_entries(1, 2, 3), [("bottom", 6, "7")])
+    out = Coord._normalize_due_up(summary, {"period": 7, "period_prefix": "Middle 7th"})
+    assert [p["id"] for p in out] == ["8", "9", "1"]
+    assert [p["short_name"] for p in out] == ["EHernandez", "Rortvedt", "Ohtani"]
+
+
+def test_normalize_due_up_leaves_a_correctly_anchored_list_alone():
+    # The no-side-effects canary: a non-wrapping break (slot 4 last, 5-6-7
+    # due) is the shape ESPN gets right, and must come through untouched.
+    summary = _due_up_summary(_due_up_entries(5, 6, 7), [("bottom", 8, "4")])
+    out = Coord._normalize_due_up(summary, {"period": 9, "period_prefix": "Middle 9th"})
+    assert [p["id"] for p in out] == ["5", "6", "7"]
+    assert [p["short_name"] for p in out] == ["THernandez", "Muncy", "Tucker"]
+
+
+def test_normalize_due_up_anchors_to_the_away_side_at_end_of_inning():
+    # "End N" means the *bottom* half just finished, so the side due up is the
+    # away side — anchor on the last top-half plate appearance (slot 7 -> 8-9-1),
+    # not the more recent bottom-half one (slot 3, which would give 4-5-6).
+    summary = _due_up_summary(_due_up_entries(1, 2, 3), [("top", 7, "7"), ("bottom", 7, "3")])
+    out = Coord._normalize_due_up(summary, {"period": 7, "period_prefix": "End 7th"})
+    assert [p["id"] for p in out] == ["8", "9", "1"]
+
+
+def test_normalize_due_up_passes_through_outside_a_break():
+    # Mid-half there is no "next half" to anchor to. ESPN normally drops
+    # `dueUp` entirely here; if it sends one anyway, don't invent an anchor.
+    summary = _due_up_summary(_due_up_entries(1, 2, 3), [("bottom", 6, "7")])
+    out = Coord._normalize_due_up(summary, {"period": 7, "period_prefix": "Bottom 7th"})
+    assert [p["id"] for p in out] == ["1", "2", "3"]
+
+
+def test_normalize_due_up_keeps_top_of_order_before_the_side_has_batted():
+    # First time through the order there is no reference at-bat, and the top
+    # of the lineup that ESPN sent is correct — leave it alone.
+    summary = _due_up_summary(_due_up_entries(1, 2, 3), [])
+    out = Coord._normalize_due_up(summary, {"period": 1, "period_prefix": "Middle 1st"})
+    assert [p["id"] for p in out] == ["1", "2", "3"]
+
+
+def test_normalize_due_up_resolves_a_rebuilt_slot_to_the_active_substitute():
+    # A rebuilt slot must surface whoever is in the game now, matching
+    # `_normalize_on_deck`'s rule for a double-filled batOrder.
+    order = (
+        *_ORDER[:8],
+        ("9", "OldStarter", 9, False),
+        ("9b", "Replacement", 9, True),
+    )
+    summary = _due_up_summary(_due_up_entries(1, 2, 3), [("bottom", 6, "7")], *order)
+    out = Coord._normalize_due_up(summary, {"period": 7, "period_prefix": "Middle 7th"})
+    assert [p["id"] for p in out] == ["8", "9b", "1"]
+
+
+def test_normalize_due_up_falls_back_to_espn_when_a_slot_cannot_be_resolved():
+    # Degrade to ESPN's list rather than to a short or empty panel when the
+    # box score can't fill a computed slot.
+    summary = _due_up_summary(_due_up_entries(1, 2, 3), [("bottom", 6, "7")], *_ORDER[:8])
+    out = Coord._normalize_due_up(summary, {"period": 7, "period_prefix": "Middle 7th"})
+    assert [p["id"] for p in out] == ["1", "2", "3"]
+
+
+def test_normalize_due_up_ignores_plays_logged_into_the_upcoming_half():
+    # ESPN logs the break's roster moves into the half that hasn't started yet
+    # ("Hall relieved Senzatela" lands in Bottom 7 while the top of the 7th is
+    # still live). Such a play must not advance the anchor: the last *played*
+    # bottom half is the 6th, so this is still 8-9-1, not 9-1-2.
+    summary = _due_up_summary(
+        _due_up_entries(1, 2, 3),
+        [("bottom", 6, "7"), ("bottom", 7, "8")],
+    )
+    out = Coord._normalize_due_up(summary, {"period": 7, "period_prefix": "Middle 7th"})
+    assert [p["id"] for p in out] == ["8", "9", "1"]
+
+
+def test_normalize_due_up_carry_over_at_bat_leads_off_the_next_half():
+    # Third out made on the bases (caught stealing) with slot 3 at the plate:
+    # his at-bat is unfinished — ESPN emits its Start marker with no End — so
+    # he leads off the next half himself. Real case in the same game: the top
+    # of the 3rd ended with Chourio caught stealing on Sánchez's 2-0 count.
+    summary = _due_up_summary(
+        _due_up_entries(1, 2, 3),
+        [("top", 3, "2", "End Batter/Pitcher"), ("top", 3, "3", "Start Batter/Pitcher")],
+    )
+    out = Coord._normalize_due_up(summary, {"period": 3, "period_prefix": "End 3rd"})
+    assert [p["id"] for p in out] == ["3", "4", "5"]
+
+
+def test_normalize_due_up_completed_at_bat_advances_a_slot():
+    # The contrast: identical half except slot 3's at-bat finished, so the
+    # anchor moves on to slot 4.
+    summary = _due_up_summary(
+        _due_up_entries(1, 2, 3),
+        [("top", 3, "2", "End Batter/Pitcher"), ("top", 3, "3", "End Batter/Pitcher")],
+    )
+    out = Coord._normalize_due_up(summary, {"period": 3, "period_prefix": "End 3rd"})
+    assert [p["id"] for p in out] == ["4", "5", "6"]
+
+
+def test_normalize_due_up_passes_through_without_an_inning_number():
+    summary = _due_up_summary(_due_up_entries(1, 2, 3), [("bottom", 6, "7")])
+    out = Coord._normalize_due_up(summary, {"period_prefix": "Middle 7th"})
+    assert [p["id"] for p in out] == ["1", "2", "3"]
+
+
+def test_normalize_due_up_empty_without_espn_due_up():
+    summary = _due_up_summary([], [("bottom", 6, "7")])
+    assert Coord._normalize_due_up(summary, {"period": 7, "period_prefix": "Middle 7th"}) == []
+
+
 def _two_way_pitcher_only_summary(athlete_id, name):
     """Box score where a two-way player has come up to bat but ESPN still
     lists him only in the pitching block (no batting line yet).
