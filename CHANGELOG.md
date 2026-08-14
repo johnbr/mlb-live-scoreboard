@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.26.1...v1.26.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* anchor Due Up to the batting order instead of trusting ESPN's list ([#97](https://github.com/johnbr/mlb-live-scoreboard/issues/97)) ([538148e](https://github.com/johnbr/mlb-live-scoreboard/commit/538148e4317498e464ac6ff856c6c5389c5624e0))
+
 ## [1.26.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.26.0...v1.26.1) (2026-08-12)
 
 
