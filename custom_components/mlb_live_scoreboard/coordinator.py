@@ -127,6 +127,16 @@ _PLAY_RESULT_PLAY_TYPES: frozenset[str] = frozenset(
     }
 )
 
+# The two at-bat boundary markers, in the spelling variants ESPN has used.
+# A half-inning whose last at-bat has a start marker but no end marker was cut
+# short by a third out on the bases — see ``_last_batter_of_half``.
+_START_BATTER_PLAY_TYPES: frozenset[str] = frozenset(
+    {"start batter/pitcher", "start batter pitcher", "start-batterpitcher"}
+)
+_END_BATTER_PLAY_TYPES: frozenset[str] = frozenset(
+    {"end batter/pitcher", "end batter pitcher", "end-batterpitcher"}
+)
+
 # Ordered list of (play-text keyword, abbreviation) used when classifying a
 # completed at-bat for the current batter's game outcomes.
 _BATTER_OUTCOME_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -737,7 +747,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 saw_pitch = True
                 continue
 
-            if play_type in {"start batter/pitcher", "start batter pitcher", "start-batterpitcher"}:
+            if play_type in _START_BATTER_PLAY_TYPES:
                 break
 
             # keep scanning past steals/advances/other non-terminal updates for same batter
@@ -1666,11 +1676,197 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             "strikeouts": strikeouts,
         }
 
+    @staticmethod
+    def _bat_order_and_team_block(summary: dict[str, Any], athlete_id: str) -> tuple[int, dict[str, Any] | None]:
+        """Return ``(batOrder, team_block)`` for ``athlete_id`` from the box score.
+
+        The team block is the caller's handle on the rest of that side's
+        batting order, so both are returned from the one scan.
+        """
+        if not athlete_id:
+            return 0, None
+        for team_block in (summary.get("boxscore") or {}).get("players") or []:
+            for stat_block in team_block.get("statistics") or []:
+                if stat_block.get("type") != "batting":
+                    continue
+                for athlete_entry in stat_block.get("athletes") or []:
+                    athlete = athlete_entry.get("athlete") or {}
+                    if str(athlete.get("id") or "") == athlete_id:
+                        return _safe_int(athlete_entry.get("batOrder")), team_block
+        return 0, None
+
+    @staticmethod
+    def _batting_slot_entry(team_block: dict[str, Any], bat_order: int) -> tuple[dict[str, Any], list[str]]:
+        """Return ``(athlete_entry, keys)`` for the player currently filling ``bat_order``.
+
+        When a slot has been double-filled by a substitution, ESPN keeps both
+        the starter and the sub at the same batOrder (starter listed first), so
+        the first match is the subbed-out player. Prefer the entry currently in
+        the game (active=True); fall back to the last candidate.
+        """
+        for stat_block in team_block.get("statistics") or []:
+            if stat_block.get("type") != "batting":
+                continue
+            keys = [str(k or "") for k in (stat_block.get("keys") or [])]
+            candidates = [
+                entry
+                for entry in (stat_block.get("athletes") or [])
+                if _safe_int(entry.get("batOrder")) == bat_order
+            ]
+            if not candidates:
+                continue
+            return next((e for e in candidates if e.get("active")), candidates[-1]), keys
+        return {}, []
+
+    @staticmethod
+    def _last_batter_of_half(summary: dict[str, Any], half: str, max_inning: int) -> tuple[str, bool]:
+        """Return ``(athlete_id, at_bat_completed)`` for the last plate appearance in ``half``.
+
+        ``half`` is ESPN's ``period.type`` casing-insensitively — "top" or
+        "bottom". Scans newest-first, so at a between-halves break this is the
+        last batter of that side's previous turn at the plate.
+
+        ``at_bat_completed`` is False when the half ended on the bases with
+        that batter still at the plate — a caught stealing or pickoff for the
+        third out. **That batter then leads off the next half with a fresh
+        count**, so the anchor is his own slot rather than the next one. Real
+        case in the same game: the top of the 3rd ended with Chourio caught
+        stealing on Sánchez's 2-0 count, and Sánchez opened the 4th. ESPN marks
+        such an at-bat by emitting its ``Start Batter/Pitcher`` with no
+        matching ``End Batter/Pitcher``; a payload carrying neither marker
+        reads as completed, which is the ordinary case.
+
+        ``max_inning`` bounds the scan to halves that have actually been
+        played. ESPN logs the break's roster moves into the *upcoming* half
+        (e.g. "Hall relieved Senzatela" lands in Bottom 7 while the top of the
+        7th is still the live half), so without the bound an announcement that
+        happened to name a batter would advance the anchor a slot too far.
+        Substitution plays carry no ``batter`` participant in the payloads
+        we've seen, but the bound makes that an observation we don't depend on.
+        """
+        plays = summary.get("plays") or []
+        if not isinstance(plays, list):
+            return "", True
+        target = half.strip().lower()
+        athlete_id = ""
+        completed = True
+        boundary_seen = False
+        for play in reversed(plays):
+            if not isinstance(play, dict):
+                continue
+            period = play.get("period") or {}
+            if str(period.get("type") or "").strip().lower() != target:
+                continue
+            inning = _safe_int(period.get("number"))
+            if not 0 < inning <= max_inning:
+                continue
+            if not boundary_seen:
+                play_type = str((play.get("type") or {}).get("text") or "").strip().lower()
+                if play_type in _END_BATTER_PLAY_TYPES:
+                    boundary_seen = True
+                elif play_type in _START_BATTER_PLAY_TYPES:
+                    completed, boundary_seen = False, True
+            if not athlete_id:
+                for participant in play.get("participants") or []:
+                    if str(participant.get("type") or "").strip().lower() != "batter":
+                        continue
+                    athlete_id = str(((participant.get("athlete") or {}).get("id")) or "")
+                    if athlete_id:
+                        break
+            if athlete_id and boundary_seen:
+                break
+        return athlete_id, completed
+
     @classmethod
-    def _normalize_due_up(cls, summary: dict[str, Any]) -> list[dict[str, Any]]:
+    def _due_up_in_batting_order(
+        cls, summary: dict[str, Any], raw: list[dict[str, Any]], inning_context: dict[str, Any] | None
+    ) -> list[dict[str, Any]]:
+        """Re-anchor ESPN's ``situation.dueUp`` to the slot that actually leads off next.
+
+        ESPN's list is **not reliably anchored at the true next batter**: when
+        the order wraps past the 9-hole it restarts at the top of the lineup
+        instead. Observed live 2026-08-13 (MIL @ LAD, event 401816515): the
+        bottom of the 6th ended on slot 7, so the bottom of the 7th was due to
+        open 8-9-1 (E. Hernández, Rortvedt, Ohtani) and did — but the panel
+        rendered 1-2-3 (Ohtani, Pages, Edman), i.e. two of the three names were
+        simply wrong. Breaks sampled at slots 5 and 7 that same game (no wrap)
+        were correct, so the failure tracks the wrap, not the game.
+
+        Everything needed to fix it is already in the payload we fetch each
+        tick, so recompute the anchor from the batting order and reorder
+        around it. Falls back to ESPN's list verbatim whenever the anchor
+        cannot be established, so a payload shape we don't recognise degrades
+        to the old behaviour rather than to an empty panel.
+        """
+        if not raw:
+            # Only ever *repair* a list ESPN sent. ESPN drops `dueUp` outside a
+            # break, and an empty list is load-bearing downstream: the card
+            # gates the panel on it, and the coordinator's stale-situation
+            # bridge reuses the prior snapshot when it comes back empty.
+            # Synthesizing one from the box score would put a Due Up panel on
+            # screen where ESPN publishes none.
+            return []
+
+        prefix = str((inning_context or {}).get("period_prefix") or "").strip().lower()
+        inning = _safe_int((inning_context or {}).get("period"))
+        if not inning:
+            return list(raw)
+        if prefix.startswith("mid"):
+            # Top half just ended -> the home side (bottom half) bats next, and
+            # last batted no later than the *previous* inning.
+            last_half, max_inning = "bottom", inning - 1
+        elif prefix.startswith("end"):
+            # Bottom half just ended -> the away side bats next in the top of
+            # the following inning; it last batted in the top of this one.
+            last_half, max_inning = "top", inning
+        else:
+            # Not a between-halves break; there is no "next half" to anchor to.
+            return list(raw)
+
+        reference_id, at_bat_completed = cls._last_batter_of_half(summary, last_half, max_inning)
+        if not reference_id:
+            # That side hasn't batted yet (first time through the order), so
+            # the top of the lineup — what ESPN already sent — is correct.
+            return list(raw)
+        last_slot, team_block = cls._bat_order_and_team_block(summary, reference_id)
+        if not last_slot or team_block is None:
+            return list(raw)
+
+        # A third out made on the bases leaves that batter's at-bat unfinished;
+        # he leads off the next half himself instead of yielding to the next slot.
+        anchor = (last_slot % BATTING_ORDER_SIZE) + 1 if at_bat_completed else last_slot
+
+        by_slot: dict[int, dict[str, Any]] = {}
+        for item in raw:
+            by_slot.setdefault(_safe_int(item.get("batOrder")), item)
+
+        ordered: list[dict[str, Any]] = []
+        for offset in range(DUE_UP_LIMIT):
+            slot = ((anchor - 1 + offset) % BATTING_ORDER_SIZE) + 1
+            item = by_slot.get(slot)
+            if item is None:
+                # ESPN didn't send this slot — resolve it from the box score.
+                entry, _keys = cls._batting_slot_entry(team_block, slot)
+                athlete_id = str(((entry.get("athlete") or {}).get("id")) or "")
+                if not athlete_id:
+                    return list(raw)
+                item = {"playerId": athlete_id, "batOrder": slot}
+            ordered.append(item)
+        return ordered
+
+    @classmethod
+    def _normalize_due_up(
+        cls, summary: dict[str, Any], inning_context: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         """Return the next ``DUE_UP_LIMIT`` batters scheduled to bat next half-inning."""
         situation = summary.get("situation") or {}
-        due_up = situation.get("dueUp") or []
+        raw = situation.get("dueUp") or []
+        due_up = cls._due_up_in_batting_order(summary, raw, inning_context)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            before = [_safe_int(i.get("batOrder")) for i in raw[:DUE_UP_LIMIT]]
+            after = [_safe_int(i.get("batOrder")) for i in due_up[:DUE_UP_LIMIT]]
+            if before != after:
+                _LOGGER.debug("Re-anchored ESPN dueUp batting order %s -> %s", before, after)
         result: list[dict[str, Any]] = []
         for item in due_up[:DUE_UP_LIMIT]:
             player_id = str(item.get("playerId") or item.get("id") or "")
@@ -2173,68 +2369,30 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if not batter_id:
             return {}
 
-        # Find current batter's batOrder in the boxscore
-        boxscore = summary.get("boxscore") or {}
-        current_bat_order = 0
-        batting_team_block = None
-
-        for team_block in boxscore.get("players") or []:
-            # Match by checking competitors in header or by position
-            for stat_block in team_block.get("statistics") or []:
-                if stat_block.get("type") != "batting":
-                    continue
-                for athlete_entry in stat_block.get("athletes") or []:
-                    athlete = athlete_entry.get("athlete") or {}
-                    if str(athlete.get("id") or "") == batter_id:
-                        current_bat_order = int(athlete_entry.get("batOrder") or 0)
-                        batting_team_block = team_block
-                        break
-                if batting_team_block:
-                    break
-            if batting_team_block:
-                break
-
-        if not current_bat_order or not batting_team_block:
+        current_bat_order, batting_team_block = cls._bat_order_and_team_block(summary, batter_id)
+        if not current_bat_order or batting_team_block is None:
             return {}
 
         # Calculate next batter in order (wrap 9 -> 1)
         next_bat_order = (current_bat_order % BATTING_ORDER_SIZE) + 1
+        athlete_entry, keys = cls._batting_slot_entry(batting_team_block, next_bat_order)
+        if not athlete_entry:
+            return {}
 
-        # Find the next batter. When a slot has been double-filled by a
-        # substitution, ESPN keeps both the starter and the sub at the same
-        # batOrder (starter listed first), so the first match is the
-        # subbed-out player. Prefer the entry currently in the game
-        # (active=True); fall back to the last candidate, then the first.
-        for stat_block in batting_team_block.get("statistics") or []:
-            if stat_block.get("type") != "batting":
-                continue
-            keys = [str(k or "") for k in (stat_block.get("keys") or [])]
-            candidates = [
-                entry
-                for entry in (stat_block.get("athletes") or [])
-                if int(entry.get("batOrder") or 0) == next_bat_order
-            ]
-            if not candidates:
-                continue
-            athlete_entry = next(
-                (e for e in candidates if e.get("active")),
-                candidates[-1],
-            )
-            athlete = athlete_entry.get("athlete") or {}
-            # Get stats for on-deck batter
-            h = cls._stat_from_entry(athlete_entry, keys, "h", "hits")
-            ab = cls._stat_from_entry(athlete_entry, keys, "ab", "atBats")
-            avg = cls._stat_from_entry(athlete_entry, keys, "avg", "battingAverage")
-            return {
-                "id": str(athlete.get("id") or ""),
-                "display_name": athlete.get("displayName") or athlete.get("shortName") or "",
-                "short_name": athlete.get("shortName") or athlete.get("displayName") or "",
-                "headshot": ((athlete.get("headshot") or {}).get("href") or ""),
-                "bat_order": next_bat_order,
-                "avg": avg,
-                "hits_ab": f"{h}-{ab}" if h and ab else "",
-            }
-        return {}
+        athlete = athlete_entry.get("athlete") or {}
+        # Get stats for on-deck batter
+        h = cls._stat_from_entry(athlete_entry, keys, "h", "hits")
+        ab = cls._stat_from_entry(athlete_entry, keys, "ab", "atBats")
+        avg = cls._stat_from_entry(athlete_entry, keys, "avg", "battingAverage")
+        return {
+            "id": str(athlete.get("id") or ""),
+            "display_name": athlete.get("displayName") or athlete.get("shortName") or "",
+            "short_name": athlete.get("shortName") or athlete.get("displayName") or "",
+            "headshot": ((athlete.get("headshot") or {}).get("href") or ""),
+            "bat_order": next_bat_order,
+            "avg": avg,
+            "hits_ab": f"{h}-{ab}" if h and ab else "",
+        }
 
     @classmethod
     def _normalize_lineups(cls, summary: dict[str, Any], batter_id: str) -> Lineups:
@@ -2568,7 +2726,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         plays = summary.get("plays") or []
         for play in reversed(plays):
             play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
-            if play_type not in {"start batter/pitcher", "start batter pitcher", "start-batterpitcher"}:
+            if play_type not in _START_BATTER_PLAY_TYPES:
                 continue
             for participant in play.get("participants") or []:
                 part_type = str(participant.get("type", "")).lower()
@@ -3122,7 +3280,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 self._between_halves_entered_at = None
                 self._third_out_batter_id = None
 
-            due_up = self._normalize_due_up(summary)
+            due_up = self._normalize_due_up(summary, inning_context)
             if stale_situation and not due_up and self.data and self.data.due_up:
                 # ESPN occasionally clears ``situation.dueUp`` before
                 # ``situation.batter`` updates — reuse the prior snapshot so the
@@ -3130,7 +3288,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 due_up = list(self.data.due_up)
         else:
             # Navigated games are finals/scheduled — no inning-rollover bridge.
-            due_up = self._normalize_due_up(summary)
+            due_up = self._normalize_due_up(summary, inning_context)
 
         # One pass over the summary plays serves the play-by-play list, the
         # third-out play, and the hold deadline. Previously each was normalized
