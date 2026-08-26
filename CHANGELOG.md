@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.26.2...v1.27.0) (2026-08-26)
+
+
+### Features
+
+* **card:** let headshots keep scaling on wide cards ([#99](https://github.com/johnbr/mlb-live-scoreboard/issues/99)) ([e80969d](https://github.com/johnbr/mlb-live-scoreboard/commit/e80969dc270769f57ba3ee9bdeb84429b28922a1))
+
 ## [1.26.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.26.1...v1.26.2) (2026-08-14)
 
 
