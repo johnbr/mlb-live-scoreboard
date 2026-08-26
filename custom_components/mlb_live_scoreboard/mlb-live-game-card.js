@@ -4060,9 +4060,19 @@ line-height: 1.25;
              chosen so a 400px-wide card lands near the historic 56px size
              (14% = 56), while wider cards grow and narrower cards shrink.
              The headshot-size-* preset rules below replace this clamp with
-             a fixed pixel value when the user opts out of auto. */
-          width: clamp(40px, 14cqi, 80px);
-          height: clamp(40px, 14cqi, 80px);
+             a fixed pixel value when the user opts out of auto.
+
+             The ceiling is deliberately high (128px, reached at a ~915px
+             card). It used to be 80px, which saturated at only ~570px — so
+             every dashboard wider than that rendered an identical 80px
+             circle and the "auto" scaling looked broken on wide views.
+             128px keeps the same headshot-to-card ratio a 400px card has. */
+          width: clamp(40px, 14cqi, 128px);
+          /* Square via aspect-ratio, never an explicit height: if the box is
+             ever shrunk by its container, a fixed height would not shrink
+             with it and border-radius:50% would render an ellipse. Same
+             lesson as .diamond-graphic below. */
+          aspect-ratio: 1 / 1;
           object-fit: cover;
           border-radius: 50%;
           /* 'flex: 0 0 auto' lets the box's own width (the clamp) act as
@@ -4307,7 +4317,14 @@ color: var(--secondary-text-color);
         }
 
         .matchup-grid.enhanced {
-          grid-template-columns: minmax(0,1fr) 56px minmax(0,1fr);
+          /* The center column holds the base diamond. It was a fixed 56px,
+             which silently capped the diamond on wide cards (its own clamp
+             could ask for more, then got flex-shrunk back down to 56 — the
+             root cause of the slanted-rhombus bug, see .diamond-graphic).
+             Now it scales on the same container query as everything else,
+             with a floor of 56px so narrow cards are byte-identical to
+             before (14cqi only exceeds 56px past a 400px card). */
+          grid-template-columns: minmax(0,1fr) clamp(56px, 14cqi, 100px) minmax(0,1fr);
           column-gap: 0;
           row-gap: 0;
           align-items:start;
@@ -4372,14 +4389,25 @@ color: var(--secondary-text-color);
           position: relative;
           /* Scales with the card's inline (width) size via the same 'cqi'
              container query used by the headshots — grows on wide
-             dashboards, clamps to a sane min/max on narrow ones. */
-          width: clamp(44px, 13cqi, 80px);
+             dashboards, clamps to a sane min/max on narrow ones. The ceiling
+             stays a little under the center column's own ceiling (100px) so
+             the diamond keeps its historic ~6px breathing room either side
+             instead of filling the column edge to edge. */
+          width: clamp(44px, 13cqi, 88px);
           /* Keep the box square via aspect-ratio rather than a fixed height.
-             The center grid column is a fixed 56px, so on wide dashboards the
-             clamp width (up to 80px) gets flex-shrunk to fit. A fixed height
-             would NOT shrink with it, leaving a tall rectangle — and the
-             rotate(45deg) below then renders it as a slanted rhombus. Deriving
-             height from the used width keeps it square at any shrink. */
+             The center grid column can be narrower than this clamp asks for,
+             so the flex item's width gets shrunk to fit while an explicit
+             height would NOT shrink with it — leaving a tall rectangle that
+             the rotate(45deg) below renders as a slanted rhombus. Deriving
+             height from the used width keeps it square at any shrink.
+
+             For the same reason every child below is sized in PERCENT, not
+             in 'cqi': percentages resolve against this box's *used* width
+             (post-shrink), whereas cqi would resolve against the card and
+             desynchronise from a shrunk parent — reintroducing the exact
+             bug this aspect-ratio exists to prevent. The percentages are the
+             old fixed pixel values over the old 56px reference box, so the
+             diamond's proportions are unchanged at every size. */
           aspect-ratio: 1 / 1;
           display:flex;
           align-items:center;
@@ -4387,7 +4415,7 @@ color: var(--secondary-text-color);
         }
         .diamond-field {
           position:absolute;
-          inset: 7px;
+          inset: 12.5%;   /* was 7px on a 56px box */
           border: 2px solid rgba(255,255,255,0.56);
           border-radius: 2px;
           transform: rotate(45deg);
@@ -4396,8 +4424,8 @@ color: var(--secondary-text-color);
         }
         .diamond-base {
           position:absolute;
-          width: 10px;
-          height: 10px;
+          width: 17.9%;   /* was 10px on a 56px box */
+          aspect-ratio: 1 / 1;
           background: rgba(255,255,255,0.24);
           border: 1px solid rgba(255,255,255,0.42);
           transform: rotate(45deg);
@@ -4409,14 +4437,17 @@ color: var(--secondary-text-color);
           border-color: rgba(255,255,255,0.70);
           box-shadow: 0 0 0 1px rgba(99,162,255,0.22);
         }
-        .diamond-base.home { bottom: 1px; left: 50%; margin-left: -5px; }
-        .diamond-base.first { top: 50%; right: 1px; margin-top: -5px; }
-        .diamond-base.second { top: 1px; left: 50%; margin-left: -5px; }
-        .diamond-base.third { top: 50%; left: 1px; margin-top: -5px; }
+        /* Percentage margins always resolve against the containing block's
+           WIDTH (true for margin-top too), which is what we want to re-centre
+           a percentage-width base on a square box: -8.95% is half of 17.9%. */
+        .diamond-base.home { bottom: 1.8%; left: 50%; margin-left: -8.95%; }
+        .diamond-base.first { top: 50%; right: 1.8%; margin-top: -8.95%; }
+        .diamond-base.second { top: 1.8%; left: 50%; margin-left: -8.95%; }
+        .diamond-base.third { top: 50%; left: 1.8%; margin-top: -8.95%; }
         .diamond-mound {
           position:absolute;
-          width: 6px;
-          height: 6px;
+          width: 10.7%;   /* was 6px on a 56px box */
+          aspect-ratio: 1 / 1;
           border-radius: 50%;
           background: rgba(255,255,255,0.48);
           left: 50%;
@@ -5050,8 +5081,8 @@ white-space: nowrap;
           /* Same auto-scale strategy as .player-shot, with a slightly larger
              ceiling because the probable-pitcher panel is dedicated to the
              portrait so it can afford more pixels on wide cards. */
-          width: clamp(44px, 16cqi, 88px);
-          height: clamp(44px, 16cqi, 88px);
+          width: clamp(44px, 16cqi, 144px);
+          aspect-ratio: 1 / 1;
           border-radius: 50%;
           object-fit: cover;
           background: var(--secondary-background-color, rgba(127,127,127,0.15));
@@ -5074,26 +5105,29 @@ white-space: nowrap;
            the top of this file. The presets are intentionally a short
            ladder (Small / Medium / Large / X-Large) rather than a free-form
            pixel input — easier to choose, and the auto clamp already covers
-           the in-between cases for most viewports. */
+           the in-between cases for most viewports.
+
+           Width only: the base rules carry 'aspect-ratio: 1 / 1', so height
+           follows automatically. Don't reintroduce an explicit height here —
+           that is what makes a shrunk box render as an ellipse. Note these
+           are fixed sizes, so on a wide card the auto clamp now grows past
+           even X-Large; that is intended, the presets exist to OPT OUT of
+           scaling rather than to cap it. */
         .wrapper.headshot-size-small .player-shot,
         .wrapper.headshot-size-small .upcoming-pitcher-img {
           width: 40px;
-          height: 40px;
         }
         .wrapper.headshot-size-medium .player-shot,
         .wrapper.headshot-size-medium .upcoming-pitcher-img {
           width: 56px;
-          height: 56px;
         }
         .wrapper.headshot-size-large .player-shot,
         .wrapper.headshot-size-large .upcoming-pitcher-img {
           width: 72px;
-          height: 72px;
         }
         .wrapper.headshot-size-xlarge .player-shot,
         .wrapper.headshot-size-xlarge .upcoming-pitcher-img {
           width: 88px;
-          height: 88px;
         }
         .upcoming-pitcher-name {
           font-weight: 600;
@@ -5142,8 +5176,11 @@ white-space: nowrap;
           text-align: center;
         }
         .decision-img {
-          width: 44px;
-          height: 44px;
+          /* W/L/SV portraits. These were pinned at 44px and never scaled at
+             all; 11cqi is 44px at a 400px card, so narrow cards render
+             exactly as before and only wider ones gain. */
+          width: clamp(44px, 11cqi, 88px);
+          aspect-ratio: 1 / 1;
           border-radius: 50%;
           object-fit: cover;
           background: rgba(255,255,255,0.04);
