@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.27.0...v1.28.0) (2026-08-27)
+
+
+### Features
+
+* **card:** mark the next batter in the lineup popup's Game view ([#101](https://github.com/johnbr/mlb-live-scoreboard/issues/101)) ([ce70d44](https://github.com/johnbr/mlb-live-scoreboard/commit/ce70d4416bca96093dbf9bfe46879810c757cbe2))
+
 ## [1.27.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.26.2...v1.27.0) (2026-08-26)
 
 
