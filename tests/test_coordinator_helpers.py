@@ -3060,3 +3060,188 @@ def test_user_agent_is_self_identifying():
     assert "(+https://github.com/johnbr/mlb-live-scoreboard)" in USER_AGENT
     # Version must be resolved from the manifest, not left at the fallback.
     assert INTEGRATION_VERSION != "0.0.0"
+
+
+# ---------------------------------------------------------------------------
+# _next_bat_order  (lineup-popup "up next" marker)
+# ---------------------------------------------------------------------------
+
+
+def _bat_block(prefix: str, *, active_slot_overrides: dict[int, bool] | None = None):
+    """A 9-man batting stat block whose athlete ids are f"{prefix}{slot}"."""
+    overrides = active_slot_overrides or {}
+    return {
+        "type": "batting",
+        "keys": ["atBats", "runs", "hits"],
+        "athletes": [
+            {
+                "athlete": {"id": f"{prefix}{slot}", "displayName": f"{prefix.upper()} {slot}"},
+                "batOrder": slot,
+                "active": overrides.get(slot, True),
+                "stats": ["1", "0", "0"],
+            }
+            for slot in range(1, 10)
+        ],
+    }
+
+
+def _nbo_summary(plays):
+    """Box score with away ids a1..a9 / home ids h1..h9, plus ``plays``."""
+    return {
+        "boxscore": {
+            "teams": [
+                {"team": {"id": "10"}, "homeAway": "away"},
+                {"team": {"id": "20"}, "homeAway": "home"},
+            ],
+            "players": [
+                {"team": {"id": "10", "abbreviation": "AWY"}, "statistics": [_bat_block("a")]},
+                {"team": {"id": "20", "abbreviation": "HOM"}, "statistics": [_bat_block("h")]},
+            ],
+        },
+        "plays": plays,
+    }
+
+
+def _batter_play(period, half, athlete_id, play_type="play result"):
+    return {
+        "id": f"{half}{period}-{athlete_id}",
+        "period": {"number": period, "type": half},
+        "type": {"text": play_type},
+        "participants": [{"type": "batter", "athlete": {"id": athlete_id}}],
+    }
+
+
+def test_next_bat_order_batting_side_is_on_deck():
+    # Away is at the plate in the top of the 3rd with slot 4 up -> slot 5 next.
+    summary = _nbo_summary([_batter_play(3, "Top", "a4")])
+    ctx = {"period": 3, "period_prefix": "Top 3"}
+    assert Coord._next_bat_order(summary, ctx, "away", "a4", True) == 5
+
+
+def test_next_bat_order_batting_side_wraps_past_nine():
+    summary = _nbo_summary([_batter_play(3, "Top", "a9")])
+    ctx = {"period": 3, "period_prefix": "Top 3"}
+    assert Coord._next_bat_order(summary, ctx, "away", "a9", True) == 1
+
+
+def test_next_bat_order_fielding_side_uses_its_own_last_half():
+    # Top 3 is live (away batting). The home side last batted in the bottom of
+    # the 2nd, ending on slot 6 -> it leads off the bottom of the 3rd with 7.
+    summary = _nbo_summary(
+        [
+            _batter_play(2, "Bottom", "h6"),
+            _batter_play(2, "Bottom", "h6", play_type="end batter/pitcher"),
+            _batter_play(3, "Top", "a4"),
+        ]
+    )
+    ctx = {"period": 3, "period_prefix": "Top 3"}
+    assert Coord._next_bat_order(summary, ctx, "home", "a4", False) == 7
+    # ...and the batting side is unaffected by the other team's plays.
+    assert Coord._next_bat_order(summary, ctx, "away", "a4", True) == 5
+
+
+def test_next_bat_order_fielding_side_third_out_on_the_bases():
+    # The bottom of the 2nd ended with h6 still at the plate (a start marker
+    # with no matching end marker = caught stealing / pickoff for the third
+    # out). He leads off the bottom of the 3rd himself rather than yielding.
+    summary = _nbo_summary(
+        [
+            _batter_play(2, "Bottom", "h6", play_type="start batter/pitcher"),
+            _batter_play(3, "Top", "a4"),
+        ]
+    )
+    ctx = {"period": 3, "period_prefix": "Top 3"}
+    assert Coord._next_bat_order(summary, ctx, "home", "a4", False) == 6
+
+
+def test_next_bat_order_home_has_not_batted_yet():
+    # Top of the 1st: the home side has no previous half to anchor to.
+    summary = _nbo_summary([_batter_play(1, "Top", "a2")])
+    ctx = {"period": 1, "period_prefix": "Top 1"}
+    assert Coord._next_bat_order(summary, ctx, "home", "a2", False) == 1
+
+
+def test_next_bat_order_mid_break_anchors_each_side_to_its_own_half():
+    # "Mid 7": the top of the 7th just ended. Away last batted top 7 (slot 3),
+    # home last batted bottom 6 (slot 8). Neither is at the plate.
+    summary = _nbo_summary(
+        [
+            _batter_play(6, "Bottom", "h8"),
+            _batter_play(6, "Bottom", "h8", play_type="end batter/pitcher"),
+            _batter_play(7, "Top", "a3"),
+            _batter_play(7, "Top", "a3", play_type="end batter/pitcher"),
+        ]
+    )
+    ctx = {"period": 7, "period_prefix": "Mid 7"}
+    assert Coord._next_bat_order(summary, ctx, "away", "", False) == 4
+    assert Coord._next_bat_order(summary, ctx, "home", "", False) == 9
+
+
+def test_next_bat_order_end_break_anchors_home_to_current_inning():
+    # "End 7": the bottom of the 7th is over, so the home side's most recent
+    # half is bottom 7 (not bottom 6) -- the away side is still anchored to
+    # top 7 either way.
+    summary = _nbo_summary(
+        [
+            _batter_play(7, "Top", "a3"),
+            _batter_play(7, "Top", "a3", play_type="end batter/pitcher"),
+            _batter_play(7, "Bottom", "h8"),
+            _batter_play(7, "Bottom", "h8", play_type="end batter/pitcher"),
+        ]
+    )
+    ctx = {"period": 7, "period_prefix": "End 7"}
+    assert Coord._next_bat_order(summary, ctx, "away", "", False) == 4
+    assert Coord._next_bat_order(summary, ctx, "home", "", False) == 9
+
+
+def test_next_bat_order_batting_side_between_at_bats():
+    # Away is batting but ESPN has dropped situation.batter for a tick. The
+    # fielding path still resolves the current half correctly (top 3, not the
+    # previous top) and reports the slot after the last completed at-bat.
+    summary = _nbo_summary(
+        [
+            _batter_play(3, "Top", "a4"),
+            _batter_play(3, "Top", "a4", play_type="end batter/pitcher"),
+        ]
+    )
+    ctx = {"period": 3, "period_prefix": "Top 3"}
+    assert Coord._next_bat_order(summary, ctx, "away", "", True) == 5
+
+
+def test_next_bat_order_unknown_inning_returns_zero():
+    summary = _nbo_summary([_batter_play(3, "Top", "a4")])
+    assert Coord._next_bat_order(summary, {"period": 0, "period_prefix": ""}, "away", "a4", True) == 0
+    assert Coord._next_bat_order(summary, {"period": 3}, "sideways", "a4", True) == 0
+
+
+def test_next_bat_order_batter_missing_from_boxscore_returns_zero():
+    summary = _nbo_summary([_batter_play(3, "Top", "a4")])
+    ctx = {"period": 3, "period_prefix": "Top 3"}
+    assert Coord._next_bat_order(summary, ctx, "away", "ghost", True) == 0
+
+
+def test_normalize_lineups_publishes_next_bat_order_for_both_sides():
+    summary = _nbo_summary(
+        [
+            _batter_play(2, "Bottom", "h6"),
+            _batter_play(2, "Bottom", "h6", play_type="end batter/pitcher"),
+            _batter_play(3, "Top", "a4"),
+        ]
+    )
+    ctx = {"period": 3, "period_prefix": "Top 3"}
+    lineups = Coord._normalize_lineups(summary, "a4", ctx, True)
+    assert lineups["away"]["is_batting"] is True
+    assert lineups["away"]["next_bat_order"] == 5
+    # The fielding side gets a marker too -- that is the point of the feature.
+    assert lineups["home"]["is_batting"] is False
+    assert lineups["home"]["next_bat_order"] == 7
+
+
+def test_normalize_lineups_suppresses_next_bat_order_when_not_live():
+    summary = _nbo_summary([_batter_play(3, "Top", "a4")])
+    ctx = {"period": 3, "period_prefix": "Top 3"}
+    lineups = Coord._normalize_lineups(summary, "a4", ctx, False)
+    assert lineups["away"]["next_bat_order"] == 0
+    assert lineups["home"]["next_bat_order"] == 0
+    # Default args (the pre-existing two-arg call shape) stay non-live.
+    assert Coord._normalize_lineups(summary, "a4")["away"]["next_bat_order"] == 0

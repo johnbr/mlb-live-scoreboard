@@ -365,6 +365,13 @@ class LineupTeam(TypedDict, total=False):
     box-score team whose batting block contains the current batter. It is
     ``False`` for both sides when there is no current batter (pre-game or a
     completed game).
+
+    ``next_bat_order`` is the batting-order slot (1-9) that comes to the
+    plate next for *this* side, set for the fielding team as well as the
+    batting one (see :meth:`_next_bat_order`). It is ``0`` when the game is
+    not live or the anchor could not be established; the card draws its
+    "up next" marker only on a non-zero slot. Note a slot can be filled by
+    two rows after a substitution — match the one with ``active`` set.
     """
 
     team_id: str
@@ -373,6 +380,7 @@ class LineupTeam(TypedDict, total=False):
     short_name: str
     logo: str
     is_batting: bool
+    next_bat_order: int
     hitters: list[LineupHitter]
     pitchers: list[LineupPitcher]
 

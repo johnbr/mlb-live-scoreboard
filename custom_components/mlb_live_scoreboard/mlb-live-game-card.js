@@ -984,6 +984,13 @@ function playerCardBodyHtml(card, headshotSrc) {
 // pre-sorted by the backend (batting order, starter before sub); a
 // subbed-out player (active === false) is dimmed so the table reads like a
 // box score listing everyone who appeared.
+//
+// In the Game view only, the hitter due to step to the plate next is flagged
+// with a small arrow. The backend supplies the slot as `team.next_bat_order`
+// for BOTH sides — for the team in the field it is the leadoff man of its
+// next half-inning — so the marker appears whether or not this team is
+// batting (see coordinator._next_bat_order). It is deliberately absent from
+// the Season view, where a live batting order has no meaning.
 function lineupTablesHtml(team, view, seasonStats) {
   const t = team && typeof team === "object" ? team : {};
   const hitters = Array.isArray(t.hitters) ? t.hitters : [];
@@ -1012,19 +1019,33 @@ function lineupTablesHtml(team, view, seasonStats) {
     `<th scope="col" class="mlb-lu-name">Hitter</th>` +
     hitCols.map((c) => `<th scope="col">${escapeHtml(c)}</th>`).join("") +
     `</tr>`;
+  // Slot coming to the plate next, or 0 for "no marker" (not live, anchor
+  // unresolved, or Season view). A substitution leaves two rows sharing one
+  // slot, so the marker also requires the row to be the one still in the
+  // game — otherwise it would land on the player who was lifted.
+  const nextSlot = isSeason ? 0 : Number(t.next_bat_order) || 0;
   const hitRows = hitters
     .map((h) => {
       const cls = h.active === false ? ' class="mlb-lu-out"' : "";
       const ord = h.bat_order ? String(h.bat_order) : "";
+      const isNext =
+        nextSlot > 0 && Number(h.bat_order) === nextSlot && h.active !== false;
       const s = (ss[String(h.id)] || {}).hitting || {};
       const cells = isSeason
         ? cell(pair(s.h, s.ab)) + [s.hr, s.rbi, s.sb, s.avg].map(cell).join("")
         : [h.ab, h.r, h.h, h.hr, h.rbi, h.bb, h.k, h.avg].map(cell).join("");
+      // The arrow lives in a fixed-width span present on EVERY row, so the
+      // names stay aligned in the column instead of the marked one jogging
+      // right. aria-hidden on the glyph + a visually-hidden phrase keeps it
+      // from being announced as punctuation.
+      const marker =
+        `<span class="mlb-lu-next" aria-hidden="true">${isNext ? "\u25B8" : ""}</span>` +
+        (isNext ? `<span class="mlb-lu-sr">Batting next: </span>` : "");
       return (
         `<tr${cls}>` +
         `<th scope="row" class="mlb-lu-num">${escapeHtml(ord)}</th>` +
         `<td class="mlb-lu-pos">${escapeHtml(h.position || "")}</td>` +
-        `<td class="mlb-lu-name">${escapeHtml(
+        `<td class="mlb-lu-name">${marker}${escapeHtml(
           shortPersonName(h.name || h.short_name || DASH),
         )}</td>` +
         cells +
@@ -2492,6 +2513,26 @@ class MlbLiveGameCard extends HTMLElement {
           text-align: left;
         }
         .mlb-lu-table td.mlb-lu-name { color: var(--primary-text-color, #e1e1e1); }
+        /* "Up next" arrow. Reserved on every hitter row (empty on all but
+           one) so the name column stays aligned. */
+        .mlb-lu-next {
+          display: inline-block;
+          width: 0.8em;
+          margin-right: 2px;
+          color: var(--accent-color, #f5c518);
+          font-size: 0.9em;
+          line-height: 1;
+        }
+        /* Visually hidden, still announced. */
+        .mlb-lu-sr {
+          position: absolute;
+          width: 1px; height: 1px;
+          margin: -1px; padding: 0; border: 0;
+          overflow: hidden;
+          clip: rect(0 0 0 0);
+          clip-path: inset(50%);
+          white-space: nowrap;
+        }
         .mlb-lu-table .mlb-lu-num { width: 1.5em; }
         .mlb-lu-table tr.mlb-lu-out td, .mlb-lu-table tr.mlb-lu-out th {
           opacity: 0.55;
