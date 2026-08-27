@@ -1855,6 +1855,70 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return ordered
 
     @classmethod
+    def _next_bat_order(
+        cls,
+        summary: dict[str, Any],
+        inning_context: dict[str, Any] | None,
+        side: str,
+        batter_id: str,
+        is_batting: bool,
+    ) -> int:
+        """Return the batting-order slot (1-9) that steps to the plate next for ``side``.
+
+        Answers the question for *either* side — batting or in the field — so
+        the lineup popup can mark "up next" on both teams:
+
+        * **Batting side** — the on-deck slot, i.e. the one after the batter
+          currently in the box. The man at the plate is batting *now*, not
+          next, so this is unconditionally ``current + 1``. (Deliberately not
+          routed through :meth:`_last_batter_of_half`, which would report the
+          in-progress at-bat itself as the anchor.)
+        * **Fielding side** — the slot leading off its next half-inning,
+          resolved from the last plate appearance of its own most recent
+          half. Reuses :meth:`_last_batter_of_half`, so it inherits the
+          caught-stealing/pickoff case: a half that ended on the bases leaves
+          that batter's at-bat unfinished and he leads off again himself
+          rather than yielding to the next slot.
+
+        The away side bats the top of every inning and the home side the
+        bottom, so "its own most recent half" is a pure function of the
+        status prefix: the top of inning N is under way or done in every
+        state we can be called in, while the bottom of N has only begun once
+        the prefix reads "Bottom"/"End".
+
+        Returns ``0`` when the anchor cannot be established (unrecognised
+        status, or a box score missing the reference batter), which the card
+        reads as "draw no marker".
+        """
+        inning = _safe_int((inning_context or {}).get("period"))
+        if not inning or side not in ("away", "home"):
+            return 0
+
+        if is_batting and batter_id:
+            current_slot, _team_block = cls._bat_order_and_team_block(summary, batter_id)
+            if not current_slot:
+                return 0
+            return (current_slot % BATTING_ORDER_SIZE) + 1
+
+        prefix = str((inning_context or {}).get("period_prefix") or "").strip().lower()
+        if side == "away":
+            side_half, max_inning = "top", inning
+        else:
+            side_half = "bottom"
+            max_inning = inning if prefix.startswith(("bot", "end")) else inning - 1
+        if max_inning < 1:
+            # That side has not come to bat yet; the lineup leads off.
+            return 1
+
+        reference_id, at_bat_completed = cls._last_batter_of_half(summary, side_half, max_inning)
+        if not reference_id:
+            return 1
+        last_slot, team_block = cls._bat_order_and_team_block(summary, reference_id)
+        if not last_slot or team_block is None:
+            return 0
+        return (last_slot % BATTING_ORDER_SIZE) + 1 if at_bat_completed else last_slot
+
+    @classmethod
     def _normalize_due_up(
         cls, summary: dict[str, Any], inning_context: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
@@ -2395,7 +2459,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         }
 
     @classmethod
-    def _normalize_lineups(cls, summary: dict[str, Any], batter_id: str) -> Lineups:
+    def _normalize_lineups(
+        cls,
+        summary: dict[str, Any],
+        batter_id: str,
+        inning_context: dict[str, Any] | None = None,
+        is_live: bool = False,
+    ) -> Lineups:
         """Flatten ``summary["boxscore"]`` into per-side Game-stat lineups.
 
         Pure transform of the box score the coordinator already fetches every
@@ -2468,13 +2538,19 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             # (ESPN already lists starter-before-sub within a shared slot).
             hitters.sort(key=lambda h: h.get("bat_order") or 99)
 
+            is_batting = bool(batting_team_id) and team_id == batting_team_id
             result[side] = {  # type: ignore[literal-required]
                 "team_id": team_id,
                 "abbreviation": str(team.get("abbreviation") or ""),
                 "name": str(team.get("displayName") or ""),
                 "short_name": str(team.get("name") or team.get("shortDisplayName") or ""),
                 "logo": str(team.get("logo") or ""),
-                "is_batting": bool(batting_team_id) and team_id == batting_team_id,
+                "is_batting": is_batting,
+                # Only meaningful while a game is under way — pre-game there is
+                # no half to anchor to, and post-final "next" has no referent.
+                "next_bat_order": (
+                    cls._next_bat_order(summary, inning_context, side, batter_id, is_batting) if is_live else 0
+                ),
                 "hitters": hitters,
                 "pitchers": pitchers,
             }
@@ -3357,7 +3433,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             third_out_play=third_out_play,
             third_out_hold_until=third_out_hold_until,
             on_deck=self._normalize_on_deck(summary, inning_context, batter_id),
-            lineups=self._normalize_lineups(summary, batter_id),
+            lineups=self._normalize_lineups(summary, batter_id, inning_context, is_live),
             leaders=self._normalize_leaders(summary),
             decisions=self._normalize_decisions(summary),
             division_standings=division_standings,
