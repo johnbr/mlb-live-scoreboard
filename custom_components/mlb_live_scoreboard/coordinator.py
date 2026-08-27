@@ -1855,7 +1855,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return ordered
 
     @classmethod
-    def _next_bat_order(
+    def _up_bat_order(
         cls,
         summary: dict[str, Any],
         inning_context: dict[str, Any] | None,
@@ -1863,22 +1863,28 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         batter_id: str,
         is_batting: bool,
     ) -> int:
-        """Return the batting-order slot (1-9) that steps to the plate next for ``side``.
+        """Return the batting-order slot (1-9) that is "up" for ``side``.
 
-        Answers the question for *either* side — batting or in the field — so
-        the lineup popup can mark "up next" on both teams:
+        "Up" in the baseball sense, which resolves differently per side and
+        lets the lineup popup mark both teams with one field:
 
-        * **Batting side** — the on-deck slot, i.e. the one after the batter
-          currently in the box. The man at the plate is batting *now*, not
-          next, so this is unconditionally ``current + 1``. (Deliberately not
-          routed through :meth:`_last_batter_of_half`, which would report the
-          in-progress at-bat itself as the anchor.)
-        * **Fielding side** — the slot leading off its next half-inning,
-          resolved from the last plate appearance of its own most recent
-          half. Reuses :meth:`_last_batter_of_half`, so it inherits the
-          caught-stealing/pickoff case: a half that ended on the bases leaves
-          that batter's at-bat unfinished and he leads off again himself
-          rather than yielding to the next slot.
+        * **Batting side** — the batter *at the plate right now*.
+        * **Fielding side** — nobody is up, so the slot that leads off its
+          next half-inning.
+
+        Both fall out of one rule: an at-bat still in progress points at that
+        batter, a completed one points at the slot after him. That is exactly
+        the ``at_bat_completed`` flag :meth:`_last_batter_of_half` already
+        returns, so this reuses it (and :meth:`_bat_order_and_team_block`)
+        rather than growing a second implementation of the batting order.
+        The reuse also inherits the caught-stealing/pickoff case those solved:
+        a half that ended on the bases leaves that batter's at-bat unfinished
+        and he leads off the next half himself rather than yielding.
+
+        ``situation.batter`` is authoritative for who is in the box, so the
+        batting side short-circuits to it and only falls back to the play
+        scan when ESPN drops the field for a tick — at which point the
+        general rule above lands on the right answer anyway.
 
         The away side bats the top of every inning and the home side the
         bottom, so "its own most recent half" is a pure function of the
@@ -1896,9 +1902,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         if is_batting and batter_id:
             current_slot, _team_block = cls._bat_order_and_team_block(summary, batter_id)
-            if not current_slot:
-                return 0
-            return (current_slot % BATTING_ORDER_SIZE) + 1
+            return current_slot or 0
 
         prefix = str((inning_context or {}).get("period_prefix") or "").strip().lower()
         if side == "away":
@@ -2547,9 +2551,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 "logo": str(team.get("logo") or ""),
                 "is_batting": is_batting,
                 # Only meaningful while a game is under way — pre-game there is
-                # no half to anchor to, and post-final "next" has no referent.
-                "next_bat_order": (
-                    cls._next_bat_order(summary, inning_context, side, batter_id, is_batting) if is_live else 0
+                # no half to anchor to, and post-final "up" has no referent.
+                "up_bat_order": (
+                    cls._up_bat_order(summary, inning_context, side, batter_id, is_batting) if is_live else 0
                 ),
                 "hitters": hitters,
                 "pitchers": pitchers,

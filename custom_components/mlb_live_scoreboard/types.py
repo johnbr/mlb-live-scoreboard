@@ -366,12 +366,14 @@ class LineupTeam(TypedDict, total=False):
     ``False`` for both sides when there is no current batter (pre-game or a
     completed game).
 
-    ``next_bat_order`` is the batting-order slot (1-9) that comes to the
-    plate next for *this* side, set for the fielding team as well as the
-    batting one (see :meth:`_next_bat_order`). It is ``0`` when the game is
-    not live or the anchor could not be established; the card draws its
-    "up next" marker only on a non-zero slot. Note a slot can be filled by
-    two rows after a substitution — match the one with ``active`` set.
+    ``up_bat_order`` is the batting-order slot (1-9) that is "up" for *this*
+    side — the batter at the plate while it is batting, otherwise the slot
+    leading off its next half-inning, so the fielding team carries one too
+    (see :meth:`_up_bat_order`). It is ``0`` when the game is not live or the
+    anchor could not be established; the card draws its marker only on a
+    non-zero slot. Note a slot can be filled by two rows after a substitution
+    — match the one with ``active`` set. ``is_batting`` discriminates the two
+    readings: when it is ``True`` the slot is the batter in the box.
     """
 
     team_id: str
@@ -380,7 +382,7 @@ class LineupTeam(TypedDict, total=False):
     short_name: str
     logo: str
     is_batting: bool
-    next_bat_order: int
+    up_bat_order: int
     hitters: list[LineupHitter]
     pitchers: list[LineupPitcher]
 
