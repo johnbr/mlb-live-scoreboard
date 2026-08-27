@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.28.0...v1.28.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **card:** point the lineup arrow at the batter in the box ([#103](https://github.com/johnbr/mlb-live-scoreboard/issues/103)) ([7eb00e2](https://github.com/johnbr/mlb-live-scoreboard/commit/7eb00e24201d4b11670f50249ae279c892461219))
+
 ## [1.28.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.27.0...v1.28.0) (2026-08-27)
 
 
