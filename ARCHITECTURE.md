@@ -170,7 +170,7 @@ toggle. The two views use deliberately opposite data routes:
 - **Game stats** ride the existing push flow. `coordinator._normalize_lineups`
   flattens the already-fetched `summary["boxscore"]` into a `lineups`
   sensor attribute (`{away, home}` → hitters/pitchers + `is_batting` +
-  `next_bat_order`). Zero
+  `up_bat_order`). Zero
   new ESPN calls; always fresh at the 5 s cadence. The card renders Game
   synchronously from the attribute.
 - **Season stats** are on-demand, lazy, and batched — only fetched when the
@@ -231,7 +231,7 @@ Top-level `extra_state_attributes` exposed on the sensor:
 | `due_up`                             | list[dict]   | up to `DUE_UP_LIMIT` next batters, **re-anchored to the batting order** — see below                                                                                                                                                             |
 | `third_out_play`                     | dict \| None | the play that produced the 3rd out (when ESPN flags it)                                                                                                                                                                                         |
 | `on_deck`                            | dict         | next batter info                                                                                                                                                                                                                                |
-| `lineups`                            | dict         | `{away, home}`, each: team meta + `is_batting`, `next_bat_order` (slot 1-9 due up next for *that* side, batting or fielding; `0` when not live), `hitters[]` (Game box-score line), `pitchers[]`; drives the team lineup popup's Game view      |
+| `lineups`                            | dict         | `{away, home}`, each: team meta + `is_batting`, `up_bat_order` (slot 1-9 that is "up" for *that* side — batter at the plate if batting, else its next half's leadoff; `0` when not live), `hitters[]` (Game box-score line), `pitchers[]`; drives the team lineup popup's Game view      |
 
 `competition` contains the fields the card reads:
 `competitors[]` (each with `team`, `score`, `homeAway`, `linescores`, totals),
