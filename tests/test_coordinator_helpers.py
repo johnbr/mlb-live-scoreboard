@@ -665,6 +665,141 @@ def test_normalize_on_deck_prefers_active_substitute_in_shared_slot():
 
 
 # ---------------------------------------------------------------------------
+# _advance_completed_at_bat — promoting the next hitter once ESPN resolves an
+# at-bat but before it clears `situation.batter`
+# ---------------------------------------------------------------------------
+
+_LIVE_TOP_1ST = {"period": 1, "period_prefix": "Top 1st", "is_between_halves": False}
+
+# Slot 1 is the batter `situation` names, slot 2 the hitter behind him.
+_AT_BAT_ORDER = (("10", "Tucker", 1, True), ("20", "Rortvedt", 2, True))
+
+
+def _at_bat_summary(plays, *athletes):
+    summary = _on_deck_summary(*(athletes or _AT_BAT_ORDER))
+    summary["plays"] = plays
+    return summary
+
+
+def _boundary_play(text, *, outs=None, batter_id=None, play_type="play result", play_id="r1"):
+    play = _make_play(period=1, half="top", text=text, play_type=play_type, outs=outs, play_id=play_id)
+    if batter_id:
+        play["participants"] = [{"type": "batter", "athlete": {"id": batter_id}}]
+    return play
+
+
+def test_advance_completed_at_bat_promotes_the_next_hitter():
+    # The bug this exists for: ESPN has published the flyout but still names
+    # Tucker in `situation.batter`, so the card showed him above his own out.
+    summary = _at_bat_summary([_boundary_play("Tucker flied out to left.", outs=1, batter_id="10")])
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("20", 1)
+
+
+def test_advance_completed_at_bat_matches_the_batter_by_name_without_participants():
+    summary = _at_bat_summary([_boundary_play("Tucker flied out to left.", outs=1)])
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("20", 1)
+
+
+def test_advance_completed_at_bat_walks_past_an_unattributed_end_marker():
+    summary = _at_bat_summary(
+        [
+            _boundary_play("Tucker flied out to left.", outs=1, batter_id="10", play_id="r1"),
+            _boundary_play("End of at bat", play_type="end batter/pitcher", play_id="r2"),
+        ]
+    )
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("20", 1)
+
+
+def test_advance_completed_at_bat_holds_on_the_third_out():
+    # A third out hands off to the Due Up panel, not to the next hitter.
+    summary = _at_bat_summary([_boundary_play("Tucker flied out to left.", outs=3, batter_id="10")])
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("10", None)
+
+
+def test_advance_completed_at_bat_holds_when_a_runner_made_the_third_out():
+    # Tucker's at-bat finished, then the runner behind him was thrown out to
+    # end the half — still nothing to promote.
+    summary = _at_bat_summary(
+        [
+            _boundary_play("Tucker singled to right.", outs=2, batter_id="10", play_id="r1"),
+            _boundary_play("Rortvedt caught stealing second.", outs=3, play_id="r2"),
+        ]
+    )
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("10", None)
+
+
+def test_advance_completed_at_bat_holds_when_the_situation_block_shows_three_outs():
+    # The play-level gate depends on ESPN populating `outs` on the play; when
+    # it doesn't, a situation block already showing three ends the half.
+    summary = _at_bat_summary([_boundary_play("Tucker flied out to left.", batter_id="10")])
+    summary["situation"] = {"outs": 3}
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("10", None)
+
+
+def test_advance_completed_at_bat_holds_mid_at_bat():
+    summary = _at_bat_summary(
+        [
+            _boundary_play("Tucker steps in", play_type="start batter/pitcher", batter_id="10", play_id="s1"),
+            _make_play(period=1, half="top", text="Pitch 1 : Ball", play_type="pitch", play_id="p1"),
+        ]
+    )
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("10", None)
+
+
+def test_advance_completed_at_bat_holds_when_the_result_names_someone_else():
+    # `situation.batter` is ahead of the play log rather than behind it.
+    summary = _at_bat_summary([_boundary_play("Rortvedt flied out to left.", outs=1, batter_id="20")])
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("10", None)
+
+
+def test_advance_completed_at_bat_holds_between_halves():
+    summary = _at_bat_summary([_boundary_play("Tucker flied out to left.", outs=1, batter_id="10")])
+    context = {"period": 1, "period_prefix": "Mid 1st", "is_between_halves": True}
+    assert Coord._advance_completed_at_bat(summary, context, "10") == ("10", None)
+
+
+def test_advance_completed_at_bat_ignores_other_half_innings():
+    summary = _at_bat_summary([_boundary_play("Tucker flied out to left.", outs=1, batter_id="10")])
+    context = {"period": 1, "period_prefix": "Bottom 1st", "is_between_halves": False}
+    assert Coord._advance_completed_at_bat(summary, context, "10") == ("10", None)
+
+
+def test_advance_completed_at_bat_trusts_espns_start_marker_over_the_order():
+    # ESPN opened the next at-bat for a hitter the batting order wouldn't
+    # produce (a pinch hitter, here slot-less id "99") — the marker wins.
+    summary = _at_bat_summary(
+        [
+            _boundary_play("Tucker flied out to left.", outs=1, batter_id="10", play_id="r1"),
+            _boundary_play("Pinch hitter steps in", play_type="start batter/pitcher", batter_id="99", play_id="s1"),
+        ]
+    )
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("99", 1)
+
+
+def test_advance_completed_at_bat_holds_without_the_next_slot_in_the_box_score():
+    summary = _at_bat_summary([_boundary_play("Tucker flied out to left.", outs=1, batter_id="10")], ("10", "Tucker", 1, True))
+    assert Coord._advance_completed_at_bat(summary, _LIVE_TOP_1ST, "10") == ("10", None)
+
+
+def test_normalize_current_batter_ignores_a_stale_situation_block():
+    # With the batter advanced past his finished at-bat, the situation block's
+    # name and headshot belong to the hitter who just made an out.
+    summary = _on_deck_summary(*_AT_BAT_ORDER)
+    summary["situation"] = {"batter": {"playerId": "10", "displayName": "Tucker", "shortName": "K. Tucker"}}
+    out = Coord._normalize_current_batter(summary, "20")
+    assert out["id"] == "20"
+    assert out["display_name"] == "Rortvedt"
+
+
+def test_normalize_current_batter_uses_the_situation_block_when_it_agrees():
+    summary = _on_deck_summary(*_AT_BAT_ORDER)
+    summary["situation"] = {"batter": {"playerId": "10", "displayName": "Kyle Tucker", "shortName": "K. Tucker"}}
+    out = Coord._normalize_current_batter(summary, "10")
+    assert out["display_name"] == "Kyle Tucker"
+    assert out["short_name"] == "K. Tucker"
+
+
+# ---------------------------------------------------------------------------
 # _normalize_due_up — re-anchoring ESPN's `situation.dueUp`
 # ---------------------------------------------------------------------------
 

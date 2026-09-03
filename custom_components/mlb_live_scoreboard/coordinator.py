@@ -1338,6 +1338,15 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
     def _normalize_current_batter(cls, summary: dict[str, Any], batter_id: str) -> dict[str, Any]:
         situation = summary.get("situation") or {}
         batter = situation.get("batter") or {}
+        situation_id = str(
+            batter.get("playerId") or batter.get("id") or ((batter.get("athlete") or {}).get("id")) or ""
+        )
+        if batter_id and situation_id and situation_id != batter_id:
+            # The caller resolved a different hitter than ESPN's situation
+            # block names — a finished at-bat it has not cleared yet, see
+            # `_advance_completed_at_bat`. The block's name and headshot
+            # belong to the retired batter, so fall through to the box score.
+            batter = {}
         athlete = batter.get("athlete") or cls._find_any_athlete(summary, batter_id)
         display_name = (
             batter.get("displayName")
@@ -2819,6 +2828,161 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return batter_id, pitcher_id
 
     @staticmethod
+    def _play_batter_ids(play: dict[str, Any]) -> list[str]:
+        """Return the athlete ids ESPN tags as the ``batter`` on ``play``."""
+        ids: list[str] = []
+        for participant in play.get("participants") or []:
+            if str(participant.get("type") or "").strip().lower() != "batter":
+                continue
+            athlete_id = str(((participant.get("athlete") or {}).get("id")) or "")
+            if athlete_id:
+                ids.append(athlete_id)
+        return ids
+
+    @classmethod
+    def _play_names_batter(cls, summary: dict[str, Any], play: dict[str, Any], batter_id: str) -> bool:
+        """Return True when ``play`` is ``batter_id``'s plate appearance.
+
+        Prefers ESPN's ``participants`` list; falls back to the leading-name
+        text match :meth:`_extract_batter_game_outcomes` already relies on for
+        the play types that carry no participants.
+        """
+        if not batter_id:
+            return False
+        ids = cls._play_batter_ids(play)
+        if ids:
+            return batter_id in ids
+        text = str(play.get("text") or "").strip().lower()
+        if not text:
+            return False
+        athlete = cls._find_any_athlete(summary, batter_id)
+        names = {
+            str(athlete.get("displayName") or "").strip().lower(),
+            str(athlete.get("shortName") or "").strip().lower(),
+            str(athlete.get("lastName") or "").strip().lower(),
+        }
+        return any(name and text.startswith(name) for name in names)
+
+    @classmethod
+    def _advance_completed_at_bat(
+        cls, summary: dict[str, Any], inning_context: dict[str, Any], batter_id: str
+    ) -> tuple[str, int | None]:
+        """Advance past an at-bat ESPN has resolved but not yet cleared.
+
+        ESPN publishes the terminating play into ``summary.plays`` seconds
+        before ``situation.batter`` rolls over, so without this the card
+        renders "Tucker" in the box above "Tucker flied out to left" in the
+        play-by-play. Both halves of the answer are already in the payload we
+        fetch each tick: the half's plays say the at-bat is over, and the box
+        score says who bats next — the same slot lookup
+        :meth:`_normalize_on_deck` uses, so the hitter promoted here is
+        exactly the one the card had on deck. When the play log has already
+        opened the next at-bat, its ``Start Batter/Pitcher`` marker names the
+        hitter outright and wins over the batting-order lookup — that path
+        also covers a pinch hitter the box score has yet to record.
+
+        Returns ``(batter_id, outs_after)`` — who to display, and the out
+        count the terminating play left behind (unchanged / ``None`` when
+        nothing was advanced).
+
+        Deliberately does **not** advance when the at-bat ended the half: a
+        third out hands off to the Due Up panel rather than to the next
+        hitter, and the between-halves bridge in :meth:`_assemble_game_data`
+        keys off ``situation.batter`` still naming the batter who made it.
+        Anything else it cannot establish with certainty — an unrecognised
+        half, a terminating play naming somebody else, a box score without
+        the next slot — leaves the batter as ESPN reported him.
+        """
+        plays = summary.get("plays") or []
+        if not batter_id or not isinstance(plays, list) or inning_context.get("is_between_halves"):
+            return batter_id, None
+        target_inning, target_half = cls._resolve_target_half(inning_context)
+        if not target_inning or not target_half:
+            return batter_id, None
+        # Belt and braces on the third out: the play-level check below is the
+        # primary gate, but it depends on ESPN populating `outs` on the play.
+        # When the situation block has already ticked over to three, the half
+        # is over whatever the play log says.
+        situation_outs = (summary.get("situation") or {}).get("outs")
+        if situation_outs not in (None, "") and _safe_int(situation_outs) >= 3:
+            return batter_id, None
+
+        outs_after: int | None = None
+        completed = False
+        # Set when ESPN has opened an at-bat for somebody other than the batter
+        # `situation` names — trusted only once this batter's own at-bat is
+        # seen ending behind it (see the start-marker branch below).
+        started_ids: list[str] | None = None
+        for play in reversed(plays):
+            if not isinstance(play, dict):
+                continue
+            period = play.get("period") or {}
+            if _safe_int(period.get("number")) != target_inning:
+                continue
+            if str(period.get("type") or "").strip().lower() != target_half:
+                continue
+
+            outs_raw = play.get("outs")
+            if outs_raw in (None, ""):
+                outs_raw = (play.get("result") or {}).get("outs")
+            if outs_raw not in (None, ""):
+                outs = _safe_int(outs_raw)
+                if outs >= 3:
+                    # The half is over — either this at-bat made the third out
+                    # or a runner was retired after it. Due Up owns that
+                    # handoff; promoting a hitter here would show a batter for
+                    # a half-inning that has already ended.
+                    return batter_id, None
+                if outs_after is None:
+                    outs_after = outs
+
+            play_type = str((play.get("type") or {}).get("text") or (play.get("type") or {}).get("type") or "").lower()
+            if play_type in _START_BATTER_PLAY_TYPES:
+                if started_ids is not None:
+                    # Two start markers with no at-bat ending between them —
+                    # not a shape we can reason about. Leave ESPN's batter be.
+                    return batter_id, None
+                ids = cls._play_batter_ids(play)
+                if not ids or batter_id in ids:
+                    # The newest boundary opens this batter's at-bat: he really
+                    # is in the box.
+                    return batter_id, None
+                # ESPN has opened an at-bat for the next hitter and named him
+                # outright, which beats a `situation.batter` that has not caught
+                # up — but only once we see this batter's at-bat end behind it.
+                started_ids = ids
+                continue
+            if play_type not in _END_BATTER_PLAY_TYPES and not (
+                play_type in {"play result", "play-result"}
+                and any(keyword in str(play.get("text") or "").lower() for keyword in _AT_BAT_END_KEYWORDS)
+            ):
+                continue
+            if cls._play_names_batter(summary, play, batter_id):
+                if started_ids is not None:
+                    return started_ids[0], outs_after
+                completed = True
+                break
+            if cls._play_batter_ids(play):
+                # A finished at-bat belonging to someone else: ESPN's situation
+                # block is ahead of (or out of step with) the play log, so
+                # there is nothing here to advance past.
+                return batter_id, None
+            # An unattributed boundary (ESPN's bare "End Batter/Pitcher"
+            # marker) — keep walking back to the named play result behind it.
+
+        if not completed:
+            return batter_id, None
+
+        current_slot, team_block = cls._bat_order_and_team_block(summary, batter_id)
+        if not current_slot or team_block is None:
+            return batter_id, None
+        entry, _keys = cls._batting_slot_entry(team_block, (current_slot % BATTING_ORDER_SIZE) + 1)
+        next_id = str(((entry.get("athlete") or {}).get("id")) or "")
+        if not next_id or next_id == batter_id:
+            return batter_id, None
+        return next_id, outs_after
+
+    @staticmethod
     def _resolve_status_info(display_comp: dict[str, Any] | None) -> tuple[str, bool, bool]:
         """Return (status_detail_text, is_live, is_delayed) for a competition."""
         status_type = ((display_comp or {}).get("status") or {}).get("type") or {}
@@ -3291,8 +3455,29 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             self._fetch_team_payload(home_id, "home"),
         )
 
+        # Computed once and reused — `_normalize_inning_context` is a pure
+        # function of (summary, display_comp), so previously calling it 5x per
+        # refresh was wasteful.
+        inning_context = self._normalize_inning_context(summary, display_comp)
+
         batter_id, pitcher_id = self._resolve_batter_pitcher_ids(summary)
         status_detail, is_live, is_delayed = self._resolve_status_info(display_comp)
+
+        # ESPN resolves an at-bat in `summary.plays` before it clears
+        # `situation.batter`, which put the retired batter in the box above
+        # his own result ("Tucker" over "Tucker flied out to left"). Advancing
+        # here rather than in the card keeps every batter-derived field — the
+        # at-bat stat line, on deck, the lineup popup's up-batter arrow — on
+        # the same hitter.
+        at_bat_handoff_outs: int | None = None
+        if is_live:
+            advanced_batter_id, at_bat_handoff_outs = self._advance_completed_at_bat(
+                summary, inning_context, batter_id
+            )
+            at_bat_advanced = advanced_batter_id != batter_id
+            batter_id = advanced_batter_id
+        else:
+            at_bat_advanced = False
 
         mode = "live" if live_id and display_id == live_id else ("previous" if display_id == prev_id else "next")
 
@@ -3316,10 +3501,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         team_name = self.team_abbr
         if schedule.get("team") and isinstance(schedule["team"], dict):
             team_name = str(schedule["team"].get("displayName") or schedule["team"].get("name") or self.team_abbr)
-
-        # Compute once and reuse — `_normalize_inning_context` is a pure function of
-        # (summary, display_comp), so previously calling it 5x per refresh was wasteful.
-        inning_context = self._normalize_inning_context(summary, display_comp)
 
         effective_between = False
         if live_bridge:
@@ -3387,6 +3568,16 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 max(third_out_hold_until, fallback_until) if third_out_hold_until is not None else fallback_until
             )
 
+        situation = self._normalize_situation(summary)
+        if at_bat_advanced:
+            # The promoted hitter is 0-0 by definition; the situation block
+            # still carries the finished at-bat's count. Its out total can lag
+            # the same way, and the terminating play states it outright.
+            situation["balls"] = 0
+            situation["strikes"] = 0
+            if at_bat_handoff_outs is not None:
+                situation["outs"] = at_bat_handoff_outs
+
         standings_payload, groups_payload = await asyncio.gather(self._get_standings(), self._get_groups())
         division_index = self._team_id_division_index(groups_payload)
         division_standings = self._normalize_standings(standings_payload, division_index, self.team_id)
@@ -3430,7 +3621,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             current_pitcher=self._normalize_current_pitcher(summary, pitcher_id),
             batter_stats=self._normalize_batter_stats(summary, batter_id, batter_season_stats, is_live=is_live),
             pitcher_stats=self._normalize_pitcher_stats(summary, pitcher_id, season_era=pitcher_season_era),
-            situation=self._normalize_situation(summary),
+            situation=situation,
             probable_pitchers=self._normalize_probable_pitchers(display_comp),
             win_probability=self._normalize_win_probability(summary),
             due_up=due_up,
