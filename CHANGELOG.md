@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.28.1...v1.28.2) (2026-09-03)
+
+
+### Bug Fixes
+
+* **card:** promote the next hitter once ESPN resolves the at-bat ([#105](https://github.com/johnbr/mlb-live-scoreboard/issues/105)) ([da8a2ff](https://github.com/johnbr/mlb-live-scoreboard/commit/da8a2ff4393c0ff5d4c48142e6f9ba73f52557d1))
+
 ## [1.28.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.28.0...v1.28.1) (2026-08-27)
 
 
