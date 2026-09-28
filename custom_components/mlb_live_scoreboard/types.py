@@ -401,6 +401,36 @@ class Lineups(TypedDict, total=False):
     home: LineupTeam
 
 
+class SeriesCompetitor(TypedDict, total=False):
+    """One team's standing in :class:`PostseasonSeries`."""
+
+    team_id: str
+    abbreviation: str
+    wins: int
+
+
+class PostseasonSeries(TypedDict, total=False):
+    """Shape of the ``series`` attribute: the displayed game's playoff series.
+
+    Empty (``{}``) outside the postseason. Sourced from the summary's
+    ``header.competitions[0].series`` entry of ``type == "playoff"`` (the
+    ``current`` entry is the season-long head-to-head, not the playoff
+    series). ``wins`` reflect the series entering the game while it is
+    scheduled or live, and include it once it is final. ``summary`` is the
+    card's ready-to-render line, e.g. ``"NLDS · Dodgers lead 2-0"``,
+    ``"NLDS · Series tied 1-1"`` or ``"World Series · Dodgers win 4-3"``.
+    ``leader_team_id`` is ``""`` while the series is tied.
+    """
+
+    round: str
+    game_number: int
+    best_of: int
+    completed: bool
+    leader_team_id: str
+    summary: str
+    competitors: list[SeriesCompetitor]
+
+
 class PlayerCardBio(TypedDict, total=False):
     """Bio header of a :class:`PlayerCard` (from the ESPN ``/athletes/{id}``
     endpoint's ``athlete`` object)."""
