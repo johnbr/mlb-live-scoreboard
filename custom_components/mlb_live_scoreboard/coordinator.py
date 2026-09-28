@@ -51,11 +51,14 @@ from .const import (
     SCAN_INTERVAL_NEAR_GAME_SECONDS,
     SCHEDULE_STALE_FALLBACK_SECONDS,
     SCHEDULE_TTL_SECONDS,
+    SEASON_TYPE_POSTSEASON,
+    SEASON_TYPE_REGULAR,
     SHOW_NEXT_AFTER_PREV_SECONDS,
     STANDINGS_STALE_FALLBACK_SECONDS,
     STANDINGS_TTL_SECONDS,
     STATUS_NAME_DELAYED,
     STATUS_NAME_IN_PROGRESS,
+    SUPPLEMENT_SCHEDULE_STALE_FALLBACK_SECONDS,
     TEAM_METADATA_TTL_SECONDS,
     TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS,
     TEAM_SEASON_STATS_TTL_SECONDS,
@@ -341,6 +344,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # short-lived fallback when ESPN's schedule endpoint has a transient
         # failure, so a one-poll hiccup doesn't blank the card.
         self._schedule_cache: tuple[float, dict[str, Any]] | None = None
+        # season_type -> (fetched_at_ts, payload) for the other season type's
+        # schedule, merged in around the regular-season/postseason boundary.
+        # See ``_supplement_season_type``.
+        self._supplement_schedule_cache: dict[int, tuple[float, dict[str, Any]]] = {}
         # (fetched_at_ts, payload) for the All-Star Game schedule endpoint.
         # Fetched year-round behind a day-long TTL so that on the one local
         # calendar day the game is played, every entry can display it in place
@@ -509,6 +516,22 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         )
 
     @staticmethod
+    def _event_time_valid(event: dict[str, Any] | None) -> bool | None:
+        """Return a schedule event's ``timeValid`` flag (None when absent).
+
+        ESPN sets it False on games whose start is a placeholder — e.g. an
+        unannounced postseason game stored at a fake ``04:00Z``.
+        """
+        if not event:
+            return None
+        value = event.get("timeValid")
+        if value is None:
+            comps = event.get("competitions") or []
+            if comps and isinstance(comps[0], dict):
+                value = comps[0].get("timeValid")
+        return value if isinstance(value, bool) else None
+
+    @staticmethod
     def _team_display_name(team: dict[str, Any]) -> str:
         """Return the team's display name, disambiguating the two All-Star squads.
 
@@ -528,7 +551,14 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
     def _compact_competition(
         display_comp: dict[str, Any] | None,
         records_map: dict[str, str] | None = None,
+        time_valid: bool | None = None,
     ) -> dict[str, Any] | None:
+        """Trim a competition to the fields the card reads.
+
+        ``time_valid`` comes from the schedule event: the summary header omits
+        ESPN's ``timeValid`` flag, which is False when ``date`` is only a
+        placeholder (a postseason game whose first pitch isn't set yet).
+        """
         if not display_comp:
             return None
         status = display_comp.get("status") or {}
@@ -576,6 +606,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return {
             "id": display_comp.get("id"),
             "date": display_comp.get("date"),
+            "timeValid": time_valid if time_valid is not None else display_comp.get("timeValid"),
             "status": {
                 "displayPeriod": status.get("displayPeriod"),
                 "period": status.get("period"),
@@ -2739,7 +2770,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         Logs failures at debug level. On failure, falls back to the last-known
         cached payload (even if expired) before returning ``{}``.
         """
-        if not team_id:
+        # Postseason placeholders ("TBD" until a prior round ends) carry
+        # negative ids like "-2" that ESPN can't resolve to a team.
+        if not team_id or not team_id.isdigit():
             return {}
         cached = self._team_payload_cache.get(team_id)
         now_ts = time.time()
@@ -3241,6 +3274,71 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 return cached_schedule[1]
             raise UpdateFailed(f"Unable to fetch schedule: {err}") from err
 
+    @staticmethod
+    def _supplement_season_type(schedule: dict[str, Any], now_ts: float) -> int | None:
+        """Return the season type to merge into ``schedule``, or None.
+
+        ESPN's team schedule serves one season type per request. Once the
+        regular season has no games left, the postseason lives only under
+        ``?seasontype=3`` — without it the card would sit on the last
+        regular-season final while the team is in the playoffs. Conversely,
+        if ESPN's default has already flipped to the postseason, pull the
+        regular season back in so schedule navigation can still page to it.
+        Mid-season (future regular-season games remain) nothing is merged.
+        """
+        season = schedule.get("requestedSeason") or schedule.get("season") or {}
+        try:
+            season_type = int(season.get("type") or 0)
+        except (TypeError, ValueError):
+            return None
+        if season_type == SEASON_TYPE_POSTSEASON:
+            return SEASON_TYPE_REGULAR
+        if season_type != SEASON_TYPE_REGULAR:
+            return None
+        for event in schedule.get("events") or []:
+            ts = _parse_iso_ts(event.get("date"))
+            if ts is not None and ts > now_ts:
+                return None
+        return SEASON_TYPE_POSTSEASON
+
+    async def _fetch_supplement_schedule(self, season_type: int) -> dict[str, Any] | None:
+        """Fetch this team's schedule for ``season_type``, TTL cached.
+
+        Best-effort like the All-Star fetch: a failure with no usable cache
+        returns None so the primary schedule still renders on its own.
+        """
+        now_ts = time.time()
+        cached = self._supplement_schedule_cache.get(season_type)
+        if cached is not None and (now_ts - cached[0]) < SCHEDULE_TTL_SECONDS:
+            return cached[1]
+        url = (
+            f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{self.team_abbr.lower()}/schedule"
+            f"?seasontype={season_type}"
+        )
+        try:
+            payload = await self._get_json(url)
+        except Exception as err:
+            _LOGGER.debug("Season-type %s schedule fetch failed: %s", season_type, err)
+            if cached is not None and (now_ts - cached[0]) < SUPPLEMENT_SCHEDULE_STALE_FALLBACK_SECONDS:
+                return cached[1]
+            return None
+        self._supplement_schedule_cache[season_type] = (now_ts, payload)
+        return payload
+
+    @staticmethod
+    def _merge_schedule_events(
+        events: list[dict[str, Any]], extra: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Merge two season types' events into one chronological list.
+
+        Deduplicates by event id (the primary list wins) and sorts by start
+        time, since ``_select_event`` relies on chronological order to bin
+        previous / next games.
+        """
+        seen = {str(e.get("id")) for e in events if e.get("id") is not None}
+        merged = list(events) + [e for e in extra if str(e.get("id")) not in seen]
+        return sorted(merged, key=lambda e: _parse_iso_ts(e.get("date")) or 0.0)
+
     def _local_now(self) -> datetime:
         """Return a timezone-aware 'now' in the Home Assistant local time zone.
 
@@ -3325,7 +3423,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if override is not None:
             return override
         schedule = await self._fetch_schedule()
-        return schedule, (schedule.get("events") or [])
+        events = schedule.get("events") or []
+        supplement_type = self._supplement_season_type(schedule, time.time())
+        if supplement_type is not None:
+            supplement = await self._fetch_supplement_schedule(supplement_type)
+            if supplement and supplement.get("events"):
+                events = self._merge_schedule_events(events, supplement["events"])
+        return schedule, events
 
     async def async_get_game_at_offset(self, offset: int) -> dict[str, Any] | None:
         """Return a neighboring game's full card payload for schedule navigation.
@@ -3610,7 +3714,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             live_event_id=live_id,
             previous_event_id=prev_id,
             next_event_id=next_id,
-            selected_competition=self._compact_competition(display_comp, records_map),
+            selected_competition=self._compact_competition(
+                display_comp, records_map, time_valid=self._event_time_valid(display_event)
+            ),
             inning_context=inning_context,
             recent_plays=recent_plays,
             scoring_plays=self._normalize_scoring_plays(summary),
@@ -3655,7 +3761,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         now_ts = time.time()
         for event in events:
             start_ts = _parse_iso_ts(event.get("date"))
-            if start_ts is None:
+            # A placeholder start (time not yet announced) says nothing about
+            # when the game is near; the idle cadence still catches it going live.
+            if start_ts is None or self._event_time_valid(event) is False:
                 continue
             if start_ts - NEAR_GAME_LEAD_SECONDS <= now_ts <= start_ts + NEAR_GAME_LAG_SECONDS:
                 return timedelta(seconds=SCAN_INTERVAL_NEAR_GAME_SECONDS)

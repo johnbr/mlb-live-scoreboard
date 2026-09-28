@@ -478,7 +478,15 @@ function lineupSideForRole(attrs, role) {
   return "";
 }
 
-function formatEventDate(dateRaw) {
+// ESPN parks a game whose first pitch isn't announced yet (timeValid: false)
+// at a placeholder instant — 04:00Z, i.e. midnight Eastern — so its *UTC*
+// calendar day is the real game day, while the local conversion lands on the
+// evening before for anyone west of Eastern. Returns local midnight of that day.
+function placeholderLocalDay(dt) {
+  return new Date(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
+}
+
+function formatEventDate(dateRaw, timeValid = true) {
   if (!dateRaw) return "";
   const dt = new Date(dateRaw);
   if (Number.isNaN(dt.getTime())) return "";
@@ -488,16 +496,21 @@ function formatEventDate(dateRaw) {
     now.getMonth(),
     now.getDate(),
   );
-  const startOfTarget = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  const tbd = timeValid === false;
+  const startOfTarget = tbd
+    ? placeholderLocalDay(dt)
+    : new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
   const dayDiff = Math.round((startOfTarget - startOfToday) / 86400000);
-  const timeText = dt.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const timeText = tbd
+    ? "Time TBD"
+    : dt.toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      });
   if (dayDiff === 0) return `Today ${timeText}`;
   if (dayDiff === 1) return `Tomorrow ${timeText}`;
   if (dayDiff === -1) return `Yesterday ${timeText}`;
-  const dateText = dt.toLocaleDateString([], {
+  const dateText = startOfTarget.toLocaleDateString([], {
     month: "numeric",
     day: "numeric",
   });
@@ -520,7 +533,7 @@ function deriveGameState(attrs) {
       "",
   ).trim();
   const eventDate = get(competition, ["date"], "");
-  const scheduledText = formatEventDate(eventDate);
+  const scheduledText = formatEventDate(eventDate, competition?.timeValid);
   // ESPN uses several status flavors for an interrupted live game
   // (STATUS_DELAYED, STATUS_RAIN_DELAY, STATUS_SUSPENDED, ...) and several
   // detail strings ("Delayed", "Rain Delay", "Weather Delay", "Delay: Rain").
@@ -3753,7 +3766,7 @@ class MlbLiveGameCard extends HTMLElement {
     }
   }
 
-  formatCompactDateTime(dateValue) {
+  formatCompactDateTime(dateValue, timeValid = true) {
     const d = dateValue ? new Date(dateValue) : null;
     if (!d || Number.isNaN(d.getTime()))
       return { date: "", time: "", isToday: false };
@@ -3763,17 +3776,22 @@ class MlbLiveGameCard extends HTMLElement {
       now.getMonth(),
       now.getDate(),
     );
-    const startOfTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const tbd = timeValid === false;
+    const startOfTarget = tbd
+      ? placeholderLocalDay(d)
+      : new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const isToday = startOfTarget.getTime() === startOfToday.getTime();
     const dayDiff = Math.round((startOfTarget - startOfToday) / 86400000);
     const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const dateText =
       dayDiff > 0 && dayDiff <= 7
-        ? DAY_ABBR[d.getDay()]
-        : `${d.getMonth() + 1}/${d.getDate()}`;
+        ? DAY_ABBR[startOfTarget.getDay()]
+        : `${startOfTarget.getMonth() + 1}/${startOfTarget.getDate()}`;
     return {
       date: dateText,
-      time: d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      time: tbd
+        ? "TBD"
+        : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       isToday,
     };
   }
@@ -3801,6 +3819,7 @@ class MlbLiveGameCard extends HTMLElement {
       awayTeam?.abbreviation || awayMeta?.abbreviation,
       homeTeam?.abbreviation || homeMeta?.abbreviation,
       competition?.date,
+      competition?.timeValid,
       awayScore.text,
       homeScore.text,
       awayRecord,
@@ -3814,7 +3833,10 @@ class MlbLiveGameCard extends HTMLElement {
     }
     this._lastCompactFp = compactFp;
 
-    const when = this.formatCompactDateTime(competition?.date);
+    const when = this.formatCompactDateTime(
+      competition?.date,
+      competition?.timeValid,
+    );
     const awayLogo = requestCachedLogo(
       this,
       awayTeam?.logo ||

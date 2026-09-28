@@ -114,6 +114,17 @@ SCHEDULE_TTL_SECONDS = 30 * 60
 # coordinator raise UpdateFailed so the sensor goes unavailable.
 SCHEDULE_STALE_FALLBACK_SECONDS = 5 * 60
 
+# ESPN season types. The team schedule endpoint only returns ONE season type per
+# request (its default is whatever ESPN considers current), so postseason games
+# are invisible to the default fetch until ESPN flips it — and once it does, the
+# regular season drops out instead. ``_supplement_season_type`` decides when to
+# fetch the other half and merge it in. The supplement is best-effort, so its
+# stale fallback is long: losing it mid-October would snap the card back to the
+# last regular-season game.
+SEASON_TYPE_REGULAR = 2
+SEASON_TYPE_POSTSEASON = 3
+SUPPLEMENT_SCHEDULE_STALE_FALLBACK_SECONDS = 6 * 60 * 60
+
 # The All-Star Game is auto-displayed by every entry on the local calendar day
 # it's played (no club plays that day), regardless of which team the entry
 # follows. ``teams/al/schedule`` returns just the single mid-July All-Star
