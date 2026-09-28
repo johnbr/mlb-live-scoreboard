@@ -418,7 +418,8 @@ class PostseasonSeries(TypedDict, total=False):
     series). ``wins`` reflect the series entering the game while it is
     scheduled or live, and include it once it is final. ``summary`` is the
     card's ready-to-render line, e.g. ``"NLDS · Dodgers lead 2-0"``,
-    ``"NLDS · Series tied 1-1"`` or ``"World Series · Dodgers win 4-3"``.
+    ``"NLDS · Series tied 1-1"`` or ``"World Series · Dodgers win 4-3"`` —
+    or ``"NLDS · Game 1"`` before any game of the series has been played.
     ``leader_team_id`` is ``""`` while the series is tied.
     """
 
