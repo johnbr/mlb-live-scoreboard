@@ -1401,6 +1401,75 @@ function renderGameLeadersPanel(attrs, awayMeta, homeMeta) {
       </div>`;
 }
 
+// "Sat 10/4" (or "Today") for the playoff panel heading. `isoDay` is the
+// backend's Eastern schedule date ("2025-10-04"), read as a plain calendar day.
+function formatScoreboardDay(isoDay) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(isoDay || ""));
+  if (!m) return "";
+  const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const now = new Date();
+  if (
+    day.getFullYear() === now.getFullYear() &&
+    day.getMonth() === now.getMonth() &&
+    day.getDate() === now.getDate()
+  )
+    return "Today";
+  const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return `${DAY_ABBR[day.getDay()]} ${day.getMonth() + 1}/${day.getDate()}`;
+}
+
+// Status column for one playoff game: the local start time before first pitch
+// (ESPN's own pre-game detail is pinned to Eastern), otherwise ESPN's short
+// status ("Top 6th", "Final/11", "Postponed").
+function playoffGameStatus(game) {
+  if (String(game?.state || "") === "pre") {
+    if (game?.time_valid === false) return "TBD";
+    const dt = new Date(game?.date || "");
+    if (!Number.isNaN(dt.getTime()))
+      return dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  return String(game?.detail || "");
+}
+
+// Postseason replacement for the division standings in the expand panel:
+// every playoff game on the displayed game's date with its score, status and
+// series standing. The card's own game is highlighted.
+function renderPlayoffScoreboardPanel(card, attrs) {
+  const board = attrs?.playoff_scoreboard || {};
+  const games = Array.isArray(board.games) ? board.games : [];
+  if (!games.length) return "";
+  const day = formatScoreboardDay(board.date);
+  const heading = day === "Today" ? "Today's playoff games" : `Playoff games${day ? ` · ${day}` : ""}`;
+  const side = (team, state) => {
+    const logo = requestCachedLogo(card, team?.logo || "");
+    const decided = state === "post";
+    const cls = decided ? (team?.winner ? " winner" : " loser") : "";
+    return `
+      <span class="playoff-sb-team${cls}">${logo ? `<img class="playoff-sb-logo" src="${logo}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<span class="playoff-sb-logo placeholder"></span>`}<span class="playoff-sb-abbr">${escapeHtml(team?.abbreviation || "TBD")}</span></span>
+      <span class="playoff-sb-score${cls}">${state === "pre" ? "" : escapeHtml(team?.score ?? "")}</span>`;
+  };
+  const rows = games
+    .map((game) => {
+      const state = String(game?.state || "");
+      return `
+      <div class="playoff-sb-game${game?.is_displayed ? " is-displayed" : ""}">
+        <div class="playoff-sb-line">
+          ${side(game?.away, state)}
+          <span class="playoff-sb-at">@</span>
+          ${side(game?.home, state)}
+          <span class="playoff-sb-status${state === "in" ? " live" : ""}">${escapeHtml(playoffGameStatus(game))}</span>
+        </div>
+        ${game?.series_summary ? `<div class="playoff-sb-series">${escapeHtml(game.series_summary)}</div>` : ""}
+      </div>`;
+    })
+    .join("");
+  return `
+    <div class="upcoming-standings playoff-sb">
+      <div class="standings-heading">${escapeHtml(heading)}</div>
+      ${rows}
+    </div>`;
+}
+
 function renderUpcomingDetails(
   card,
   attrs,
@@ -1463,7 +1532,13 @@ function renderUpcomingDetails(
     displayId !== "" && displayId === String(attrs?.previous_event_id || "");
   const showStandings = kind !== "final" || isMostRecentFinal;
   let standingsHtml = "";
-  if (entries.length && showStandings) {
+  if (isPostseasonGame(attrs)) {
+    // Division standings are a regular-season table; in October the slot
+    // shows every playoff game on this game's date instead. That list is
+    // date-specific (not "today's table"), so it's accurate on any final,
+    // including older ones reached via schedule navigation.
+    standingsHtml = renderPlayoffScoreboardPanel(card, attrs);
+  } else if (entries.length && showStandings) {
     const rows = entries
       .map((entry) => {
         const isMyTeam =
@@ -2010,6 +2085,13 @@ class MlbLiveGameCard extends HTMLElement {
       leadersFp,
       // Highlights URL pops in 30-90 min post-final; repaint when it appears.
       attrs?.highlights_url || "",
+      // Postseason playoff-games panel: other games' scores/status move.
+      (attrs?.playoff_scoreboard?.games || [])
+        .map(
+          (g) =>
+            `${g.id}:${g.state}:${g.detail}:${g.away?.score ?? ""}-${g.home?.score ?? ""}:${g.series_summary || ""}`,
+        )
+        .join(","),
     ].join("|");
   }
 
@@ -5450,6 +5532,70 @@ white-space: nowrap;
         .standings-gb {
           text-align: right;
           font-variant-numeric: tabular-nums;
+        }
+        .playoff-sb { gap: 4px; }
+        .playoff-sb-game {
+          padding: 3px 6px;
+          border-radius: 6px;
+        }
+        .playoff-sb-game.is-displayed {
+          background: rgba(127, 127, 127, 0.16);
+        }
+        .playoff-sb-line {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 22px 14px minmax(0, 1fr) 22px minmax(56px, auto);
+          align-items: center;
+          gap: 4px;
+          font-size: 0.9em;
+          line-height: 1.25;
+        }
+        .playoff-sb-team {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          min-width: 0;
+          white-space: nowrap;
+          overflow: hidden;
+        }
+        .playoff-sb-logo {
+          width: 18px;
+          height: 18px;
+          object-fit: contain;
+          flex: 0 0 auto;
+        }
+        .playoff-sb-logo.placeholder {
+          display: inline-block;
+          border-radius: 50%;
+          background: rgba(127, 127, 127, 0.3);
+        }
+        .playoff-sb-score {
+          text-align: right;
+          font-variant-numeric: tabular-nums;
+          font-weight: 600;
+        }
+        .playoff-sb-team.winner,
+        .playoff-sb-score.winner { font-weight: 700; }
+        .playoff-sb-team.loser,
+        .playoff-sb-score.loser { opacity: 0.6; }
+        .playoff-sb-at {
+          text-align: center;
+          opacity: 0.5;
+          font-size: 0.85em;
+        }
+        .playoff-sb-status {
+          text-align: right;
+          white-space: nowrap;
+          font-size: 0.88em;
+          color: var(--secondary-text-color);
+        }
+        .playoff-sb-status.live {
+          color: var(--primary-color, #03a9f4);
+          font-weight: 600;
+        }
+        .playoff-sb-series {
+          font-size: 0.78em;
+          color: var(--secondary-text-color);
+          margin-top: 1px;
         }
 `;
 

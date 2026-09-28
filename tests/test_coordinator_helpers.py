@@ -1759,6 +1759,7 @@ def _make_data(
         division_standings={"division_name": "", "entries": []},
         highlights_url="",
         series={},
+        playoff_scoreboard={},
         mode="live" if is_live else "previous",
         status_text="Top 5th",
         is_live=is_live,
@@ -3719,3 +3720,163 @@ def test_normalize_series_empty_outside_postseason():
     assert Coord._normalize_series({}, None) == {}
     # Postseason header without a playoff entry or a round -> nothing to say.
     assert Coord._normalize_series(_series_summary(""), _series_comp(_LAD)) == {}
+
+
+# ---------------------------------------------------------------------------
+# Postseason playoff-games panel (league scoreboard)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_game_note_variants():
+    assert Coord._parse_game_note("NLDS - Game 3") == ("NLDS", 3)
+    assert Coord._parse_game_note("World Series - Game 7") == ("World Series", 7)
+    assert Coord._parse_game_note("ALWC - Game 3 If Necessary") == ("ALWC", 3)
+    assert Coord._parse_game_note("Something else") == ("Something else", 0)
+    assert Coord._parse_game_note(None) == ("", 0)
+
+
+def test_scoreboard_date_key_uses_eastern_day():
+    # 8 PM EDT first pitch is stored as the next day's 00:00Z.
+    assert Coord._scoreboard_date_key("2026-09-30T00:00Z") == "20260929"
+    # timeValid:false placeholder (midnight Eastern) keeps its intended day.
+    assert Coord._scoreboard_date_key("2026-10-03T04:00Z") == "20261003"
+    assert Coord._scoreboard_date_key("2026-09-29T18:00Z") == "20260929"
+    assert Coord._scoreboard_date_key("") == ""
+
+
+def _sb_event(eid, *, away, home, state="post", detail="Final", note="NLDS - Game 1",
+              wins=None, season_type=3, date="2025-10-04T18:08Z", time_valid=True):
+    def side(team, home_away):
+        tid, abbr, name, score, winner = team
+        return {
+            "homeAway": home_away,
+            "score": score,
+            "winner": winner,
+            "team": {"id": tid, "abbreviation": abbr, "shortDisplayName": name, "name": name,
+                     "logo": f"https://x/{abbr.lower()}.png"},
+        }
+
+    comp = {
+        "status": {"type": {"state": state, "shortDetail": detail}},
+        "notes": [{"type": "event", "headline": note}],
+        "competitors": [side(home, "home"), side(away, "away")],
+        "timeValid": time_valid,
+    }
+    if wins is not None:
+        comp["series"] = {
+            "type": "playoff",
+            "summary": "ESPN text",
+            "totalCompetitions": 5,
+            "competitors": [{"id": tid, "wins": w} for tid, w in wins.items()],
+        }
+    return {"id": eid, "date": date, "season": {"type": season_type}, "competitions": [comp]}
+
+
+def test_normalize_playoff_scoreboard_builds_rows_and_skips_regular_season():
+    payload = {
+        "events": [
+            _sb_event("E1", away=("16", "CHC", "Cubs", "3", False), home=("8", "MIL", "Brewers", "9", True),
+                      wins={"8": 1, "16": 0}),
+            _sb_event("E2", away=("19", "LAD", "Dodgers", "5", True), home=("22", "PHI", "Phillies", "3", False),
+                      wins={"22": 0, "19": 1}, detail="Final/11"),
+            _sb_event("REG", away=("1", "BAL", "Orioles", "1", False), home=("2", "BOS", "Red Sox", "2", True),
+                      season_type=2),
+        ]
+    }
+    board = Coord._normalize_playoff_scoreboard(payload, "20251004", "E2")
+    assert board["date"] == "2025-10-04"
+    assert [g["id"] for g in board["games"]] == ["E1", "E2"]
+    first, second = board["games"]
+    assert first["series_summary"] == "NLDS · Brewers lead 1-0"
+    assert first["is_displayed"] is False
+    assert first["away"] == {"id": "16", "abbreviation": "CHC", "name": "Cubs", "logo": "https://x/chc.png",
+                             "score": "3", "winner": False}
+    assert first["home"]["winner"] is True
+    assert (first["round"], first["game_number"], first["state"], first["detail"]) == ("NLDS", 1, "post", "Final")
+    assert second["is_displayed"] is True
+    assert second["detail"] == "Final/11"
+    assert second["series_summary"] == "NLDS · Dodgers lead 1-0"
+
+
+def test_normalize_playoff_scoreboard_pregame_and_placeholder_time():
+    payload = {
+        "events": [
+            _sb_event("W1", away=("22", "PHI", "Phillies", "0", None), home=("15", "ATL", "Braves", "0", None),
+                      state="pre", detail="9/29 - 2:00 PM EDT", note="NLWC - Game 1", wins={"15": 0, "22": 0},
+                      time_valid=False),
+        ]
+    }
+    game = Coord._normalize_playoff_scoreboard(payload, "20260929", "")["games"][0]
+    assert game["series_summary"] == "NLWC · Series tied 0-0"
+    assert game["time_valid"] is False
+    assert game["away"]["winner"] is False
+
+
+def test_normalize_playoff_scoreboard_empty_without_postseason_games():
+    assert Coord._normalize_playoff_scoreboard(None, "20260601", "") == {}
+    reg = {"events": [_sb_event("R", away=("1", "BAL", "O", "1", False), home=("2", "BOS", "R", "2", True),
+                                season_type=2)]}
+    assert Coord._normalize_playoff_scoreboard(reg, "20260601", "") == {}
+
+
+def test_scoreboard_settled_only_when_every_game_is_final():
+    final = _sb_event("A", away=("1", "A", "A", "1", False), home=("2", "B", "B", "2", True))
+    live = _sb_event("B", away=("1", "A", "A", "1", False), home=("2", "B", "B", "2", False), state="in")
+    assert Coord._scoreboard_settled({"events": [final]}) is True
+    assert Coord._scoreboard_settled({"events": [final, live]}) is False
+    assert Coord._scoreboard_settled({"events": []}) is True
+
+
+def _scoreboard_coord(get_json):
+    coord = Coord.__new__(Coord)
+    coord._scoreboard_cache = {}
+    coord._get_json = get_json
+    return coord
+
+
+def test_fetch_scoreboard_ttl_depends_on_whether_day_is_settled():
+    import time as _time
+
+    urls = []
+
+    async def _get_json(url):
+        urls.append(url)
+        return {"events": []}
+
+    coord = _scoreboard_coord(_get_json)
+    live_payload = {"events": [_sb_event("L", away=("1", "A", "A", "0", False), home=("2", "B", "B", "0", False),
+                                         state="in")]}
+    settled_payload = {"events": []}
+    # Two minutes old: stale for a live day (refetch), fresh for a settled one.
+    coord._scoreboard_cache["20261010"] = (_time.time() - 120, live_payload)
+    coord._scoreboard_cache["20261004"] = (_time.time() - 120, settled_payload)
+    asyncio.run(coord._fetch_scoreboard("20261010"))
+    assert asyncio.run(coord._fetch_scoreboard("20261004")) is settled_payload
+    assert urls == ["https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=20261010"]
+
+
+def test_fetch_scoreboard_prunes_oldest_and_falls_back_on_failure():
+    import time as _time
+
+    from custom_components.mlb_live_scoreboard.const import SCOREBOARD_CACHE_MAX_DATES
+
+    async def _ok(url):
+        return {"events": []}
+
+    coord = _scoreboard_coord(_ok)
+    now = _time.time()
+    for i in range(SCOREBOARD_CACHE_MAX_DATES):
+        coord._scoreboard_cache[f"2026{i:04d}"] = (now - 10 * 3600 + i, {"events": []})
+    asyncio.run(coord._fetch_scoreboard("20261031"))
+    assert len(coord._scoreboard_cache) == SCOREBOARD_CACHE_MAX_DATES
+    assert "20260000" not in coord._scoreboard_cache
+
+    async def _boom(url):
+        raise RuntimeError("503")
+
+    coord = _scoreboard_coord(_boom)
+    assert asyncio.run(coord._fetch_scoreboard("20261010")) is None
+    live = {"events": [_sb_event("L", away=("1", "A", "A", "0", False), home=("2", "B", "B", "0", False),
+                                 state="in")]}
+    coord._scoreboard_cache["20261010"] = (_time.time() - 600, live)
+    assert asyncio.run(coord._fetch_scoreboard("20261010")) is live

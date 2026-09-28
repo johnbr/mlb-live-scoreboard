@@ -431,6 +431,52 @@ class PostseasonSeries(TypedDict, total=False):
     competitors: list[SeriesCompetitor]
 
 
+class PlayoffScoreboardTeam(TypedDict, total=False):
+    """One side of a :class:`PlayoffScoreboardGame`."""
+
+    id: str
+    abbreviation: str
+    name: str
+    logo: str
+    score: str
+    winner: bool
+
+
+class PlayoffScoreboardGame(TypedDict, total=False):
+    """One postseason game in :class:`PlayoffScoreboard`.
+
+    ``series_summary`` uses the same wording as :class:`PostseasonSeries`
+    (``"NLDS · Brewers lead 1-0"``). ``state`` is ESPN's ``pre``/``in``/
+    ``post``; ``detail`` is its short status ("Final/11", "Top 6th") — the
+    card formats a ``pre`` game's start from ``date`` in local time instead,
+    honoring ``time_valid``. ``is_displayed`` marks the card's own game.
+    """
+
+    id: str
+    round: str
+    game_number: int
+    series_summary: str
+    state: str
+    detail: str
+    date: str
+    time_valid: bool
+    is_displayed: bool
+    away: PlayoffScoreboardTeam
+    home: PlayoffScoreboardTeam
+
+
+class PlayoffScoreboard(TypedDict, total=False):
+    """Shape of the ``playoff_scoreboard`` attribute.
+
+    Every postseason game on the displayed game's (Eastern) date, from ESPN's
+    league scoreboard, in start order. Replaces the division standings in the
+    card's expand panel during the postseason. ``{}`` outside the postseason.
+    """
+
+    date: str
+    games: list[PlayoffScoreboardGame]
+
+
 class PlayerCardBio(TypedDict, total=False):
     """Bio header of a :class:`PlayerCard` (from the ESPN ``/athletes/{id}``
     endpoint's ``athlete`` object)."""
