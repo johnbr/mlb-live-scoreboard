@@ -656,11 +656,23 @@ function isPostseasonGame(attrs) {
   return Object.keys(attrs?.series || {}).length > 0;
 }
 
+// Escape a series line ("NLDS · Dodgers lead 2-0"), picking out the leading
+// round ("NLDS") in the card's yellow so it stands out. The backend sends the
+// round separately; fall back to plain text if the line doesn't start with it.
+function seriesLineMarkup(summary, round) {
+  const text = String(summary || "").trim();
+  const prefix = String(round || "").trim();
+  if (prefix && text.startsWith(`${prefix} · `)) {
+    return `<span class="series-round">${escapeHtml(prefix)}</span>${escapeHtml(text.slice(prefix.length))}`;
+  }
+  return escapeHtml(text);
+}
+
 function renderSeriesBanner(card, attrs) {
   if (card?.config?.show_series === false) return "";
   const text = String(attrs?.series?.summary || "").trim();
   if (!text) return "";
-  return `<div class="series-banner">${escapeHtml(text)}</div>`;
+  return `<div class="series-banner">${seriesLineMarkup(text, attrs?.series?.round)}</div>`;
 }
 
 function renderOnDeckRow(onDeck) {
@@ -1459,7 +1471,7 @@ function renderPlayoffScoreboardPanel(card, attrs) {
           ${side(game?.home, state)}
           <span class="playoff-sb-status${state === "in" ? " live" : ""}">${escapeHtml(playoffGameStatus(game))}</span>
         </div>
-        ${game?.series_summary ? `<div class="playoff-sb-series">${escapeHtml(game.series_summary)}</div>` : ""}
+        ${game?.series_summary ? `<div class="playoff-sb-series">${seriesLineMarkup(game.series_summary, game.round)}</div>` : ""}
       </div>`;
     })
     .join("");
@@ -5197,6 +5209,11 @@ white-space: nowrap;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+        /* Round label ("NLDS") in the banner and playoff-games rows — the
+           same yellow as player names. */
+        .series-round {
+          color: var(--warning-color);
         }
         .live-expandable {
           cursor: pointer;
