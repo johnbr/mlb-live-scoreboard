@@ -651,6 +651,11 @@ function renderBaseOccupancyRow(situation) {
 // Postseason series standing ("NLDS · Dodgers lead 2-0") as a slim line above
 // the score rows. The backend builds the text and sends `series: {}` outside the
 // postseason, so this renders nothing all regular season.
+// The backend sends `series: {}` for every non-postseason game.
+function isPostseasonGame(attrs) {
+  return Object.keys(attrs?.series || {}).length > 0;
+}
+
 function renderSeriesBanner(card, attrs) {
   if (card?.config?.show_series === false) return "";
   const text = String(attrs?.series?.summary || "").trim();
@@ -3424,12 +3429,11 @@ class MlbLiveGameCard extends HTMLElement {
     const pitcherSecondaryLine = renderPitcherLineSecondary(
       attrs.pitcher_stats,
     );
-    const awayRecord = this.config.show_records
-      ? competitorRecord(away, awayMeta)
-      : "";
-    const homeRecord = this.config.show_records
-      ? competitorRecord(home, homeMeta)
-      : "";
+    // A regular-season W-L means little once the playoffs start — the series
+    // banner carries the standing that matters — so postseason games drop it.
+    const showRecords = this.config.show_records && !isPostseasonGame(attrs);
+    const awayRecord = showRecords ? competitorRecord(away, awayMeta) : "";
+    const homeRecord = showRecords ? competitorRecord(home, homeMeta) : "";
     const awayWon =
       stateInfo.pillClass === "final" &&
       awayScore.num != null &&
@@ -5102,11 +5106,11 @@ white-space: nowrap;
            glyphs so the two affordances read as the same language. */
         .series-banner {
           text-align: center;
-          font-size: 0.8em;
-          font-weight: 600;
+          font-size: 0.85em;
+          font-weight: 700;
           letter-spacing: 0.02em;
           line-height: 1.3;
-          color: var(--secondary-text-color);
+          color: var(--primary-text-color);
           margin: 0 0 6px;
           white-space: nowrap;
           overflow: hidden;
