@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.28.2...v1.28.3) (2026-09-28)
+
+
+### Bug Fixes
+
+* include postseason games in the team schedule ([#108](https://github.com/johnbr/mlb-live-scoreboard/issues/108)) ([8634708](https://github.com/johnbr/mlb-live-scoreboard/commit/8634708909e1132b288df0aaa8bb220561bda6cc))
+
 ## [1.28.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.28.1...v1.28.2) (2026-09-03)
 
 
