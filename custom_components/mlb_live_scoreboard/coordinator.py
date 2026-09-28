@@ -1223,8 +1223,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         The round comes from ``header.gameNote`` ("NLDS - Game 3").
 
         A game whose opponent is still TBD (the prior round is unfinished)
-        carries no ``playoff`` entry; its series cannot have started, so it is
-        reported as tied 0-0.
+        carries no ``playoff`` entry; its series cannot have started, so like
+        any 0-0 series it reads "NLDS · Game 1".
         """
         header = summary.get("header") or {}
         season = header.get("season") or {}
@@ -1254,7 +1254,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             if team.get("id") is not None:
                 teams[str(team["id"])] = team
 
-        standing = MlbLiveScoreboardCoordinator._series_standing(playoff, teams)
+        standing = MlbLiveScoreboardCoordinator._series_standing(playoff, teams, game_number)
         return {
             "round": round_name,
             "game_number": game_number,
@@ -1280,15 +1280,19 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
     @staticmethod
     def _series_standing(
-        playoff: dict[str, Any] | None, teams: dict[str, dict[str, Any]]
+        playoff: dict[str, Any] | None,
+        teams: dict[str, dict[str, Any]],
+        game_number: int = 0,
     ) -> dict[str, Any]:
         """Turn an ESPN ``playoff`` series entry into the card's wording.
 
         ``teams`` maps team id -> ESPN team dict, used for nicknames
         ("Dodgers lead 2-0" rather than ESPN's "LAD lead series 2-0"). Returns
         ``text``, ``leader_team_id`` ("" while tied), ``completed``,
-        ``best_of`` and per-team ``competitors``. A missing entry (TBD
-        opponent: the series can't have started) reads "Series tied 0-0".
+        ``best_of`` and per-team ``competitors``. Before any game of the
+        series is played (0-0, or a missing entry for a TBD opponent) there is
+        no standing to report, so the text names the game instead: "Game 1"
+        (``game_number`` from ESPN's note, defaulting to 1).
         """
         competitors: list[dict[str, Any]] = []
         for entry in (playoff or {}).get("competitors") or []:
@@ -1323,7 +1327,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 text = str((playoff or {}).get("summary") or "")
         else:
             tied = ranked[0]["wins"] if ranked else 0
-            text = f"Series tied {tied}-{tied}"
+            text = f"Series tied {tied}-{tied}" if tied else f"Game {game_number or 1}"
 
         return {
             "text": text,
@@ -3565,7 +3569,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 (e for e in series_entries if isinstance(e, dict) and e.get("type") == "playoff"),
                 None,
             )
-            standing = MlbLiveScoreboardCoordinator._series_standing(playoff, teams)
+            standing = MlbLiveScoreboardCoordinator._series_standing(playoff, teams, game_number)
             status = ((comp.get("status") or event.get("status") or {}).get("type")) or {}
             time_valid = comp.get("timeValid", event.get("timeValid"))
             event_id = str(event.get("id") or "")

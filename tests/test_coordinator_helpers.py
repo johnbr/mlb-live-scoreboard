@@ -3671,11 +3671,12 @@ def test_normalize_series_tied():
     assert series["leader_team_id"] == ""
 
 
-def test_normalize_series_game_one_pregame_is_tied_zero_zero():
-    # ESPN's own text here is "Series starts 9/29"; the card wants the standing.
+def test_normalize_series_game_one_pregame_names_the_game():
+    # ESPN's own text here is "Series starts 9/29"; with no standing yet the
+    # card names the game instead of "Series tied 0-0".
     summary = _series_summary("NLDS - Game 1", {"19": 0, "22": 0}, total=5, espn_summary="Series starts 9/29")
     series = Coord._normalize_series(summary, _series_comp(_LAD, {"id": "22", "name": "Phillies"}))
-    assert series["summary"] == "NLDS · Series tied 0-0"
+    assert series["summary"] == "NLDS · Game 1"
 
 
 def test_normalize_series_clinched_says_win():
@@ -3692,13 +3693,16 @@ def test_normalize_series_clinch_inferred_from_best_of_when_flag_missing():
     assert series["completed"] is True
 
 
-def test_normalize_series_tbd_opponent_reports_tied_zero_zero():
+def test_normalize_series_tbd_opponent_names_the_game():
     # No playoff entry while the opponent is TBD -- the series can't have begun.
     summary = _series_summary("NLDS - Game 1")
     series = Coord._normalize_series(summary, _series_comp(_LAD, {"id": "-2", "name": "Phillies/Braves"}))
-    assert series["summary"] == "NLDS · Series tied 0-0"
+    assert series["summary"] == "NLDS · Game 1"
     assert series["competitors"] == []
     assert series["best_of"] == 0
+    # A later TBD placeholder in the same round names its own game number.
+    later = Coord._normalize_series(_series_summary("NLDS - Game 3"), _series_comp(_LAD))
+    assert later["summary"] == "NLDS · Game 3"
 
 
 def test_normalize_series_if_necessary_note_parses_round_and_game():
@@ -3807,7 +3811,7 @@ def test_normalize_playoff_scoreboard_pregame_and_placeholder_time():
         ]
     }
     game = Coord._normalize_playoff_scoreboard(payload, "20260929", "")["games"][0]
-    assert game["series_summary"] == "NLWC · Series tied 0-0"
+    assert game["series_summary"] == "NLWC · Game 1"
     assert game["time_valid"] is False
     assert game["away"]["winner"] is False
 
