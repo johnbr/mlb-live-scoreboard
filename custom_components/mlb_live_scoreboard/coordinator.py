@@ -51,6 +51,11 @@ from .const import (
     SCAN_INTERVAL_NEAR_GAME_SECONDS,
     SCHEDULE_STALE_FALLBACK_SECONDS,
     SCHEDULE_TTL_SECONDS,
+    SCOREBOARD_CACHE_MAX_DATES,
+    SCOREBOARD_STALE_FALLBACK_SECONDS,
+    SCOREBOARD_TIME_ZONE,
+    SCOREBOARD_TTL_ACTIVE_SECONDS,
+    SCOREBOARD_TTL_SETTLED_SECONDS,
     SEASON_TYPE_POSTSEASON,
     SEASON_TYPE_REGULAR,
     SHOW_NEXT_AFTER_PREV_SECONDS,
@@ -79,6 +84,7 @@ from .types import (
     PitcherDecisions,
     PitcherStats,
     PlayerCard,
+    PlayoffScoreboard,
     PostseasonSeries,
     ProbablePitchers,
     RecentPlay,
@@ -311,6 +317,9 @@ class MlbLiveScoreboardData:
     # Playoff series standing for the displayed game; ``{}`` outside the
     # postseason. See :class:`PostseasonSeries`.
     series: PostseasonSeries
+    # Every postseason game on the displayed game's date; ``{}`` outside the
+    # postseason. See :class:`PlayoffScoreboard`.
+    playoff_scoreboard: PlayoffScoreboard
     mode: str
     status_text: str
     is_live: bool
@@ -352,6 +361,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # schedule, merged in around the regular-season/postseason boundary.
         # See ``_supplement_season_type``.
         self._supplement_schedule_cache: dict[int, tuple[float, dict[str, Any]]] = {}
+        # "YYYYMMDD" (Eastern) -> (fetched_at_ts, payload) for the league
+        # scoreboard behind the postseason playoff-games panel.
+        self._scoreboard_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         # (fetched_at_ts, payload) for the All-Star Game schedule endpoint.
         # Fetched year-round behind a day-long TTL so that on the one local
         # calendar day the game is played, every entry can display it in place
@@ -1219,10 +1231,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         if _safe_int(season.get("type")) != SEASON_TYPE_POSTSEASON:
             return {}
 
-        note = str(header.get("gameNote") or "").strip()
-        match = re.match(r"^(.+?)\s+-\s+Game\s+(\d+)", note)
-        round_name = match.group(1).strip() if match else note
-        game_number = int(match.group(2)) if match else 0
+        round_name, game_number = MlbLiveScoreboardCoordinator._parse_game_note(header.get("gameNote"))
 
         comps = header.get("competitions") or []
         header_comp = comps[0] if comps and isinstance(comps[0], dict) else {}
@@ -1245,6 +1254,42 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             if team.get("id") is not None:
                 teams[str(team["id"])] = team
 
+        standing = MlbLiveScoreboardCoordinator._series_standing(playoff, teams)
+        return {
+            "round": round_name,
+            "game_number": game_number,
+            "best_of": standing["best_of"],
+            "completed": standing["completed"],
+            "leader_team_id": standing["leader_team_id"],
+            "summary": " · ".join(part for part in (round_name, standing["text"]) if part),
+            "competitors": standing["competitors"],
+        }
+
+    @staticmethod
+    def _parse_game_note(note: Any) -> tuple[str, int]:
+        """Split ESPN's postseason game note into ``(round, game_number)``.
+
+        "NLDS - Game 3" -> ("NLDS", 3); "ALWC - Game 3 If Necessary" ->
+        ("ALWC", 3). An unrecognized note is returned whole with game 0.
+        """
+        text = str(note or "").strip()
+        match = re.match(r"^(.+?)\s+-\s+Game\s+(\d+)", text)
+        if not match:
+            return text, 0
+        return match.group(1).strip(), int(match.group(2))
+
+    @staticmethod
+    def _series_standing(
+        playoff: dict[str, Any] | None, teams: dict[str, dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Turn an ESPN ``playoff`` series entry into the card's wording.
+
+        ``teams`` maps team id -> ESPN team dict, used for nicknames
+        ("Dodgers lead 2-0" rather than ESPN's "LAD lead series 2-0"). Returns
+        ``text``, ``leader_team_id`` ("" while tied), ``completed``,
+        ``best_of`` and per-team ``competitors``. A missing entry (TBD
+        opponent: the series can't have started) reads "Series tied 0-0".
+        """
         competitors: list[dict[str, Any]] = []
         for entry in (playoff or {}).get("competitors") or []:
             if not isinstance(entry, dict):
@@ -1271,22 +1316,20 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             team = teams.get(leader_team_id) or {}
             name = str(team.get("name") or team.get("shortDisplayName") or team.get("abbreviation") or "")
             verb = "win" if completed else "lead"
-            standing = f"{name} {verb} {leader['wins']}-{ranked[1]['wins']}" if name else ""
-            if not standing:
-                # Leader isn't one of the displayed teams; fall back to ESPN's
+            text = f"{name} {verb} {leader['wins']}-{ranked[1]['wins']}" if name else ""
+            if not text:
+                # Leader isn't one of the known teams; fall back to ESPN's
                 # own (abbreviation-based) wording.
-                standing = str((playoff or {}).get("summary") or "")
+                text = str((playoff or {}).get("summary") or "")
         else:
             tied = ranked[0]["wins"] if ranked else 0
-            standing = f"Series tied {tied}-{tied}"
+            text = f"Series tied {tied}-{tied}"
 
         return {
-            "round": round_name,
-            "game_number": game_number,
-            "best_of": best_of,
-            "completed": completed,
+            "text": text,
             "leader_team_id": leader_team_id,
-            "summary": " · ".join(part for part in (round_name, standing) if part),
+            "completed": completed,
+            "best_of": best_of,
             "competitors": competitors,
         }
 
@@ -3420,6 +3463,132 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return payload
 
     @staticmethod
+    def _scoreboard_date_key(date_raw: Any) -> str:
+        """Return the Eastern calendar date ("YYYYMMDD") of an ESPN start time.
+
+        ESPN's scoreboard ``dates=`` buckets games by MLB's (Eastern) schedule
+        day, so an 8 PM ET first pitch stored as the next day's ``00:00Z``
+        still belongs to the earlier date. Placeholder starts (``04:00Z``,
+        midnight Eastern) land on their intended day too.
+        """
+        ts = _parse_iso_ts(date_raw)
+        if ts is None:
+            return ""
+        return datetime.fromtimestamp(ts, ZoneInfo(SCOREBOARD_TIME_ZONE)).strftime("%Y%m%d")
+
+    @staticmethod
+    def _scoreboard_settled(payload: dict[str, Any]) -> bool:
+        """True when every game on a scoreboard payload has finished."""
+        for event in payload.get("events") or []:
+            comps = event.get("competitions") or [{}]
+            status = ((comps[0] or {}).get("status") or event.get("status") or {}).get("type") or {}
+            if str(status.get("state") or "").lower() != "post":
+                return False
+        return True
+
+    async def _fetch_scoreboard(self, date_key: str) -> dict[str, Any] | None:
+        """Fetch the league scoreboard for one Eastern date, TTL cached.
+
+        A day with any unfinished game refreshes every minute so other
+        playoff scores stay current; a settled day is kept for hours.
+        Best-effort: on failure the last payload is reused while reasonably
+        fresh, else None (the card simply omits the panel).
+        """
+        now_ts = time.time()
+        cached = self._scoreboard_cache.get(date_key)
+        if cached is not None:
+            ttl = (
+                SCOREBOARD_TTL_SETTLED_SECONDS
+                if self._scoreboard_settled(cached[1])
+                else SCOREBOARD_TTL_ACTIVE_SECONDS
+            )
+            if (now_ts - cached[0]) < ttl:
+                return cached[1]
+        url = f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={date_key}"
+        try:
+            payload = await self._get_json(url)
+        except Exception as err:
+            _LOGGER.debug("Scoreboard fetch for %s failed: %s", date_key, err)
+            if cached is not None and (now_ts - cached[0]) < SCOREBOARD_STALE_FALLBACK_SECONDS:
+                return cached[1]
+            return None
+        self._scoreboard_cache[date_key] = (now_ts, payload)
+        if len(self._scoreboard_cache) > SCOREBOARD_CACHE_MAX_DATES:
+            oldest = min(self._scoreboard_cache, key=lambda k: self._scoreboard_cache[k][0])
+            self._scoreboard_cache.pop(oldest, None)
+        return payload
+
+    @staticmethod
+    def _normalize_playoff_scoreboard(
+        payload: dict[str, Any] | None, date_key: str, display_id: str
+    ) -> PlayoffScoreboard:
+        """Flatten a league scoreboard into the ``playoff_scoreboard`` attribute.
+
+        Keeps only postseason games (season type 3), in ESPN's start order.
+        Each game's series line is worded like the card's banner.
+        """
+        games: list[dict[str, Any]] = []
+        for event in (payload or {}).get("events") or []:
+            if not isinstance(event, dict):
+                continue
+            if _safe_int((event.get("season") or {}).get("type")) != SEASON_TYPE_POSTSEASON:
+                continue
+            comps = event.get("competitions") or []
+            comp = comps[0] if comps and isinstance(comps[0], dict) else {}
+            notes = comp.get("notes") or []
+            headline = next(
+                (n.get("headline") for n in notes if isinstance(n, dict) and n.get("headline")),
+                "",
+            )
+            round_name, game_number = MlbLiveScoreboardCoordinator._parse_game_note(headline)
+
+            teams: dict[str, dict[str, Any]] = {}
+            sides: dict[str, dict[str, Any]] = {}
+            for competitor in comp.get("competitors") or []:
+                team = competitor.get("team") or {}
+                team_id = str(team.get("id") or "")
+                teams[team_id] = {**team, "name": team.get("shortDisplayName") or team.get("name")}
+                side = competitor.get("homeAway")
+                if side in ("away", "home"):
+                    sides[side] = {
+                        "id": team_id,
+                        "abbreviation": str(team.get("abbreviation") or ""),
+                        "name": str(team.get("shortDisplayName") or team.get("name") or ""),
+                        "logo": str(team.get("logo") or ""),
+                        "score": str(competitor.get("score") or ""),
+                        "winner": competitor.get("winner") is True,
+                    }
+
+            series_raw = comp.get("series")
+            series_entries = series_raw if isinstance(series_raw, list) else [series_raw]
+            playoff = next(
+                (e for e in series_entries if isinstance(e, dict) and e.get("type") == "playoff"),
+                None,
+            )
+            standing = MlbLiveScoreboardCoordinator._series_standing(playoff, teams)
+            status = ((comp.get("status") or event.get("status") or {}).get("type")) or {}
+            time_valid = comp.get("timeValid", event.get("timeValid"))
+            event_id = str(event.get("id") or "")
+            games.append(
+                {
+                    "id": event_id,
+                    "round": round_name,
+                    "game_number": game_number,
+                    "series_summary": " · ".join(part for part in (round_name, standing["text"]) if part),
+                    "state": str(status.get("state") or ""),
+                    "detail": str(status.get("shortDetail") or status.get("detail") or ""),
+                    "date": str(event.get("date") or comp.get("date") or ""),
+                    "time_valid": time_valid is not False,
+                    "is_displayed": event_id == str(display_id),
+                    "away": sides.get("away") or {},
+                    "home": sides.get("home") or {},
+                }
+            )
+        if not games:
+            return {}
+        return {"date": f"{date_key[:4]}-{date_key[4:6]}-{date_key[6:]}", "games": games}
+
+    @staticmethod
     def _merge_schedule_events(
         events: list[dict[str, Any]], extra: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
@@ -3803,6 +3972,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         selected_competition = self._compact_competition(
             display_comp, records_map, time_valid=self._event_time_valid(display_event)
         )
+        series = self._normalize_series(summary, selected_competition)
+        playoff_scoreboard: dict[str, Any] = {}
+        if series:
+            date_key = self._scoreboard_date_key((selected_competition or {}).get("date"))
+            if date_key:
+                scoreboard = await self._fetch_scoreboard(date_key)
+                playoff_scoreboard = self._normalize_playoff_scoreboard(scoreboard, date_key, display_id)
 
         return MlbLiveScoreboardData(
             team_abbr=self.team_abbr,
@@ -3835,7 +4011,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             decisions=self._normalize_decisions(summary),
             division_standings=division_standings,
             highlights_url=self._extract_highlights_url(summary),
-            series=self._normalize_series(summary, selected_competition),
+            series=series,
+            playoff_scoreboard=playoff_scoreboard,
             mode=mode,
             status_text=status_detail,
             is_live=is_live,

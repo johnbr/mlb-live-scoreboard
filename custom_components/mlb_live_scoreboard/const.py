@@ -125,6 +125,19 @@ SEASON_TYPE_REGULAR = 2
 SEASON_TYPE_POSTSEASON = 3
 SUPPLEMENT_SCHEDULE_STALE_FALLBACK_SECONDS = 6 * 60 * 60
 
+# League scoreboard (every game on one date) behind the postseason "playoff
+# games" panel that replaces division standings in October. A date with any
+# unfinished game refreshes every minute; once all its games are final the day
+# is settled and a long TTL applies. Keyed by date so schedule navigation to
+# older playoff games reuses entries; the cap bounds that cache. MLB's
+# schedule day is Eastern, which is also how ESPN's ``dates=`` param buckets
+# games (an 8 PM ET first pitch is stored as the next day's 00:00Z).
+SCOREBOARD_TTL_ACTIVE_SECONDS = 60
+SCOREBOARD_TTL_SETTLED_SECONDS = 6 * 60 * 60
+SCOREBOARD_STALE_FALLBACK_SECONDS = 24 * 60 * 60
+SCOREBOARD_CACHE_MAX_DATES = 16
+SCOREBOARD_TIME_ZONE = "America/New_York"
+
 # The All-Star Game is auto-displayed by every entry on the local calendar day
 # it's played (no club plays that day), regardless of which team the entry
 # follows. ``teams/al/schedule`` returns just the single mid-July All-Star
