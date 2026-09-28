@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.29.1...v1.30.0) (2026-09-28)
+
+
+### Features
+
+* show the day's playoff games in place of division standings ([#114](https://github.com/johnbr/mlb-live-scoreboard/issues/114)) ([54ccd11](https://github.com/johnbr/mlb-live-scoreboard/commit/54ccd11ce37296cd990e8be3d271f87335fe7a70))
+
 ## [1.29.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.29.0...v1.29.1) (2026-09-28)
 
 
