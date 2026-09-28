@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.30.0...v1.31.0) (2026-09-28)
+
+
+### Features
+
+* **card:** highlight the playoff round in yellow ([#116](https://github.com/johnbr/mlb-live-scoreboard/issues/116)) ([0155c30](https://github.com/johnbr/mlb-live-scoreboard/commit/0155c306bfafafebf1574e40f4466f5108697b79))
+
 ## [1.30.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.29.1...v1.30.0) (2026-09-28)
 
 
