@@ -1758,6 +1758,7 @@ def _make_data(
         decisions={},
         division_standings={"division_name": "", "entries": []},
         highlights_url="",
+        series={},
         mode="live" if is_live else "previous",
         status_text="Top 5th",
         is_live=is_live,
@@ -3602,3 +3603,119 @@ def test_compute_update_interval_ignores_placeholder_start_times():
     assert coord._compute_update_interval(data, [soon]).total_seconds() == SCAN_INTERVAL_NEAR_GAME_SECONDS
     soon["timeValid"] = False
     assert coord._compute_update_interval(data, [soon]).total_seconds() == SCAN_INTERVAL_IDLE_SECONDS
+
+
+# ---------------------------------------------------------------------------
+# _normalize_series (postseason series banner)
+# ---------------------------------------------------------------------------
+
+_LAD = {"id": "19", "abbreviation": "LAD", "name": "Dodgers"}
+_TOR = {"id": "14", "abbreviation": "TOR", "name": "Blue Jays"}
+
+
+def _series_summary(note, wins=None, *, total=7, completed=False, season_type=3, espn_summary=""):
+    series = [
+        # The misleadingly named "current" entry is the season-long
+        # head-to-head; these are its real (wrong-looking) 2025 WS values.
+        {
+            "type": "current",
+            "summary": "TOR wins series 5-2",
+            "completed": True,
+            "totalCompetitions": 7,
+            "competitors": [{"id": "19", "wins": 2}, {"id": "14", "wins": 5}],
+        },
+    ]
+    if wins is not None:
+        series.append(
+            {
+                "type": "playoff",
+                "summary": espn_summary,
+                "completed": completed,
+                "totalCompetitions": total,
+                "competitors": [{"id": tid, "wins": w} for tid, w in wins.items()],
+            }
+        )
+    return {
+        "header": {
+            "season": {"year": 2025, "type": season_type},
+            "gameNote": note,
+            "competitions": [{"series": series}],
+        }
+    }
+
+
+def _series_comp(*teams):
+    return {"competitors": [{"team": dict(t)} for t in teams]}
+
+
+def test_normalize_series_leader_uses_playoff_entry_not_current():
+    summary = _series_summary("World Series - Game 1", {"14": 1, "19": 0})
+    series = Coord._normalize_series(summary, _series_comp(_TOR, _LAD))
+    assert series["summary"] == "World Series · Blue Jays lead 1-0"
+    assert series["round"] == "World Series"
+    assert series["game_number"] == 1
+    assert series["best_of"] == 7
+    assert series["leader_team_id"] == "14"
+    assert series["completed"] is False
+    assert series["competitors"] == [
+        {"team_id": "14", "abbreviation": "TOR", "wins": 1},
+        {"team_id": "19", "abbreviation": "LAD", "wins": 0},
+    ]
+
+
+def test_normalize_series_tied():
+    summary = _series_summary("World Series - Game 2", {"14": 1, "19": 1})
+    series = Coord._normalize_series(summary, _series_comp(_TOR, _LAD))
+    assert series["summary"] == "World Series · Series tied 1-1"
+    assert series["leader_team_id"] == ""
+
+
+def test_normalize_series_game_one_pregame_is_tied_zero_zero():
+    # ESPN's own text here is "Series starts 9/29"; the card wants the standing.
+    summary = _series_summary("NLDS - Game 1", {"19": 0, "22": 0}, total=5, espn_summary="Series starts 9/29")
+    series = Coord._normalize_series(summary, _series_comp(_LAD, {"id": "22", "name": "Phillies"}))
+    assert series["summary"] == "NLDS · Series tied 0-0"
+
+
+def test_normalize_series_clinched_says_win():
+    summary = _series_summary("World Series - Game 7", {"14": 3, "19": 4}, completed=True)
+    series = Coord._normalize_series(summary, _series_comp(_TOR, _LAD))
+    assert series["summary"] == "World Series · Dodgers win 4-3"
+    assert series["completed"] is True
+
+
+def test_normalize_series_clinch_inferred_from_best_of_when_flag_missing():
+    summary = _series_summary("NLWC - Game 2", {"19": 2, "17": 0}, total=3, completed=False)
+    series = Coord._normalize_series(summary, _series_comp(_LAD, {"id": "17", "name": "Reds"}))
+    assert series["summary"] == "NLWC · Dodgers win 2-0"
+    assert series["completed"] is True
+
+
+def test_normalize_series_tbd_opponent_reports_tied_zero_zero():
+    # No playoff entry while the opponent is TBD -- the series can't have begun.
+    summary = _series_summary("NLDS - Game 1")
+    series = Coord._normalize_series(summary, _series_comp(_LAD, {"id": "-2", "name": "Phillies/Braves"}))
+    assert series["summary"] == "NLDS · Series tied 0-0"
+    assert series["competitors"] == []
+    assert series["best_of"] == 0
+
+
+def test_normalize_series_if_necessary_note_parses_round_and_game():
+    summary = _series_summary("ALWC - Game 3 If Necessary", {"10": 1, "2": 1}, total=3)
+    series = Coord._normalize_series(summary, _series_comp({"id": "10", "name": "Yankees"}, {"id": "2", "name": "Red Sox"}))
+    assert (series["round"], series["game_number"]) == ("ALWC", 3)
+    assert series["summary"] == "ALWC · Series tied 1-1"
+
+
+def test_normalize_series_falls_back_to_espn_text_when_leader_unnamed():
+    summary = _series_summary("NLCS - Game 3", {"19": 2, "8": 0}, espn_summary="LAD lead series 2-0")
+    series = Coord._normalize_series(summary, _series_comp())
+    assert series["summary"] == "NLCS · LAD lead series 2-0"
+
+
+def test_normalize_series_empty_outside_postseason():
+    regular = _series_summary("", {"19": 2, "14": 1}, season_type=2)
+    assert Coord._normalize_series(regular, _series_comp(_LAD, _TOR)) == {}
+    assert Coord._normalize_series({}, None) == {}
+    # Postseason header without a playoff entry or a round -> nothing to say.
+    assert Coord._normalize_series(_series_summary(""), _series_comp(_LAD)) == {}

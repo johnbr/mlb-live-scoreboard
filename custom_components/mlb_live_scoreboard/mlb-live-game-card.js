@@ -79,6 +79,10 @@ const CARD_DEFAULTS = {
   // schedule: back through previous results, forward through upcoming
   // games. Hidden while the displayed game is live. On by default.
   show_schedule_nav: true,
+  // Postseason series standing ("NLDS · Dodgers lead 2-0") as a slim line
+  // above the score rows. Renders nothing outside the postseason (the sensor's
+  // `series` attribute is empty), so it's safe to leave on year-round.
+  show_series: true,
   // Left/right arrows above the play-by-play on the live card to page back
   // through earlier half-innings ("what happened in the 4th?"). Snaps back to
   // the live half after a short idle. On by default.
@@ -218,6 +222,7 @@ const EDITOR_SCHEMA = [
   {
     type: "grid",
     schema: [
+      { name: "show_series", selector: { boolean: {} } },
       { name: "show_batter", selector: { boolean: {} } },
       { name: "show_records", selector: { boolean: {} } },
       { name: "show_linescore", selector: { boolean: {} } },
@@ -245,6 +250,7 @@ const EDITOR_LABELS = {
   show_lineup_popup: "Enable team lineup popup",
   show_schedule_nav: "Schedule navigation arrows",
   show_inning_nav: "Past half-inning pager",
+  show_series: "Series standing (postseason)",
   show_batter: "Batter",
   show_records: "Team records",
   show_linescore: "Linescore",
@@ -270,6 +276,8 @@ const EDITOR_HELPERS = {
     "Adds ‹ › arrows beside the date/status on the non-live card to page back through previous results and forward through upcoming games. Hidden while a game is live.",
   show_inning_nav:
     "Adds a small ▾ strip below the live play-by-play that swaps the panel to the previous half-inning (one half at a time; the inning marker by the box score shows which). Snaps back to the live half after ~20s of no taps.",
+  show_series:
+    "During the postseason, shows the series standing above the score, e.g. 'NLDS · Dodgers lead 2-0'. Nothing shows during the regular season.",
   show_pitch_zone:
     "Adds a small strike-zone graphic below the base diamond with one colored dot per pitch in the current at-bat. Auto-hides between at-bats.",
   show_highlights:
@@ -638,6 +646,16 @@ function renderBaseOccupancyRow(situation) {
       <div class="base-slot"><span class="base-label">2B:</span> ${val(second)}</div>
       <div class="base-slot"><span class="base-label">3B:</span> ${val(third)}</div>
     </div>`;
+}
+
+// Postseason series standing ("NLDS · Dodgers lead 2-0") as a slim line above
+// the score rows. The backend builds the text and sends `series: {}` outside the
+// postseason, so this renders nothing all regular season.
+function renderSeriesBanner(card, attrs) {
+  if (card?.config?.show_series === false) return "";
+  const text = String(attrs?.series?.summary || "").trim();
+  if (!text) return "";
+  return `<div class="series-banner">${escapeHtml(text)}</div>`;
 }
 
 function renderOnDeckRow(onDeck) {
@@ -3752,6 +3770,7 @@ class MlbLiveGameCard extends HTMLElement {
       : scoreboardMain;
     const liveHtml = `
       <div class="wrapper ${this._headshotSizeClass()}">
+        ${renderSeriesBanner(this, attrs)}
         ${headerHtml}
         ${winProbabilityPanel}
         ${this.config.show_linescore && !liveCollapsed ? this.renderLinescore(competition, viewedHalf) : ""}
@@ -3826,6 +3845,7 @@ class MlbLiveGameCard extends HTMLElement {
       homeRecord,
       expanded ? "exp" : "col",
       canExpand ? this._upcomingDetailsFingerprint(attrs) : "",
+      renderSeriesBanner(this, attrs),
       `nav:${this._navOffset}:${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}`,
     ].join("|");
     if (compactFp === this._lastCompactFp) {
@@ -3939,6 +3959,7 @@ class MlbLiveGameCard extends HTMLElement {
     if (expanded) wrapperClasses.push("expanded");
     const html = `
       <div class="${wrapperClasses.join(" ")}"${expandable ? ` role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}" title="${expandTitle}"` : ""}>
+        ${renderSeriesBanner(this, attrs)}
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
             <div class="team-row away ${awayWon ? "winner" : ""}">
@@ -5079,6 +5100,18 @@ white-space: nowrap;
         /* Live-card collapse/expand. The header (score rows + chevron strip)
            is one click target; the strip reuses the inning-pager's triangle
            glyphs so the two affordances read as the same language. */
+        .series-banner {
+          text-align: center;
+          font-size: 0.8em;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          line-height: 1.3;
+          color: var(--secondary-text-color);
+          margin: 0 0 6px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
         .live-expandable {
           cursor: pointer;
           outline: none;

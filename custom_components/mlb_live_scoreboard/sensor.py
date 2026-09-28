@@ -91,6 +91,7 @@ def build_state_attributes(data: Any) -> dict[str, Any]:
         "decisions": data.decisions,
         "division_standings": data.division_standings,
         "highlights_url": data.highlights_url,
+        "series": data.series or {},
     }
 
 

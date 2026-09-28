@@ -79,6 +79,7 @@ from .types import (
     PitcherDecisions,
     PitcherStats,
     PlayerCard,
+    PostseasonSeries,
     ProbablePitchers,
     RecentPlay,
     ScoringPlay,
@@ -307,6 +308,9 @@ class MlbLiveScoreboardData:
     # ``https://www.espn.com/mlb/video?gameId=…``). Empty until ESPN publishes
     # at least one clip — typically 30-90 minutes after the final pitch.
     highlights_url: str
+    # Playoff series standing for the displayed game; ``{}`` outside the
+    # postseason. See :class:`PostseasonSeries`.
+    series: PostseasonSeries
     mode: str
     status_text: str
     is_live: bool
@@ -1195,6 +1199,96 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 if href:
                     return href
         return ""
+
+    @staticmethod
+    def _normalize_series(summary: dict[str, Any], competition: dict[str, Any] | None) -> PostseasonSeries:
+        """Build the ``series`` attribute for a postseason game (``{}`` otherwise).
+
+        ESPN's ``header.competitions[0].series`` is a *list* of series kinds —
+        ``current`` (despite the name, the season-long head-to-head: it read
+        "TOR wins series 5-2" during the 4-3 2025 World Series), ``season``,
+        ``preseason`` and ``playoff``. Only ``playoff`` is the playoff series.
+        The round comes from ``header.gameNote`` ("NLDS - Game 3").
+
+        A game whose opponent is still TBD (the prior round is unfinished)
+        carries no ``playoff`` entry; its series cannot have started, so it is
+        reported as tied 0-0.
+        """
+        header = summary.get("header") or {}
+        season = header.get("season") or {}
+        if _safe_int(season.get("type")) != SEASON_TYPE_POSTSEASON:
+            return {}
+
+        note = str(header.get("gameNote") or "").strip()
+        match = re.match(r"^(.+?)\s+-\s+Game\s+(\d+)", note)
+        round_name = match.group(1).strip() if match else note
+        game_number = int(match.group(2)) if match else 0
+
+        comps = header.get("competitions") or []
+        header_comp = comps[0] if comps and isinstance(comps[0], dict) else {}
+        playoff = next(
+            (
+                entry
+                for entry in header_comp.get("series") or []
+                if isinstance(entry, dict) and entry.get("type") == "playoff"
+            ),
+            None,
+        )
+        if playoff is None and not round_name:
+            return {}
+
+        # Nicknames ("Dodgers") and abbreviations from the card's own
+        # competition, so the line matches the team names shown beneath it.
+        teams: dict[str, dict[str, Any]] = {}
+        for competitor in (competition or {}).get("competitors") or []:
+            team = competitor.get("team") or {}
+            if team.get("id") is not None:
+                teams[str(team["id"])] = team
+
+        competitors: list[dict[str, Any]] = []
+        for entry in (playoff or {}).get("competitors") or []:
+            if not isinstance(entry, dict):
+                continue
+            team_id = str(entry.get("id") or "")
+            competitors.append(
+                {
+                    "team_id": team_id,
+                    "abbreviation": str((teams.get(team_id) or {}).get("abbreviation") or ""),
+                    "wins": _safe_int(entry.get("wins")),
+                }
+            )
+
+        best_of = _safe_int((playoff or {}).get("totalCompetitions"))
+        ranked = sorted(competitors, key=lambda c: c["wins"], reverse=True)
+        leader_team_id = ""
+        completed = False
+        if len(ranked) >= 2 and ranked[0]["wins"] != ranked[1]["wins"]:
+            leader = ranked[0]
+            leader_team_id = leader["team_id"]
+            completed = bool((playoff or {}).get("completed")) or (
+                best_of > 0 and leader["wins"] >= best_of // 2 + 1
+            )
+            team = teams.get(leader_team_id) or {}
+            name = str(team.get("name") or team.get("shortDisplayName") or team.get("abbreviation") or "")
+            verb = "win" if completed else "lead"
+            standing = f"{name} {verb} {leader['wins']}-{ranked[1]['wins']}" if name else ""
+            if not standing:
+                # Leader isn't one of the displayed teams; fall back to ESPN's
+                # own (abbreviation-based) wording.
+                standing = str((playoff or {}).get("summary") or "")
+        else:
+            tied = ranked[0]["wins"] if ranked else 0
+            standing = f"Series tied {tied}-{tied}"
+
+        return {
+            "round": round_name,
+            "game_number": game_number,
+            "best_of": best_of,
+            "completed": completed,
+            "leader_team_id": leader_team_id,
+            "summary": " · ".join(part for part in (round_name, standing) if part),
+            "competitors": competitors,
+        }
 
     @staticmethod
     def _normalize_standings(
@@ -3706,6 +3800,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             # don't drive the pager.
             self._live_summary_cache = (str(display_id), summary, dict(inning_context))
 
+        selected_competition = self._compact_competition(
+            display_comp, records_map, time_valid=self._event_time_valid(display_event)
+        )
+
         return MlbLiveScoreboardData(
             team_abbr=self.team_abbr,
             team_id=self.team_id,
@@ -3714,9 +3812,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             live_event_id=live_id,
             previous_event_id=prev_id,
             next_event_id=next_id,
-            selected_competition=self._compact_competition(
-                display_comp, records_map, time_valid=self._event_time_valid(display_event)
-            ),
+            selected_competition=selected_competition,
             inning_context=inning_context,
             recent_plays=recent_plays,
             scoring_plays=self._normalize_scoring_plays(summary),
@@ -3739,6 +3835,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             decisions=self._normalize_decisions(summary),
             division_standings=division_standings,
             highlights_url=self._extract_highlights_url(summary),
+            series=self._normalize_series(summary, selected_competition),
             mode=mode,
             status_text=status_detail,
             is_live=is_live,
