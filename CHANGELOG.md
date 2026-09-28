@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.31.0...v1.31.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* name the game ("NLDS · Game 1") before a series has started ([#118](https://github.com/johnbr/mlb-live-scoreboard/issues/118)) ([d5fc385](https://github.com/johnbr/mlb-live-scoreboard/commit/d5fc3855f642a95ea7f2abcf89e905bd66f28ef1))
+
 ## [1.31.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.30.0...v1.31.0) (2026-09-28)
 
 
