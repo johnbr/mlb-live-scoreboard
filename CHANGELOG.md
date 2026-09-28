@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.29.0...v1.29.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **card:** bolder series banner; hide regular-season records in the playoffs ([#112](https://github.com/johnbr/mlb-live-scoreboard/issues/112)) ([5e248ae](https://github.com/johnbr/mlb-live-scoreboard/commit/5e248aefd2e4d2545dfc46eb2ac3f80fec76e229))
+
 ## [1.29.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.28.3...v1.29.0) (2026-09-28)
 
 
