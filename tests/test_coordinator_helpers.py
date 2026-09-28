@@ -3406,3 +3406,199 @@ def test_normalize_lineups_suppresses_up_bat_order_when_not_live():
     assert lineups["home"]["up_bat_order"] == 0
     # Default args (the pre-existing two-arg call shape) stay non-live.
     assert Coord._normalize_lineups(summary, "a4")["away"]["up_bat_order"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Postseason schedule supplement (_supplement_season_type / merge / resolve)
+# ---------------------------------------------------------------------------
+
+
+def _iso(ts: float) -> str:
+    return datetime.fromtimestamp(ts, tz=UTC).isoformat().replace("+00:00", "Z")
+
+
+def _schedule(season_type, events):
+    return {"requestedSeason": {"year": 2026, "type": season_type}, "events": events}
+
+
+def test_supplement_season_type_none_mid_season():
+    now = 1_790_000_000.0
+    sched = _schedule(2, [_ev("A", date=_iso(now - 86400)), _ev("B", date=_iso(now + 86400))])
+    assert Coord._supplement_season_type(sched, now) is None
+
+
+def test_supplement_season_type_postseason_once_regular_season_is_over():
+    now = 1_790_000_000.0
+    sched = _schedule(2, [_ev("A", date=_iso(now - 2 * 86400)), _ev("B", date=_iso(now - 3600))])
+    assert Coord._supplement_season_type(sched, now) == 3
+
+
+def test_supplement_season_type_pulls_regular_season_back_when_default_flips():
+    now = 1_790_000_000.0
+    sched = _schedule(3, [_ev("P1", date=_iso(now + 86400))])
+    assert Coord._supplement_season_type(sched, now) == 2
+
+
+def test_supplement_season_type_ignores_other_or_missing_types():
+    now = 1_790_000_000.0
+    assert Coord._supplement_season_type(_schedule(1, []), now) is None
+    assert Coord._supplement_season_type({"events": []}, now) is None
+    assert Coord._supplement_season_type({"requestedSeason": {"type": "x"}}, now) is None
+    # Falls back to ``season`` when ``requestedSeason`` is absent.
+    assert Coord._supplement_season_type({"season": {"type": 2}, "events": []}, now) == 3
+
+
+def test_merge_schedule_events_sorts_and_dedupes_primary_wins():
+    now = 1_790_000_000.0
+    primary = [_ev("R1", date=_iso(now - 86400)), _ev("DUP", date=_iso(now - 3600), state="post")]
+    extra = [
+        _ev("P2", date=_iso(now + 2 * 86400)),
+        _ev("DUP", date=_iso(now - 3600), state="pre"),
+        _ev("P1", date=_iso(now + 86400)),
+    ]
+    merged = Coord._merge_schedule_events(primary, extra)
+    assert [e["id"] for e in merged] == ["R1", "DUP", "P1", "P2"]
+    assert merged[1]["competitions"][0]["status"]["type"]["state"] == "post"
+
+
+def _resolve_coord(primary, supplement):
+    coord = Coord.__new__(Coord)
+    calls = []
+
+    async def _no_allstar():
+        return None
+
+    async def _fetch_schedule():
+        return primary
+
+    async def _fetch_supplement(season_type):
+        calls.append(season_type)
+        return supplement
+
+    coord._allstar_override = _no_allstar
+    coord._fetch_schedule = _fetch_schedule
+    coord._fetch_supplement_schedule = _fetch_supplement
+    return coord, calls
+
+
+def test_resolve_schedule_merges_postseason_after_regular_season_ends():
+    import time as _time
+
+    now = _time.time()
+    primary = _schedule(
+        2, [_ev("R162", date=_iso(now - 3600), state="post", name="STATUS_FINAL", completed=True)]
+    )
+    post = _schedule(3, [_ev("NLDS1", date=_iso(now + 5 * 86400))])
+    coord, calls = _resolve_coord(primary, post)
+    schedule, events = asyncio.run(coord._resolve_schedule())
+    assert calls == [3]
+    assert schedule is primary
+    assert [e["id"] for e in events] == ["R162", "NLDS1"]
+    # The merged list feeds selection, so the playoff game is now "next".
+    _prev, next_id, _live, _disp, _ = Coord._select_event(None, events)
+    assert next_id == "NLDS1"
+
+
+def test_resolve_schedule_skips_supplement_mid_season():
+    import time as _time
+
+    now = _time.time()
+    primary = _schedule(2, [_ev("R1", date=_iso(now + 3600))])
+    coord, calls = _resolve_coord(primary, _schedule(3, [_ev("X", date=_iso(now))]))
+    _schedule_out, events = asyncio.run(coord._resolve_schedule())
+    assert calls == []
+    assert [e["id"] for e in events] == ["R1"]
+
+
+def test_resolve_schedule_survives_missing_supplement():
+    import time as _time
+
+    now = _time.time()
+    primary = _schedule(2, [_ev("R162", date=_iso(now - 3600))])
+    coord, _calls = _resolve_coord(primary, None)
+    _schedule_out, events = asyncio.run(coord._resolve_schedule())
+    assert [e["id"] for e in events] == ["R162"]
+
+
+def _supplement_coord(get_json):
+    coord = Coord.__new__(Coord)
+    coord.team_abbr = "LAD"
+    coord._supplement_schedule_cache = {}
+    coord._get_json = get_json
+    return coord
+
+
+def test_fetch_supplement_schedule_requests_season_type_and_caches():
+    urls = []
+
+    async def _get_json(url):
+        urls.append(url)
+        return {"events": [{"id": "P1"}]}
+
+    coord = _supplement_coord(_get_json)
+    first = asyncio.run(coord._fetch_supplement_schedule(3))
+    second = asyncio.run(coord._fetch_supplement_schedule(3))
+    assert first == second == {"events": [{"id": "P1"}]}
+    assert urls == [
+        "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/lad/schedule?seasontype=3"
+    ]
+
+
+def test_fetch_supplement_schedule_failure_uses_stale_cache_else_none():
+    import time as _time
+
+    async def _boom(url):
+        raise RuntimeError("503")
+
+    coord = _supplement_coord(_boom)
+    assert asyncio.run(coord._fetch_supplement_schedule(3)) is None
+    # Expired TTL but inside the stale-fallback window -> reuse.
+    coord._supplement_schedule_cache[3] = (_time.time() - 2 * 3600, {"events": ["stale"]})
+    assert asyncio.run(coord._fetch_supplement_schedule(3)) == {"events": ["stale"]}
+
+
+# ---------------------------------------------------------------------------
+# Postseason placeholders: TBD teams + unannounced start times
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_team_payload_skips_tbd_placeholder_ids():
+    coord = Coord.__new__(Coord)
+    coord._team_payload_cache = {}
+
+    async def _get_json(url):  # pragma: no cover - must not be called
+        raise AssertionError(f"unexpected fetch {url}")
+
+    coord._get_json = _get_json
+    assert asyncio.run(coord._fetch_team_payload("-2", "away")) == {}
+    assert asyncio.run(coord._fetch_team_payload("", "away")) == {}
+
+
+def test_event_time_valid_reads_event_or_competition_flag():
+    assert Coord._event_time_valid({"timeValid": False}) is False
+    assert Coord._event_time_valid({"competitions": [{"timeValid": True}]}) is True
+    assert Coord._event_time_valid({"id": "1"}) is None
+    assert Coord._event_time_valid(None) is None
+
+
+def test_compact_competition_carries_time_valid():
+    comp = {"id": "1", "date": "2026-10-03T04:00Z", "competitors": []}
+    assert Coord._compact_competition(comp, time_valid=False)["timeValid"] is False
+    assert Coord._compact_competition(comp)["timeValid"] is None
+    assert Coord._compact_competition({**comp, "timeValid": True})["timeValid"] is True
+
+
+def test_compute_update_interval_ignores_placeholder_start_times():
+    import time as _time
+
+    from custom_components.mlb_live_scoreboard.const import (
+        SCAN_INTERVAL_IDLE_SECONDS,
+        SCAN_INTERVAL_NEAR_GAME_SECONDS,
+    )
+
+    coord = Coord.__new__(Coord)
+    data = SimpleNamespace(is_live=False)
+    soon = _ev("P1", date=_iso(_time.time() + 60))
+    assert coord._compute_update_interval(data, [soon]).total_seconds() == SCAN_INTERVAL_NEAR_GAME_SECONDS
+    soon["timeValid"] = False
+    assert coord._compute_update_interval(data, [soon]).total_seconds() == SCAN_INTERVAL_IDLE_SECONDS
