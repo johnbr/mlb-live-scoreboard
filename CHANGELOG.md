@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.28.3...v1.29.0) (2026-09-28)
+
+
+### Features
+
+* show the postseason series standing above the score ([#110](https://github.com/johnbr/mlb-live-scoreboard/issues/110)) ([a0b5dc8](https://github.com/johnbr/mlb-live-scoreboard/commit/a0b5dc841403da428ffc6769ff52ecc429b77e36))
+
 ## [1.28.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.28.2...v1.28.3) (2026-09-28)
 
 
