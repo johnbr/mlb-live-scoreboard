@@ -2208,7 +2208,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
     _BATTING_LINE_CATEGORIES: tuple[str, ...] = ("career-batting", "batting")
 
     @classmethod
-    def _extract_current_season_batter_stats(cls, stats_payload: dict[str, Any]) -> dict[str, Any]:
+    def _extract_current_season_batter_stats(
+        cls, stats_payload: dict[str, Any], postseason: bool = False
+    ) -> dict[str, Any]:
         """Pick the current-season hitting line (HR / RBI / AVG) from an ESPN
         ``/athletes/{id}/stats?category=batting`` payload.
 
@@ -2217,7 +2219,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         ``?category=batting`` response sometimes lists ``career-batting``
         twice, so we walk in preference order and take the first occurrence
         whose row count is non-empty.
+
+        ``postseason=True`` reads the ``postseason-batting`` line instead, so
+        HR / RBI match the playoff AVG a postseason boxscore reports. See
+        :meth:`_extract_postseason_batter_stats`.
         """
+        if postseason:
+            return cls._extract_postseason_batter_stats(stats_payload)
         categories = stats_payload.get("categories") or []
         current_year = datetime.now().year
         for preferred in cls._BATTING_LINE_CATEGORIES:
@@ -2253,6 +2261,55 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     "rbi": get_idx(rbi_idx),
                     "avg": get_idx(avg_idx),
                 }
+        return {}
+
+    @classmethod
+    def _extract_postseason_batter_stats(cls, stats_payload: dict[str, Any]) -> dict[str, Any]:
+        """This year's postseason hitting line (HR / RBI / AVG), pre-game.
+
+        In a postseason game the boxscore ``avg`` is the *playoff* average
+        (recomputed live), so HR / RBI must come from the playoff line too or
+        the card mixes a playoff AVG with regular-season HR / RBI. ESPN's
+        ``postseason-batting`` category is, like ``career-batting``, updated
+        only after a game ends, so the live ``+ game`` math in
+        ``_normalize_batter_stats`` applies unchanged.
+
+        Only the current-year row counts — earlier Octobers are a different
+        postseason. A batter with no row yet has no playoff games before this
+        one, so the baseline is ``0`` HR / ``0`` RBI rather than blank. That
+        zero is only inferred from a payload that carries a real batting line
+        (``career-batting`` / ``batting``), never from an empty or pitching-only
+        one.
+        """
+        categories = [c for c in (stats_payload.get("categories") or []) if isinstance(c, dict)]
+        current_year = datetime.now().year
+        for category in categories:
+            if category.get("name") != "postseason-batting":
+                continue
+            names = [str(n or "") for n in (category.get("names") or [])]
+            if "homeRuns" not in names or "RBIs" not in names:
+                continue
+            row = next(
+                (
+                    r
+                    for r in (category.get("statistics") or [])
+                    if int((r.get("season") or {}).get("year") or 0) == current_year
+                ),
+                None,
+            )
+            if row is None:
+                continue
+            stats = row.get("stats") or []
+
+            def by_name(name: str, _stats: list = stats, _names: list = names) -> str:
+                idx = _names.index(name) if name in _names else -1
+                if 0 <= idx < len(_stats) and _stats[idx] not in (None, ""):
+                    return str(_stats[idx])
+                return ""
+
+            return {"hr": by_name("homeRuns"), "rbi": by_name("RBIs"), "avg": by_name("avg")}
+        if any(c.get("name") in cls._BATTING_LINE_CATEGORIES for c in categories):
+            return {"hr": "0", "rbi": "0", "avg": ""}
         return {}
 
     @classmethod
@@ -3860,8 +3917,15 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             self._get_public_batter_stats(batter_id),
             self._get_public_pitcher_stats(pitcher_id),
         )
+        # A postseason boxscore's AVG is the playoff average, so HR / RBI follow
+        # it onto the playoff line (see ``_extract_postseason_batter_stats``).
+        is_postseason = (
+            _safe_int(((summary.get("header") or {}).get("season") or {}).get("type")) == SEASON_TYPE_POSTSEASON
+        )
         batter_season_stats = (
-            self._extract_current_season_batter_stats(batter_season_payload) if batter_season_payload else {}
+            self._extract_current_season_batter_stats(batter_season_payload, postseason=is_postseason)
+            if batter_season_payload
+            else {}
         )
         pitcher_season_era = (
             (self._extract_season_line(pitcher_season_payload).get("pitching") or {}).get("era", "")

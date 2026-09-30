@@ -2896,6 +2896,87 @@ def test_extract_current_season_batter_stats_picks_first_nonempty_when_duplicate
     assert out == {"hr": "12", "rbi": "40", "avg": ".275"}
 
 
+# Shape mirrors ESPN's live ``?category=batting`` payload in October: the
+# regular-season line under ``career-batting``, the playoff line under
+# ``postseason-batting`` (one row per postseason year).
+_POSTSEASON_NAMES = ["gamesPlayed", "atBats", "homeRuns", "RBIs", "avg"]
+
+
+def _postseason_payload(post_rows):
+    return {
+        "categories": [
+            {
+                "name": "career-batting",
+                "names": _POSTSEASON_NAMES,
+                "statistics": [{"season": {"year": _THIS_YEAR}, "stats": ["156", "581", "45", "97", ".232"]}],
+            },
+            {"name": "postseason-batting", "names": _POSTSEASON_NAMES, "statistics": post_rows},
+        ],
+    }
+
+
+def test_extract_batter_stats_postseason_uses_playoff_line():
+    # Regression: in a playoff game the card paired the boxscore's playoff
+    # AVG with regular-season HR / RBI (".333 • 45hr • 97rbi").
+    payload = _postseason_payload(
+        [
+            {"season": {"year": _THIS_YEAR - 1}, "stats": ["4", "16", "2", "3", ".188"]},
+            {"season": {"year": _THIS_YEAR}, "stats": ["1", "3", "1", "2", ".333"]},
+        ]
+    )
+    assert Coord._extract_current_season_batter_stats(payload, postseason=True) == {
+        "hr": "1",
+        "rbi": "2",
+        "avg": ".333",
+    }
+    # Regular season is unchanged.
+    assert Coord._extract_current_season_batter_stats(payload)["hr"] == "45"
+
+
+def test_extract_batter_stats_postseason_first_game_is_zero_not_last_october():
+    # No current-year playoff row = no playoff games yet. Last year's
+    # postseason must not leak in; the baseline is 0 HR / 0 RBI.
+    payload = _postseason_payload([{"season": {"year": _THIS_YEAR - 1}, "stats": ["4", "16", "2", "3", ".188"]}])
+    assert Coord._extract_current_season_batter_stats(payload, postseason=True) == {
+        "hr": "0",
+        "rbi": "0",
+        "avg": "",
+    }
+    # Never-in-the-playoffs batter (category absent entirely) — same baseline.
+    first_timer = {"categories": _postseason_payload([])["categories"][:1]}
+    assert Coord._extract_current_season_batter_stats(first_timer, postseason=True)["hr"] == "0"
+
+
+def test_extract_batter_stats_postseason_no_zeros_without_a_batting_line():
+    # A pitching-only payload (``opponent-batting``) is not evidence of zero
+    # playoff HR — leave it blank.
+    stats = _load_fixture("athlete_39832_ohtani_stats.json")
+    assert Coord._extract_current_season_batter_stats(stats, postseason=True) == {}
+
+
+def test_normalize_batter_stats_live_postseason_adds_game_to_playoff_line():
+    payload = _postseason_payload([{"season": {"year": _THIS_YEAR}, "stats": ["1", "3", "0", "0", ".333"]}])
+    season = Coord._extract_current_season_batter_stats(payload, postseason=True)
+    summary = {
+        "boxscore": {
+            "players": [
+                {
+                    "statistics": [
+                        {
+                            "keys": ["hits-atBats", "atBats", "hits", "RBIs", "homeRuns", "avg"],
+                            "athletes": [
+                                {"athlete": {"id": "33712"}, "stats": ["1-4", "4", "1", "1", "1", ".286"]}
+                            ],
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    out = Coord._normalize_batter_stats(summary, "33712", season, is_live=True)
+    assert (out["avg"], out["hr"], out["rbi"]) == (".286", "1", "1")
+
+
 # ---------------------------------------------------------------------------
 # _records_from_standings
 # ---------------------------------------------------------------------------
