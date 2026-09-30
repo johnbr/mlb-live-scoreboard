@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.31.1...v1.31.2) (2026-09-30)
+
+
+### Bug Fixes
+
+* show playoff HR/RBI alongside the playoff AVG in postseason games ([#120](https://github.com/johnbr/mlb-live-scoreboard/issues/120)) ([664167a](https://github.com/johnbr/mlb-live-scoreboard/commit/664167ae9fd3674edabf2f74c684787d5078105b))
+
 ## [1.31.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.31.0...v1.31.1) (2026-09-28)
 
 
