@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.31.2...v1.31.3) (2026-10-02)
+
+
+### Bug Fixes
+
+* show 0.00 instead of ESPN's "---" ERA before a pitcher records an out ([#122](https://github.com/johnbr/mlb-live-scoreboard/issues/122)) ([86132c9](https://github.com/johnbr/mlb-live-scoreboard/commit/86132c9607ac9d36522ff8bbea6389c68c9f25de))
+
 ## [1.31.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.31.1...v1.31.2) (2026-09-30)
 
 
