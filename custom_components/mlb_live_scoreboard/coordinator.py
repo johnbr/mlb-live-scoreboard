@@ -218,6 +218,21 @@ def _safe_int(value: Any) -> int:
             return 0
 
 
+def _normalize_era(era: str, earned_runs: str = "") -> str:
+    """Replace ESPN's undefined-ERA placeholder with a real number.
+
+    ESPN emits ``"---"`` for ERA while a pitcher's cumulative innings pitched
+    is zero (e.g. a starter facing his first postseason batter), since 0 ER /
+    0 IP is undefined. With no earned runs that reads as ``0.00``; earned runs
+    with no outs recorded is an infinite ERA, shown as ``∞``. Real values and
+    blanks pass through unchanged.
+    """
+    era = str(era or "").strip()
+    if not era or any(ch.isdigit() for ch in era):
+        return era
+    return "∞" if _safe_int(earned_runs) > 0 else "0.00"
+
+
 def _competitor_for_side(comp: dict[str, Any], side: str) -> dict[str, Any]:
     """Return the competitor block (``home`` or ``away``) from a compact
     competition dict, or ``{}`` if not found.
@@ -1830,6 +1845,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         innings_pitched = cls._stat_from_entry(entry, keys, *cls._IP_KEYS)
         era = cls._stat_from_entry(entry, keys, "era", "earnedRunAverage", "ERA")
         strikeouts = cls._stat_from_entry(entry, keys, "so", "strikeouts", "SO")
+        earned_runs = cls._stat_from_entry(entry, keys, "earnedRuns", "er", "ER")
 
         if pitcher_id and (not innings_pitched or not era or not strikeouts or not pitches):
             for team_block in summary.get("boxscore", {}).get("players", []) or []:
@@ -1848,7 +1864,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                         )
                         pitches = pitches or cls._stat_from_entry(athlete_entry, block_keys, "pitches")
                         strikes = strikes or cls._stat_from_entry(athlete_entry, block_keys, "strikes")
+                        earned_runs = earned_runs or cls._stat_from_entry(
+                            athlete_entry, block_keys, "earnedRuns", "er", "ER"
+                        )
 
+        era = _normalize_era(era, earned_runs)
         return {
             "era": (season_era or era) if is_allstar else (era or season_era),
             "innings_pitched": innings_pitched,
@@ -2924,7 +2944,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             "bb": cls._stat_from_entry(entry, keys, "walks", "bb"),
             "k": cls._stat_from_entry(entry, keys, "strikeouts", "so", "k"),
             "pc": cls._stat_from_entry(entry, keys, "pitches", "pitchCount"),
-            "era": cls._stat_from_entry(entry, keys, "ERA", "era", "earnedRunAverage"),
+            "era": _normalize_era(
+                cls._stat_from_entry(entry, keys, "ERA", "era", "earnedRunAverage"),
+                cls._stat_from_entry(entry, keys, "earnedRuns", "er"),
+            ),
         }
 
     @staticmethod

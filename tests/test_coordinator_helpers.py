@@ -29,6 +29,7 @@ from custom_components.mlb_live_scoreboard.coordinator import (
 )
 from custom_components.mlb_live_scoreboard.coordinator import (
     MlbLiveScoreboardData,
+    _normalize_era,
     _parse_iso_ts,
 )
 
@@ -1148,6 +1149,57 @@ def test_normalize_batter_stats_falls_back_to_boxscore_avg_without_season():
     summary = _allstar_batting_summary("36018", "Yordan Alvarez", ".243")
     out = Coord._normalize_batter_stats(summary, "36018", {}, is_live=False)
     assert out["avg"] == ".243"
+
+
+def test_normalize_era_replaces_espn_undefined_placeholder():
+    # ESPN emits "---" while cumulative IP is 0 (Nola facing his first
+    # postseason batter); the card rendered it verbatim.
+    assert _normalize_era("---") == "0.00"
+    assert _normalize_era("---", "0") == "0.00"
+    assert _normalize_era("-.--", "") == "0.00"
+    # Earned runs with no outs recorded is an infinite ERA, not 0.00.
+    assert _normalize_era("---", "2") == "∞"
+    # Real values and blanks pass through.
+    assert _normalize_era("3.45", "2") == "3.45"
+    assert _normalize_era("0.00") == "0.00"
+    assert _normalize_era("") == ""
+
+
+_PITCHER_KEYS = [
+    "fullInnings.partInnings",
+    "hits",
+    "runs",
+    "earnedRuns",
+    "walks",
+    "strikeouts",
+    "homeRuns",
+    "pitches-strikes",
+    "ERA",
+    "pitches",
+]
+
+
+def _pitcher_summary(stats):
+    return {
+        "boxscore": {
+            "players": [
+                {"statistics": [{"keys": _PITCHER_KEYS, "athletes": [{"athlete": {"id": "33709"}, "stats": stats}]}]}
+            ]
+        }
+    }
+
+
+def test_normalize_pitcher_stats_undefined_era_reads_zero():
+    # Live 2026 Wild Card G2 payload, top 1st, before Nola recorded an out.
+    summary = _pitcher_summary(["0.0", "0", "0", "0", "0", "0", "0", "0-0", "---", "0"])
+    assert Coord._normalize_pitcher_stats(summary, "33709", season_era="3.71")["era"] == "0.00"
+
+
+def test_lineup_pitcher_row_undefined_era_reads_zero():
+    entry = {"athlete": {"id": "33709"}, "stats": ["0.0", "1", "1", "1", "0", "0", "0", "6-2", "---", "6"]}
+    assert Coord._lineup_pitcher_row(entry, _PITCHER_KEYS)["era"] == "∞"
+    entry["stats"][3] = "0"
+    assert Coord._lineup_pitcher_row(entry, _PITCHER_KEYS)["era"] == "0.00"
 
 
 def test_normalize_pitcher_stats_prefers_season_era_and_reads_allstar_ip_key():
