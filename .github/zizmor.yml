@@ -1,0 +1,9 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # HACS and hassfest validators are meant to track their default
+        # branch so new HA/HACS rules are enforced as soon as they ship.
+        "home-assistant/actions/*": any
+        "hacs/*": any
+        "*": hash-pin
