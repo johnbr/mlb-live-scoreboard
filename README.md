@@ -7,12 +7,21 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 
 ## Features
 
-- **Live game tracking** - Real-time scores, innings, count, and base runners
-- **Pitcher/Batter matchup** - Current at-bat with player headshots and stats
-- **Play-by-play** - Recent plays and pitch-by-pitch updates
+- **Live game tracking** - Real-time scores, innings, count, base runners, and a live win-probability bar
+- **Collapsible live card** - A live game starts as just the two score rows + inning marker; click to expand to the full live view (`live_default_view`)
+- **Pitcher/Batter matchup** - Current at-bat with player headshots and live in-game stats (ERA/AVG update as the game is played)
+- **Play-by-play** - Recent plays and pitch-by-pitch updates (pitch type, velocity, result)
+- **Half-inning pager** - Page the live play-by-play back to earlier half-innings ("what happened in the 4th?"); snaps back to the live half after ~20s (`show_inning_nav`)
+- **Pitch-zone graphic** - Optional strike-zone plot with one numbered, color-coded dot per pitch in the current at-bat (`show_pitch_zone`, off by default)
+- **Due-up panel** - Between half-innings, the matchup row shows the next three batters with portraits and stats
 - **Pre-game info** - Scheduled game times and probable pitchers
 - **Post-game results** - Final scores and game leaders
-- **Compact-card expand panel** - Click an upcoming or completed game card to expand it. Upcoming games show probable starters + current division standings; completed games show every scoring play of the game + game leaders (top hitters / pitchers per side) above the same standings block
+- **Compact-card expand panel** - Click an upcoming or completed game card to expand it. Upcoming games show probable starters + current division standings; completed games show the pitching decisions (W/L/SV with records and game lines), every scoring play of the game, and game leaders (top hitters / pitchers per side) above the same standings block. An optional "Watch highlights on ESPN" link appears once clips are published (`show_highlights`)
+- **Schedule navigation** - `‹ ›` arrows on the non-live card page back through previous results and forward through upcoming games (`show_schedule_nav`)
+- **Postseason support** - Playoff games are included in the schedule, a series banner (e.g. `NLDS · Dodgers lead 2-0`) sits above the score (`show_series`), postseason batting lines use playoff stats, and the expand panel shows the day's playoff games in place of division standings
+- **All-Star Game** - On All-Star Game day every card automatically shows the All-Star Game, whichever team it follows; `AL` / `NL` can also be configured as teams for a dedicated All-Star card
+- **MLB Stats API fallback** - When ESPN publishes a live game with no play-by-play, the batter, pitcher, count, plays and box score are filled in from MLB's official Stats API. You can also make MLB the preferred source with ESPN as the fallback. See [Live data source](#live-data-source) below
+- **Delays and postponements** - Rain/weather delays and suspensions show ESPN's specific delay reason; postponed games show `PPD`
 - **Player career popup** - Click any (yellow) player name to open an in-card popup with their bio and season-by-season career stats; configurable to open ESPN's player page instead (`player_link_target`)
 - **Team lineup popup** - Click a team's side of the pitcher/batter matchup (anywhere but the player name) to open an in-card popup with that team's full lineup and every player who appeared in the game, toggleable between **Game** (this game's box score) and **Season** stats for hitters and pitchers
 - **Configurable game-event actions** - Fire Home Assistant events (or invoke services directly from the integration options) on team scored, opponent scored, game won, game lost, and game started, so you can drive lights, TTS, notifications, or any other automation. See [Game Event Actions](#game-event-actions) below.
@@ -113,12 +122,14 @@ Add the card to your dashboard — either way:
 | `show_on_deck`         | boolean | `true`       | Show on-deck batter                                                                                                                                                                                                                                                                                      |
 | `show_base_occupancy`  | boolean | `true`       | Show base runner names                                                                                                                                                                                                                                                                                   |
 | `show_diamond`         | boolean | `true`       | Show base diamond graphic                                                                                                                                                                                                                                                                                |
+| `show_pitch_zone`      | boolean | `false`      | Show a strike-zone graphic under the base diamond with one numbered, color-coded dot per pitch in the current at-bat. Auto-hides between at-bats; off by default                                                                                                                                         |
 | `show_count`           | boolean | `true`       | Show balls/strikes/outs dots                                                                                                                                                                                                                                                                             |
 | `show_win_probability` | boolean | `true`       | Show live win-probability bar between the score rows and the balls/strikes/outs row (hidden pre-game when ESPN doesn't yet publish a probability series)                                                                                                                                                 |
 | `show_highlights`      | boolean | `false`      | Show a "Watch highlights on ESPN" link in the final-game expand panel. Only renders once ESPN publishes clips (typically 30-90 min after the final pitch); off by default                                                                                                                                |
 | `player_link_target`   | string  | `popup`      | What clicking a (yellow) player name does: `popup` opens an in-card career-stats popup; `espn` opens ESPN's player page directly. The popup always includes a "View on ESPN" link, so ESPN stays reachable either way                                                                                    |
 | `show_lineup_popup`    | boolean | `true`       | Allow clicking a team's side of the matchup to open the team-lineup popup. Set `false` to make the matchup sides inert (player-name links still work)                                                                                                                                                    |
 | `show_schedule_nav`    | boolean | `true`       | Show `‹ ›` arrows beside the date/status on the non-live card to page back through previous results and forward through upcoming games (as many taps as needed). Hidden while a game is live; set `false` to hide entirely                                                                                |
+| `show_inning_nav`      | boolean | `true`       | Show the half-inning pager on the live card, which swaps the play-by-play to earlier half-innings one at a time (the inning marker shows which half you're viewing). Snaps back to the live half after ~20s without a tap                                                                                |
 | `lineup_default_view`  | string  | `auto`       | Which view the lineup popup opens to: `auto` (Game while the game is live, Season otherwise), or force `game` / `season`                                                                                                                                                                                 |
 | `live_default_view`    | string  | `collapsed`  | How much of the live card shows by default: `collapsed` (just the two score rows + inning marker) or `expanded` (the full live view). Either way, clicking the score rows — or the `⌄` strip under them — toggles between the two; the choice is per-browser and re-baselines when a new game starts     |
 | `headshot_size`        | string  | `auto`       | Size of inline headshots (matchup, due-up, probable pitchers). `auto` scales them with the card's actual width via a CSS container query — responsive to HA's per-column dashboards. Fixed presets: `small` (40px), `medium` (56px), `large` (72px), `xlarge` (88px). Modal-popup avatars are unaffected |
@@ -139,12 +150,14 @@ show_play_results: true
 show_on_deck: true
 show_base_occupancy: true
 show_diamond: true
+show_pitch_zone: false
 show_count: true
 show_win_probability: true
 show_highlights: false
 player_link_target: popup
 show_lineup_popup: true
 show_schedule_nav: true
+show_inning_nav: true
 lineup_default_view: auto
 live_default_view: collapsed
 headshot_size: auto
@@ -261,6 +274,28 @@ top-level template variables (e.g. `{{ team_score }}`), whereas in
 automations they're nested under `trigger.event.data` (e.g.
 `{{ trigger.event.data.team_score }}`).
 
+## Live data source
+
+By default ESPN is the primary feed, but for some games it publishes only the score, with
+no play-by-play. When that happens during a live game, the integration fills in
+the batter, pitcher, count, plays, and box score from
+[MLB's Stats API](https://statsapi.mlb.com) (`feed/live`), so the card keeps
+working as normal. It switches back to ESPN as soon as ESPN's play-by-play
+arrives. The score itself always comes from ESPN.
+
+You can choose which feed is preferred under Settings → Devices & Services →
+_MLB Live Scoreboard_ → **Configure** → **Preferred live data source**:
+
+| Option            | Behavior                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| `ESPN` (default)  | ESPN for everything; MLB fills in when ESPN publishes no play-by-play for a live game             |
+| `MLB Stats API`   | MLB for the live batter, pitcher, count, plays, and box score; ESPN whenever MLB's feed is unavailable |
+
+While the fallback (non-preferred) feed is in use, the card shows a small
+**via MLB** or **via ESPN** tag, and the sensor's `data_source` /
+`data_source_fallback` attributes (below) report it. Neither feed requires an
+API key.
+
 ## Sensor state attributes
 
 The sensor's state is the ESPN event ID (or `idle`); all game data rides in
@@ -272,6 +307,9 @@ state attributes. A few are handy for dashboards and automations:
 | `mode`        | string | Which event the card shows: `live`, `previous`, or `next`.                                                       |
 | `is_live`     | bool   | The displayed competition's status is in-progress (or delayed/suspended).                                        |
 | `status_text` | string | Human-readable status detail, e.g. `Top 3rd`, `Final`, `Rain Delay`.                                             |
+| `data_source` | string | Which feed supplied the live game detail: `espn` or `mlb_statsapi`.                                              |
+| `data_source_fallback` | bool | `true` while a live game is being served by the non-preferred feed (see [Live data source](#live-data-source)). |
+| `series`      | object | Postseason series standing (e.g. summary `NLDS · Dodgers lead 2-0`); empty in the regular season.                |
 
 Example — only show the scoreboard card while a game is live:
 
@@ -322,10 +360,21 @@ card:
 | TEX          | Texas Rangers         |
 | TOR          | Toronto Blue Jays     |
 | WSH          | Washington Nationals  |
+| AL           | American League All-Stars |
+| NL           | National League All-Stars |
+
+You don't need the `AL` / `NL` entries to see the All-Star Game: on All-Star
+Game day, every card automatically shows it in place of the team's own
+schedule (no club plays during the break). A club's card that switches over
+this way fires no game-event actions for the exhibition.
 
 ## Data Source
 
-This integration uses ESPN's public API for MLB game data. Data is refreshed every 5 seconds during live games.
+This integration uses ESPN's public API for MLB game data, with MLB's Stats
+API as a live-game fallback (see [Live data source](#live-data-source)). No
+API keys are needed. Polling adapts to the game state: every 5 seconds while a
+game is live, every 30 seconds around first pitch and after the final, and
+every 5 minutes otherwise.
 
 For details on data flow, sensor attributes, ESPN endpoints, and the card's
 internal architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
