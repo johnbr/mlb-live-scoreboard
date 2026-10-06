@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.33.0...v1.34.0) (2026-10-06)
+
+
+### Features
+
+* show each team's ABS challenges remaining beside the live score ([#130](https://github.com/johnbr/mlb-live-scoreboard/issues/130)) ([0a9d642](https://github.com/johnbr/mlb-live-scoreboard/commit/0a9d6423bf73e6599f7483af4f21113502966f50))
+
 ## [1.33.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.32.0...v1.33.0) (2026-10-06)
 
 
