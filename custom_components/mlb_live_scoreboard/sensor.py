@@ -66,6 +66,8 @@ def build_state_attributes(data: Any) -> dict[str, Any]:
         # "espn", or "mlb_statsapi" while ESPN publishes no play-by-play for the
         # live game and MLB's Stats API fills the live view (statsapi.py).
         "data_source": getattr(data, "data_source", "espn"),
+        # True while that source is the fallback, not the preferred one.
+        "data_source_fallback": bool(getattr(data, "data_source_fallback", False)),
         "status_text": data.status_text,
         "display_event_id": data.display_event_id,
         "live_event_id": data.live_event_id,

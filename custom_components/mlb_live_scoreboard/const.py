@@ -190,10 +190,13 @@ OPT_ON_GAME_STARTED = "on_game_started"
 OPT_ON_GAME_ENDED = "on_game_ended"
 OPT_ON_GAME_WON = "on_game_won"
 OPT_ON_GAME_LOST = "on_game_lost"
-# Boolean option (default ON): fill a live game ESPN publishes no
-# play-by-play for from MLB's Stats API. See statsapi.py.
-OPT_STATSAPI_FALLBACK = "statsapi_fallback"
-DEFAULT_STATSAPI_FALLBACK = True
+# Which feed drives the LIVE view (batter / pitcher / count / plays / box
+# score); the other one is the fallback. See statsapi.py.
+OPT_DATA_SOURCE_PREFERENCE = "data_source_preference"
+DATA_SOURCE_PREFERENCE_ESPN = "espn"
+DATA_SOURCE_PREFERENCE_MLB = "mlb"
+DATA_SOURCE_PREFERENCES = (DATA_SOURCE_PREFERENCE_ESPN, DATA_SOURCE_PREFERENCE_MLB)
+DEFAULT_DATA_SOURCE_PREFERENCE = DATA_SOURCE_PREFERENCE_ESPN
 
 # Mapping from event name -> option key. Used by the coordinator to look up
 # and run the configured action sequence when an event fires.

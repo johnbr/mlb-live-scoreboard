@@ -29,11 +29,19 @@
           "on_game_ended": "When the game ends (any result)",
           "on_game_won": "When my team wins",
           "on_game_lost": "When my team loses",
-          "statsapi_fallback": "Use MLB's Stats API when ESPN has no play-by-play"
+          "data_source_preference": "Preferred live data source"
         },
         "data_description": {
-          "statsapi_fallback": "ESPN occasionally covers a live game with the score only, leaving the batter, pitcher, count and plays blank. When on, those are filled in from MLB's public Stats API for that game, and the card shows a small 'via MLB' tag."
+          "data_source_preference": "Where the live batter, pitcher, count, plays and box score come from. The other feed is the fallback: with ESPN preferred, MLB fills in when ESPN publishes no play-by-play for a game; with MLB preferred, ESPN is used whenever MLB's feed is unavailable. The score always comes from ESPN. The card shows a small 'via MLB' or 'via ESPN' tag while the fallback is in use."
         }
+      }
+    }
+  },
+  "selector": {
+    "data_source_preference": {
+      "options": {
+        "espn": "ESPN",
+        "mlb": "MLB Stats API"
       }
     }
   }
