@@ -670,6 +670,23 @@ function renderChallengeDots(side) {
   return `<div class="abs-chal" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${dots}</div>`;
 }
 
+// MLB's league logo (hosted by MLB, in its dark- or light-background
+// variant), shown at the foot of the expanded live view whenever the batter,
+// pitcher, count and plays come from MLB's Stats API -- by preference or as
+// the fallback. The score always comes from ESPN.
+const MLB_LOGO_URL = {
+  dark: "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg",
+  light: "https://www.mlbstatic.com/team-logos/league-on-light/1.svg",
+};
+
+function renderMlbSourceTag(darkMode, isFallback) {
+  const title = isFallback
+    ? "ESPN has no play-by-play for this game, so the batter, pitcher, count and plays come from MLB's Stats API"
+    : "The batter, pitcher, count and plays come from MLB's Stats API (the integration's preferred live source)";
+  const src = darkMode ? MLB_LOGO_URL.dark : MLB_LOGO_URL.light;
+  return `<div class="source-tag" title="${title}"><img class="source-logo" src="${src}" alt="via MLB" loading="lazy" decoding="async" referrerpolicy="no-referrer"></div>`;
+}
+
 function renderBaseOccupancyRow(situation) {
   const first = situation?.first_last_name || "Empty";
   const second = situation?.second_last_name || "Empty";
@@ -3835,11 +3852,11 @@ class MlbLiveGameCard extends HTMLElement {
                 `${countDotsPanel}${matchupPanel}${onDeckHtml}${baseOccupancyHtml}${recentPlaysPanel}`
           }
           ${
-            attrs.data_source_fallback
-              ? attrs.data_source === "mlb_statsapi"
-                ? `<div class="source-tag" title="ESPN has no play-by-play for this game, so the batter, pitcher, count and plays come from MLB's Stats API">via MLB</div>`
-                : `<div class="source-tag" title="MLB's Stats API is unavailable for this game, so the batter, pitcher, count and plays come from ESPN">via ESPN</div>`
-              : ""
+            attrs.data_source === "mlb_statsapi"
+              ? renderMlbSourceTag(this._hass?.themes?.darkMode !== false, attrs.data_source_fallback === true)
+              : attrs.data_source_fallback
+                ? `<div class="source-tag" title="MLB's Stats API is unavailable for this game, so the batter, pitcher, count and plays come from ESPN">via ESPN</div>`
+                : ""
           }
         </div>`
         : "";
@@ -5295,6 +5312,11 @@ white-space: nowrap;
           color: var(--secondary-text-color);
           opacity: 0.8;
           margin-top: 4px;
+        }
+        .source-logo {
+          height: 14px;
+          width: auto;
+          vertical-align: middle;
         }
         .series-banner {
           text-align: center;
