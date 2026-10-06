@@ -1816,6 +1816,7 @@ def _make_data(
         status_text="Top 5th",
         is_live=is_live,
         is_delayed=is_delayed,
+        abs_challenges={},
     )
 
 

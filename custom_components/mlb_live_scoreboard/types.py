@@ -432,6 +432,31 @@ class PostseasonSeries(TypedDict, total=False):
     competitors: list[SeriesCompetitor]
 
 
+class AbsChallengeSide(TypedDict, total=False):
+    """One team's ball-strike (ABS) challenge budget in :class:`AbsChallenges`."""
+
+    remaining: int
+    used_successful: int
+    used_failed: int
+    # True while this team's challenge of the current pitch is under review.
+    in_progress: bool
+
+
+class AbsChallenges(TypedDict, total=False):
+    """Shape of the ``abs_challenges`` attribute: ABS challenges per team.
+
+    Sourced from MLB's ``feed/live`` ``gameData.absChallenges`` (ESPN carries
+    no equivalent). MLB's ``remaining`` already applies the rule that a
+    successful challenge is retained and only a failed one is spent. Empty
+    (``{}``) unless the displayed game is live and MLB reports
+    ``hasChallenges`` for it.
+    """
+
+    has_challenges: bool
+    away: AbsChallengeSide
+    home: AbsChallengeSide
+
+
 class PlayoffScoreboardTeam(TypedDict, total=False):
     """One side of a :class:`PlayoffScoreboardGame`."""
 

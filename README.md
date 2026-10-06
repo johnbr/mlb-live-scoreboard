@@ -13,6 +13,7 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Play-by-play** - Recent plays and pitch-by-pitch updates (pitch type, velocity, result)
 - **Half-inning pager** - Page the live play-by-play back to earlier half-innings ("what happened in the 4th?"); snaps back to the live half after ~20s (`show_inning_nav`)
 - **Pitch-zone graphic** - Optional strike-zone plot with one numbered, color-coded dot per pitch in the current at-bat (`show_pitch_zone`, off by default)
+- **ABS challenges remaining** - Dots beside each team's score on the live card show its ball-strike challenges left (filled = remaining, hollow = lost); a dot pulses while that team's challenge is under review (`show_challenges`)
 - **Due-up panel** - Between half-innings, the matchup row shows the next three batters with portraits and stats
 - **Pre-game info** - Scheduled game times and probable pitchers
 - **Post-game results** - Final scores and game leaders
@@ -114,6 +115,7 @@ Add the card to your dashboard — either way:
 | `title`                | string  | Team name    | Card title                                                                                                                                                                                                                                                                                               |
 | `refresh_rate`         | number  | `0`          | Auto-refresh interval in seconds (0 = disabled)                                                                                                                                                                                                                                                          |
 | `show_series`          | boolean | `true`       | Postseason only: show the series standing above the score rows (e.g. `NLDS · Dodgers lead 2-0`, `NLDS · Game 1` before the series starts). Renders nothing in the regular season                                                                                                                         |
+| `show_challenges`      | boolean | `true`       | Show ball-strike (ABS) challenges remaining as dots left of each team's score on the live card: filled = remaining, hollow = lost (a won challenge is kept). A dot pulses while that team's challenge is under review. Data comes from MLB's Stats API; renders nothing when MLB reports no ABS challenges for the game |
 | `show_batter`          | boolean | `true`       | Show pitcher/batter matchup panel                                                                                                                                                                                                                                                                        |
 | `show_records`         | boolean | `true`       | Show team win/loss records (regular-season games only; hidden for postseason games)                                                                                                                                                                                                                      |
 | `show_linescore`       | boolean | `false`      | Show detailed inning-by-inning linescore                                                                                                                                                                                                                                                                 |
@@ -142,6 +144,7 @@ entity: sensor.mlb_live_scoreboard_lad
 title: Dodgers
 refresh_rate: 10
 show_series: true
+show_challenges: true
 show_batter: true
 show_records: true
 show_linescore: false
@@ -296,6 +299,11 @@ While the fallback (non-preferred) feed is in use, the card shows a small
 `data_source_fallback` attributes (below) report it. Neither feed requires an
 API key.
 
+ABS challenge counts (`show_challenges`) always come from MLB, since ESPN
+doesn't publish them. During live games the integration polls a field-filtered
+copy of MLB's feed (a few hundred bytes) alongside ESPN, or reads them from the
+full MLB feed when MLB is already the live source.
+
 ## Sensor state attributes
 
 The sensor's state is the ESPN event ID (or `idle`); all game data rides in
@@ -309,6 +317,7 @@ state attributes. A few are handy for dashboards and automations:
 | `status_text` | string | Human-readable status detail, e.g. `Top 3rd`, `Final`, `Rain Delay`.                                             |
 | `data_source` | string | Which feed supplied the live game detail: `espn` or `mlb_statsapi`.                                              |
 | `data_source_fallback` | bool | `true` while a live game is being served by the non-preferred feed (see [Live data source](#live-data-source)). |
+| `abs_challenges` | object | Ball-strike challenges per team while the game is live: `{has_challenges, away: {remaining, used_successful, used_failed, in_progress}, home: {…}}`, from MLB's Stats API; `{}` otherwise. |
 | `series`      | object | Postseason series standing (e.g. summary `NLDS · Dodgers lead 2-0`); empty in the regular season.                |
 
 Example — only show the scoreboard card while a game is live:

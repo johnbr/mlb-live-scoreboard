@@ -68,6 +68,8 @@ def build_state_attributes(data: Any) -> dict[str, Any]:
         "data_source": getattr(data, "data_source", "espn"),
         # True while that source is the fallback, not the preferred one.
         "data_source_fallback": bool(getattr(data, "data_source_fallback", False)),
+        # Ball-strike (ABS) challenges per team from MLB's feed; {} unless live.
+        "abs_challenges": getattr(data, "abs_challenges", None) or {},
         "status_text": data.status_text,
         "display_event_id": data.display_event_id,
         "live_event_id": data.live_event_id,

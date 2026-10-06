@@ -4,7 +4,7 @@ import asyncio
 import logging
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -78,6 +78,7 @@ from .const import (
 )
 from .statsapi import DATA_SOURCE_ESPN, DATA_SOURCE_MLB, is_mlb_id
 from .types import (
+    AbsChallenges,
     BatterStats,
     Competition,
     CurrentBatter,
@@ -353,6 +354,9 @@ class MlbLiveScoreboardData:
     # integration's "data source preference" option), i.e. a fallback is in
     # use. Drives the card's "via MLB" / "via ESPN" tag.
     data_source_fallback: bool = False
+    # Ball-strike (ABS) challenges remaining per team, from MLB's feed; ``{}``
+    # unless the displayed game is live. See :class:`AbsChallenges`.
+    abs_challenges: AbsChallenges = field(default_factory=dict)
 
 
 class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData]):
@@ -433,6 +437,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # (gamePk, fetched_at_ts, feed) -- the last good MLB feed, reused for up
         # to STATSAPI_FEED_STALE_FALLBACK_SECONDS when a fetch fails.
         self._statsapi_feed_cache: tuple[int, float, dict[str, Any]] | None = None
+        # (gamePk, fetched_at, abs_challenges) from the last good ABS fetch,
+        # reused like the feed cache when a poll fails.
+        self._abs_challenges_cache: tuple[int, float, AbsChallenges] | None = None
         # (event_id, data_source) last logged, so a switch logs once each way.
         self._data_source_logged: tuple[str, str] | None = None
         self._fired_once_event_id: str | None = None
@@ -3971,6 +3978,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         batter_id, pitcher_id = self._resolve_batter_pitcher_ids(summary)
         status_detail, is_live, is_delayed = self._resolve_status_info(display_comp)
+        abs_challenges: AbsChallenges = {}
+        if live_bridge and is_live and display_id:
+            abs_challenges = await self._abs_challenges(str(display_id), display_comp, data_source)
 
         # ESPN resolves an at-bat in `summary.plays` before it clears
         # `situation.batter`, which put the retired batter in the box above
@@ -4168,6 +4178,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             is_delayed=is_delayed,
             data_source=data_source,
             data_source_fallback=bool(live_bridge and data_source_fallback and is_live),
+            abs_challenges=abs_challenges,
         )
 
     def _prefer_mlb(self) -> bool:
@@ -4253,6 +4264,39 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             return None
         self._statsapi_feed_cache = (game_pk, now_ts, feed)
         return feed
+
+    async def _abs_challenges(
+        self, event_id: str, display_comp: dict[str, Any] | None, data_source: str
+    ) -> AbsChallenges:
+        """ABS challenges for the live game from MLB, or ``{}`` if unavailable.
+
+        ESPN has no challenge data, so this polls MLB's field-filtered feed
+        even when ESPN is the live source. When MLB already is, the full feed
+        fetched this refresh is reused instead of a second request.
+        """
+        game_pk = await self._statsapi_game_pk(event_id, display_comp)
+        if not game_pk:
+            return {}
+        now_ts = time.time()
+        feed_cache = self._statsapi_feed_cache
+        if data_source == DATA_SOURCE_MLB and feed_cache is not None and feed_cache[0] == game_pk:
+            feed: Any = feed_cache[2]
+        else:
+            try:
+                feed = await self._get_json(statsapi.STATSAPI_CHALLENGES_URL.format(game_pk=game_pk))
+            except Exception as err:
+                cached = self._abs_challenges_cache
+                if cached is not None and cached[0] == game_pk and now_ts - cached[1] <= STATSAPI_FEED_STALE_FALLBACK_SECONDS:
+                    return cached[2]
+                _LOGGER.debug("ABS challenge fetch failed for MLB game %s: %s", game_pk, err)
+                return {}
+        try:
+            challenges: AbsChallenges = statsapi.abs_challenges(feed if isinstance(feed, dict) else {})  # type: ignore[assignment]
+        except Exception as err:  # an unrecognised MLB shape must not break the refresh
+            _LOGGER.debug("Unable to read ABS challenges for MLB game %s: %s", game_pk, err)
+            return {}
+        self._abs_challenges_cache = (game_pk, now_ts, challenges)
+        return challenges
 
     def _compute_update_interval(self, data: MlbLiveScoreboardData, events: list[dict[str, Any]]) -> timedelta:
         """Pick the poll interval for the next refresh from the game state.

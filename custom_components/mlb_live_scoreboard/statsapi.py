@@ -36,6 +36,16 @@ STATSAPI_SCHEDULE_URL = (
     "https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={start}&endDate={end}&teamId={team}"
 )
 STATSAPI_FEED_URL = "https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
+# The same feed trimmed (via MLB's ``fields`` filter) to what
+# :func:`abs_challenges` reads: ~270 bytes instead of ~750 KB, cheap enough to
+# poll alongside ESPN for every live game.
+STATSAPI_CHALLENGES_URL = STATSAPI_FEED_URL + (
+    "?fields=gameData,teams,away,home,id,absChallenges,hasChallenges,usedSuccessful,usedFailed,remaining,"
+    "liveData,plays,currentPlay,playEvents,reviewDetails,inProgress,reviewType,challengeTeamId"
+)
+# ``reviewDetails.reviewType`` of a ball-strike (ABS) challenge. Manager replay
+# challenges carry other codes (MA, MV, ...) and a separate budget.
+ABS_REVIEW_TYPE = "MJ"
 MLB_HEADSHOT_URL = (
     "https://img.mlbstatic.com/mlb-photos/image/upload/w_213,q_auto:best/v1/people/{id}/headshot/67/current"
 )
@@ -419,6 +429,39 @@ def _safe_int(value: Any) -> int:
         return int(str(value))
     except (TypeError, ValueError):
         return 0
+
+
+def abs_challenges(feed: dict[str, Any]) -> dict[str, Any]:
+    """ABS (ball-strike) challenges per team from an MLB ``feed/live`` payload.
+
+    Returns the ``AbsChallenges`` shape, or ``{}`` when MLB reports no ABS
+    challenges for the game. ``remaining`` is MLB's own count (a won challenge
+    is retained). ``in_progress`` marks the team whose challenge of a pitch in
+    the current at-bat is still under review.
+    """
+    game_data = feed.get("gameData") or {}
+    abs_data = game_data.get("absChallenges") or {}
+    if not abs_data.get("hasChallenges"):
+        return {}
+    teams = game_data.get("teams") or {}
+    side_by_team = {str((teams.get(side) or {}).get("id") or ""): side for side in ("away", "home")}
+    current = ((feed.get("liveData") or {}).get("plays") or {}).get("currentPlay") or {}
+    reviews = [current.get("reviewDetails")] + [ev.get("reviewDetails") for ev in current.get("playEvents") or []]
+    pending = {
+        side_by_team.get(str(rd.get("challengeTeamId") or ""))
+        for rd in reviews
+        if isinstance(rd, dict) and rd.get("inProgress") and rd.get("reviewType") == ABS_REVIEW_TYPE
+    }
+    result: dict[str, Any] = {"has_challenges": True}
+    for side in ("away", "home"):
+        counts = abs_data.get(side) or {}
+        result[side] = {
+            "remaining": _safe_int(counts.get("remaining")),
+            "used_successful": _safe_int(counts.get("usedSuccessful")),
+            "used_failed": _safe_int(counts.get("usedFailed")),
+            "in_progress": side in pending,
+        }
+    return result
 
 
 def _bat_order(box_player: dict[str, Any]) -> int:

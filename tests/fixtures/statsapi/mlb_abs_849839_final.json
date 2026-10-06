@@ -1,0 +1,34 @@
+{
+    "gameData": {
+        "teams": {
+            "away": {
+                "id": 147
+            },
+            "home": {
+                "id": 139
+            }
+        },
+        "absChallenges": {
+            "hasChallenges": true,
+            "away": {
+                "usedSuccessful": 1,
+                "usedFailed": 0,
+                "remaining": 2
+            },
+            "home": {
+                "usedSuccessful": 1,
+                "usedFailed": 0,
+                "remaining": 2
+            }
+        }
+    },
+    "liveData": {
+        "plays": {
+            "currentPlay": {
+                "playEvents": [
+                    {}
+                ]
+            }
+        }
+    }
+}
