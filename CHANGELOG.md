@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.32.0...v1.33.0) (2026-10-06)
+
+
+### Features
+
+* choose ESPN or MLB as the preferred live source, the other as fallback ([#127](https://github.com/johnbr/mlb-live-scoreboard/issues/127)) ([5f845de](https://github.com/johnbr/mlb-live-scoreboard/commit/5f845dec4f900fde12edb8024cea5f66d29bfbf1))
+
 ## [1.32.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.31.3...v1.32.0) (2026-10-06)
 
 
