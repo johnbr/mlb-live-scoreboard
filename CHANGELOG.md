@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.34.0...v1.35.0) (2026-10-06)
+
+
+### Features
+
+* write MLB-sourced plays the way ESPN does, and show MLB's logo when MLB is the source ([#132](https://github.com/johnbr/mlb-live-scoreboard/issues/132)) ([931b96c](https://github.com/johnbr/mlb-live-scoreboard/commit/931b96c909a1560043ae384b54284764c1889d63))
+
 ## [1.34.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.33.0...v1.34.0) (2026-10-06)
 
 
