@@ -97,6 +97,7 @@ def _install_homeassistant_stubs() -> None:
     ha_helpers_platform.AddEntitiesCallback = _Stub
     ha_helpers_script.Script = _Stub
     ha_helpers_selector.ActionSelector = _Stub
+    ha_helpers_selector.BooleanSelector = _Stub
     ha_helpers_update.DataUpdateCoordinator = _Stub
     # Distinct subclass so ``CoordinatorEntity[...], SensorEntity`` don't
     # collapse to the same base (duplicate-base-class TypeError otherwise).

@@ -190,6 +190,10 @@ OPT_ON_GAME_STARTED = "on_game_started"
 OPT_ON_GAME_ENDED = "on_game_ended"
 OPT_ON_GAME_WON = "on_game_won"
 OPT_ON_GAME_LOST = "on_game_lost"
+# Boolean option (default ON): fill a live game ESPN publishes no
+# play-by-play for from MLB's Stats API. See statsapi.py.
+OPT_STATSAPI_FALLBACK = "statsapi_fallback"
+DEFAULT_STATSAPI_FALLBACK = True
 
 # Mapping from event name -> option key. Used by the coordinator to look up
 # and run the configured action sequence when an event fires.
@@ -254,3 +258,9 @@ MLB_TEAM_MAP = {
 # them apart. The distinction matters because ESPN reports player AVG/ERA
 # differently in the two — see ``_is_allstar_summary``.
 ALLSTAR_TEAM_IDS = frozenset({str(MLB_TEAM_MAP["AL"]), str(MLB_TEAM_MAP["NL"])})
+
+# MLB Stats API fallback (statsapi.py): reuse the last good MLB feed this long
+# when a fetch fails before giving up to ESPN's empty summary, and retry a
+# failed ESPN-event -> MLB-gamePk lookup this often.
+STATSAPI_FEED_STALE_FALLBACK_SECONDS = 60
+STATSAPI_GAME_PK_RETRY_SECONDS = 300

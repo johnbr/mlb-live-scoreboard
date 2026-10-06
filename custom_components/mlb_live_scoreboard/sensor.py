@@ -63,6 +63,9 @@ def build_state_attributes(data: Any) -> dict[str, Any]:
         "game_active": data.mode == "live",
         "is_live": data.is_live,
         "is_delayed": data.is_delayed,
+        # "espn", or "mlb_statsapi" while ESPN publishes no play-by-play for the
+        # live game and MLB's Stats API fills the live view (statsapi.py).
+        "data_source": getattr(data, "data_source", "espn"),
         "status_text": data.status_text,
         "display_event_id": data.display_event_id,
         "live_event_id": data.live_event_id,

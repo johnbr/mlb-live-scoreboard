@@ -16,6 +16,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.script import Script
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from . import statsapi
 from .const import (
     ALLSTAR_SCHEDULE_STALE_FALLBACK_SECONDS,
     ALLSTAR_SCHEDULE_TTL_SECONDS,
@@ -26,6 +27,7 @@ from .const import (
     CONF_NAME,
     CONF_TEAM,
     DEFAULT_SCAN_INTERVAL_SECONDS,
+    DEFAULT_STATSAPI_FALLBACK,
     DOMAIN,
     DUE_UP_LIMIT,
     EVENT_GAME_ENDED,
@@ -44,6 +46,7 @@ from .const import (
     MLB_TEAM_MAP,
     NEAR_GAME_LAG_SECONDS,
     NEAR_GAME_LEAD_SECONDS,
+    OPT_STATSAPI_FALLBACK,
     PLAYER_CARD_STALE_FALLBACK_SECONDS,
     PLAYER_CARD_TTL_SECONDS,
     SCAN_INTERVAL_IDLE_SECONDS,
@@ -61,6 +64,8 @@ from .const import (
     SHOW_NEXT_AFTER_PREV_SECONDS,
     STANDINGS_STALE_FALLBACK_SECONDS,
     STANDINGS_TTL_SECONDS,
+    STATSAPI_FEED_STALE_FALLBACK_SECONDS,
+    STATSAPI_GAME_PK_RETRY_SECONDS,
     STATUS_NAME_DELAYED,
     STATUS_NAME_IN_PROGRESS,
     SUPPLEMENT_SCHEDULE_STALE_FALLBACK_SECONDS,
@@ -70,6 +75,7 @@ from .const import (
     THIRD_OUT_HOLD_SECONDS,
     USER_AGENT,
 )
+from .statsapi import DATA_SOURCE_ESPN, DATA_SOURCE_MLB, is_mlb_id
 from .types import (
     BatterStats,
     Competition,
@@ -339,6 +345,9 @@ class MlbLiveScoreboardData:
     status_text: str
     is_live: bool
     is_delayed: bool
+    # Where the live-view fields came from: ``"espn"``, or ``"mlb_statsapi"``
+    # while ESPN publishes no play-by-play for the live game (see statsapi.py).
+    data_source: str = DATA_SOURCE_ESPN
 
 
 class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData]):
@@ -413,6 +422,14 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # ``is_live`` True->False->True and would otherwise re-fire
         # GAME_STARTED (and likewise ENDED/WON/LOST on a final-status
         # flicker). Keyed by ``display_event_id`` so a new game resets it.
+        # MLB Stats API fallback (statsapi.py). ESPN event id -> (looked_up_at,
+        # gamePk or None); a miss is retried after STATSAPI_GAME_PK_RETRY_SECONDS.
+        self._statsapi_game_pk_cache: dict[str, tuple[float, int | None]] = {}
+        # (gamePk, fetched_at_ts, feed) -- the last good MLB feed, reused for up
+        # to STATSAPI_FEED_STALE_FALLBACK_SECONDS when a fetch fails.
+        self._statsapi_feed_cache: tuple[int, float, dict[str, Any]] | None = None
+        # (event_id, data_source) last logged, so a switch logs once each way.
+        self._data_source_logged: tuple[str, str] | None = None
         self._fired_once_event_id: str | None = None
         self._fired_once_events: set[str] = set()
 
@@ -2176,7 +2193,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return ``career-batting`` under this query, so the same URL works
         for every athlete the at-bat caller will ever pass in.
         """
-        if not athlete_id:
+        # A synthetic `mlb-` id (MLB Stats API fallback) has no ESPN athlete.
+        if not athlete_id or is_mlb_id(athlete_id):
             return {}
         cached = self._batter_stats_cache.get(athlete_id)
         now_ts = time.time()
@@ -2203,7 +2221,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         displayed season ERA, which the All-Star boxscore reports as a game
         value. Falls back to a stale cache entry on fetch failure.
         """
-        if not athlete_id:
+        # A synthetic `mlb-` id (MLB Stats API fallback) has no ESPN athlete.
+        if not athlete_id or is_mlb_id(athlete_id):
             return {}
         cached = self._pitcher_stats_cache.get(athlete_id)
         now_ts = time.time()
@@ -2422,7 +2441,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         reused as a fallback when ESPN is briefly unreachable rather than
         blanking the popup.
         """
-        if not athlete_id:
+        # A synthetic `mlb-` id (MLB Stats API fallback) has no ESPN athlete.
+        if not athlete_id or is_mlb_id(athlete_id):
             return {}
         now_ts = time.time()
         cached = self._player_card_cache.get(athlete_id)
@@ -2489,7 +2509,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
     async def _get_one_season_line(self, athlete_id: str) -> dict[str, Any]:
         """One athlete's parsed current-season line, TTL-cached with a
         stale fallback (mirrors :meth:`_get_player_card`'s resilience)."""
-        if not athlete_id:
+        # A synthetic `mlb-` id (MLB Stats API fallback) has no ESPN athlete.
+        if not athlete_id or is_mlb_id(athlete_id):
             return {}
         now_ts = time.time()
         cached = self._team_season_stats_cache.get(athlete_id)
@@ -2648,7 +2669,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             suffix = str(athlete.get("suffix") or "").strip() or _suffix_from_display_name(display_name)
             last_name = str(athlete.get("lastName") or "").strip()
             if last_name:
-                return f"{last_name} {suffix}".strip() if suffix else last_name
+                # ESPN's roster `lastName` can already carry the suffix
+                # ("Mesa Jr."); appending it again read "Mesa Jr. Jr.".
+                if suffix and not last_name.lower().endswith(suffix.lower()):
+                    return f"{last_name} {suffix}"
+                return last_name
             if display_name:
                 parts = display_name.split()
                 if suffix and len(parts) >= 2:
@@ -3900,6 +3925,21 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 _LOGGER.warning("Unable to fetch summary for %s: %s", display_id, err)
 
         display_comp = self._resolve_display_comp(summary, display_id, display_event)
+
+        # ESPN sometimes covers a live game with score + status only (no
+        # plays, no situation, an empty box score). Fill those parts from MLB's
+        # Stats API, live refresh only -- a navigated game stays on ESPN.
+        data_source = DATA_SOURCE_ESPN
+        if live_bridge and statsapi.espn_lacks_play_by_play(summary) and self._statsapi_enabled():
+            _detail, live_now, _delayed = self._resolve_status_info(display_comp)
+            if live_now:
+                translated = await self._statsapi_summary(str(display_id), summary, display_comp)
+                if translated is not None:
+                    summary = translated
+                    data_source = DATA_SOURCE_MLB
+        if live_bridge:
+            self._log_data_source(str(display_id), data_source)
+
         away_id, home_id = self._resolve_competitor_ids(display_comp)
         away_team_payload, home_team_payload = await asyncio.gather(
             self._fetch_team_payload(away_id, "away"),
@@ -4108,7 +4148,87 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             status_text=status_detail,
             is_live=is_live,
             is_delayed=is_delayed,
+            data_source=data_source,
         )
+
+    def _statsapi_enabled(self) -> bool:
+        return bool((self.entry.options or {}).get(OPT_STATSAPI_FALLBACK, DEFAULT_STATSAPI_FALLBACK))
+
+    def _log_data_source(self, event_id: str, data_source: str) -> None:
+        """Log a switch of the live-view source once each way, not every poll."""
+        previous = self._data_source_logged
+        self._data_source_logged = (event_id, data_source)
+        if previous == (event_id, data_source):
+            return
+        if data_source == DATA_SOURCE_MLB:
+            _LOGGER.info(
+                "%s: ESPN has no play-by-play for event %s; filling the live view from MLB's Stats API",
+                self.team_abbr,
+                event_id,
+            )
+        elif previous is not None and previous[0] == event_id and previous[1] == DATA_SOURCE_MLB:
+            _LOGGER.info("%s: ESPN play-by-play is back for event %s; using ESPN again", self.team_abbr, event_id)
+
+    async def _statsapi_summary(
+        self, event_id: str, summary: dict[str, Any], display_comp: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        """ESPN summary with MLB's live data filled in, or None to stay on ESPN.
+
+        Every failure returns None, so the card can only ever fall back to
+        what ESPN alone would have shown.
+        """
+        game_pk = await self._statsapi_game_pk(event_id, display_comp)
+        if not game_pk:
+            return None
+        feed = await self._statsapi_feed(game_pk)
+        if not feed:
+            return None
+        try:
+            return statsapi.summary_from_statsapi(summary, feed)
+        except Exception as err:  # an unrecognised MLB shape must not break the refresh
+            _LOGGER.warning("Unable to translate MLB feed %s for event %s: %s", game_pk, event_id, err)
+            return None
+
+    async def _statsapi_game_pk(self, event_id: str, display_comp: dict[str, Any] | None) -> int | None:
+        """Resolve (and cache for the game) the MLB gamePk for an ESPN event."""
+        now_ts = time.time()
+        cached = self._statsapi_game_pk_cache.get(event_id)
+        if cached is not None and (cached[1] or now_ts - cached[0] < STATSAPI_GAME_PK_RETRY_SECONDS):
+            return cached[1]
+        away_id, home_id = self._resolve_competitor_ids(display_comp)
+        espn_date = (display_comp or {}).get("date")
+        window = statsapi.schedule_window(espn_date)
+        home_mlb = statsapi.ESPN_TO_MLB_TEAM_ID.get(home_id)
+        game_pk: int | None = None
+        if window and home_mlb:
+            url = statsapi.STATSAPI_SCHEDULE_URL.format(start=window[0], end=window[1], team=home_mlb)
+            try:
+                schedule = await self._get_json(url)
+                game_pk = statsapi.find_game_pk(schedule, away_id, home_id, espn_date)
+            except Exception as err:
+                _LOGGER.debug("MLB schedule lookup failed for event %s: %s", event_id, err)
+        if game_pk is None:
+            _LOGGER.debug("No MLB game found for ESPN event %s (%s @ %s)", event_id, away_id, home_id)
+        # Only the current game is ever needed; don't let the map grow.
+        self._statsapi_game_pk_cache = {event_id: (now_ts, game_pk)}
+        return game_pk
+
+    async def _statsapi_feed(self, game_pk: int) -> dict[str, Any] | None:
+        """MLB ``feed/live`` for ``game_pk``, reusing the last good copy briefly."""
+        now_ts = time.time()
+        try:
+            feed = await self._get_json(statsapi.STATSAPI_FEED_URL.format(game_pk=game_pk))
+        except Exception as err:
+            cached = self._statsapi_feed_cache
+            if cached is not None and cached[0] == game_pk and now_ts - cached[1] <= STATSAPI_FEED_STALE_FALLBACK_SECONDS:
+                _LOGGER.debug("MLB feed %s fetch failed (%s); reusing the last good copy", game_pk, err)
+                return cached[2]
+            _LOGGER.warning("Unable to fetch MLB feed %s: %s", game_pk, err)
+            return None
+        if not isinstance(feed, dict) or not feed.get("liveData"):
+            return None
+        self._statsapi_feed_cache = (game_pk, now_ts, feed)
+        return feed
 
     def _compute_update_interval(self, data: MlbLiveScoreboardData, events: list[dict[str, Any]]) -> timedelta:
         """Pick the poll interval for the next refresh from the game state.

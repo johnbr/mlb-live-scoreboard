@@ -28,7 +28,11 @@
           "on_game_started": "When the game starts",
           "on_game_ended": "When the game ends (any result)",
           "on_game_won": "When my team wins",
-          "on_game_lost": "When my team loses"
+          "on_game_lost": "When my team loses",
+          "statsapi_fallback": "Use MLB's Stats API when ESPN has no play-by-play"
+        },
+        "data_description": {
+          "statsapi_fallback": "ESPN occasionally covers a live game with the score only, leaving the batter, pitcher, count and plays blank. When on, those are filled in from MLB's public Stats API for that game, and the card shows a small 'via MLB' tag."
         }
       }
     }
