@@ -4,22 +4,28 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers.selector import ActionSelector, BooleanSelector
+from homeassistant.helpers.selector import (
+    ActionSelector,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .const import (
     CONF_NAME,
     CONF_TEAM,
+    DATA_SOURCE_PREFERENCES,
+    DEFAULT_DATA_SOURCE_PREFERENCE,
     DEFAULT_NAME,
-    DEFAULT_STATSAPI_FALLBACK,
     DOMAIN,
     MLB_TEAM_MAP,
+    OPT_DATA_SOURCE_PREFERENCE,
     OPT_ON_GAME_ENDED,
     OPT_ON_GAME_LOST,
     OPT_ON_GAME_STARTED,
     OPT_ON_GAME_WON,
     OPT_ON_OPPONENT_SCORED,
     OPT_ON_TEAM_SCORED,
-    OPT_STATSAPI_FALLBACK,
 )
 
 
@@ -92,8 +98,7 @@ class MlbLiveScoreboardOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             # Drop empty entries so missing/cleared fields don't persist as
             # empty action lists (which would still flag as "configured").
-            # The fallback toggle is a bool, so an explicit False must survive.
-            cleaned = {k: v for k, v in user_input.items() if v or isinstance(v, bool)}
+            cleaned = {k: v for k, v in user_input.items() if v}
             return self.async_create_entry(title="", data=cleaned)
 
         current = self.config_entry.options or {}
@@ -106,12 +111,16 @@ class MlbLiveScoreboardOptionsFlow(config_entries.OptionsFlow):
                 else vol.Optional(key)
             )
             schema_dict[field] = ActionSelector()
-        schema_dict[
-            vol.Optional(
-                OPT_STATSAPI_FALLBACK,
-                default=bool(current.get(OPT_STATSAPI_FALLBACK, DEFAULT_STATSAPI_FALLBACK)),
+        preference = current.get(OPT_DATA_SOURCE_PREFERENCE, DEFAULT_DATA_SOURCE_PREFERENCE)
+        if preference not in DATA_SOURCE_PREFERENCES:
+            preference = DEFAULT_DATA_SOURCE_PREFERENCE
+        schema_dict[vol.Optional(OPT_DATA_SOURCE_PREFERENCE, default=preference)] = SelectSelector(
+            SelectSelectorConfig(
+                options=list(DATA_SOURCE_PREFERENCES),
+                translation_key=OPT_DATA_SOURCE_PREFERENCE,
+                mode=SelectSelectorMode.DROPDOWN,
             )
-        ] = BooleanSelector()
+        )
 
         return self.async_show_form(
             step_id="init", data_schema=vol.Schema(schema_dict)

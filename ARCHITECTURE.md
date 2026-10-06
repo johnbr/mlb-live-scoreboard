@@ -296,15 +296,26 @@ expanded card goes blank. Observed 2026-10-05 on ALDS Game 2, NYY @ TB (ESPN
 games the same day were fully covered, so this is a per-game coverage gap,
 not an API change.
 
-**Trigger:** the live refresh only (`live_bridge=True`, so navigated games
-stay on ESPN). The game must be live, the flag must read `"none"`, and
-`plays` must be empty. The flag is ESPN's own statement; an empty `plays` on
-its own also happens in a covered game's first seconds. The check runs every
-poll. Going **back** to ESPN waits for ESPN's plays, not just its flag:
-when coverage resumed mid-game on 2026-10-05, ESPN flipped to `"full"` about
-a minute before any plays arrived, which would have blanked the card for that
-minute (`should_use_statsapi`).
-The options flow can turn it off (`statsapi_fallback`, on by default).
+**Preference (options flow, `data_source_preference`):** which feed drives
+the live view. The other feed is the fallback. Either way the score and the
+game state (live/final) stay ESPN's, and navigated games stay on ESPN, since
+only the live refresh (`live_bridge=True`) translates.
+
+- **`espn` (default):** MLB fills in only when ESPN has no play-by-play for
+  the live game. That needs ESPN's flag to read `"none"` **and** `plays` to be
+  empty, because an empty `plays` on its own also happens in a covered game's
+  first seconds. Going **back** to ESPN waits for ESPN's plays, not just its
+  flag: when coverage resumed mid-game on 2026-10-05, ESPN flipped to
+  `"full"` about a minute before any plays arrived, which would have blanked
+  the card for that minute (`should_use_statsapi`).
+- **`mlb`:** every live refresh tries MLB first. ESPN's summary, untouched,
+  is the fallback whenever the MLB lookup, the fetch or the translation fails
+  (`wants_statsapi`). On a fully covered game this replaces ESPN's own plays.
+  The oracle shows every player still resolves to his ESPN id there.
+
+After a successful translation `display_comp` is **re-resolved** from the
+translated summary. Otherwise the inning context and status text keep reading
+ESPN's lagging header and never see MLB's inning.
 
 **Design:** translate, don't duplicate. `summary_from_statsapi` returns a
 copy of ESPN's summary with:
@@ -350,9 +361,11 @@ Details that each matter:
   returns `None`, and so does an untranslatable shape. The card can only ever
   fall back to what ESPN alone would show.
 
-`data_source` (`"espn"` | `"mlb_statsapi"`) is a sensor attribute. The card
-shows a small **"via MLB"** tag in the expanded live view while it reads
-`mlb_statsapi`. The switch is logged at INFO once each way.
+`data_source` (`"espn"` | `"mlb_statsapi"`) and `data_source_fallback`
+(true while that source is NOT the preferred one) are sensor attributes.
+While a fallback is in use, the card shows a small **"via MLB"** or **"via
+ESPN"** tag in the expanded live view. Switching onto or off the fallback is
+logged at INFO, once each way.
 
 **Proof is the oracle test.** The CHW @ CLE game the same day was fully
 covered by both feeds. Translating MLB's copy reproduces ESPN's at-bat

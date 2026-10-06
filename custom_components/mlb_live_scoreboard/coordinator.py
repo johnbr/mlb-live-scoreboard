@@ -26,8 +26,9 @@ from .const import (
     BATTING_ORDER_SIZE,
     CONF_NAME,
     CONF_TEAM,
+    DATA_SOURCE_PREFERENCE_MLB,
+    DEFAULT_DATA_SOURCE_PREFERENCE,
     DEFAULT_SCAN_INTERVAL_SECONDS,
-    DEFAULT_STATSAPI_FALLBACK,
     DOMAIN,
     DUE_UP_LIMIT,
     EVENT_GAME_ENDED,
@@ -46,7 +47,7 @@ from .const import (
     MLB_TEAM_MAP,
     NEAR_GAME_LAG_SECONDS,
     NEAR_GAME_LEAD_SECONDS,
-    OPT_STATSAPI_FALLBACK,
+    OPT_DATA_SOURCE_PREFERENCE,
     PLAYER_CARD_STALE_FALLBACK_SECONDS,
     PLAYER_CARD_TTL_SECONDS,
     SCAN_INTERVAL_IDLE_SECONDS,
@@ -348,6 +349,10 @@ class MlbLiveScoreboardData:
     # Where the live-view fields came from: ``"espn"``, or ``"mlb_statsapi"``
     # while ESPN publishes no play-by-play for the live game (see statsapi.py).
     data_source: str = DATA_SOURCE_ESPN
+    # True while the live view is coming from the NON-preferred feed (the
+    # integration's "data source preference" option), i.e. a fallback is in
+    # use. Drives the card's "via MLB" / "via ESPN" tag.
+    data_source_fallback: bool = False
 
 
 class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData]):
@@ -3926,24 +3931,32 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         display_comp = self._resolve_display_comp(summary, display_id, display_event)
 
-        # ESPN sometimes covers a live game with score + status only (no
-        # plays, no situation, an empty box score). Fill those parts from MLB's
-        # Stats API, live refresh only -- a navigated game stays on ESPN.
+        # The live view (batter / pitcher / count / plays / box score) comes
+        # from the preferred feed, the other is the fallback (statsapi.py).
+        # ESPN preferred: MLB fills in only when ESPN publishes no play-by-play.
+        # MLB preferred: MLB always, ESPN's summary as-is when MLB fails. Live
+        # refresh only -- a navigated or final game stays on ESPN -- and the
+        # score / game state stay ESPN's either way.
+        prefer_mlb = self._prefer_mlb()
         data_source = DATA_SOURCE_ESPN
         already_on_mlb = bool(
             self.data is not None
             and self.data.data_source == DATA_SOURCE_MLB
             and str(self.data.display_event_id) == str(display_id)
         )
-        if live_bridge and statsapi.should_use_statsapi(summary, already_on_mlb) and self._statsapi_enabled():
+        if live_bridge and statsapi.wants_statsapi(summary, prefer_mlb, already_on_mlb):
             _detail, live_now, _delayed = self._resolve_status_info(display_comp)
             if live_now:
                 translated = await self._statsapi_summary(str(display_id), summary, display_comp)
                 if translated is not None:
                     summary = translated
                     data_source = DATA_SOURCE_MLB
+                    # The translated header carries MLB's inning; re-resolve so
+                    # the inning context and status text actually use it.
+                    display_comp = self._resolve_display_comp(summary, display_id, display_event)
+        data_source_fallback = data_source != (DATA_SOURCE_MLB if prefer_mlb else DATA_SOURCE_ESPN)
         if live_bridge:
-            self._log_data_source(str(display_id), data_source)
+            self._log_data_source(str(display_id), data_source, prefer_mlb)
 
         away_id, home_id = self._resolve_competitor_ids(display_comp)
         away_team_payload, home_team_payload = await asyncio.gather(
@@ -4154,25 +4167,31 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             is_live=is_live,
             is_delayed=is_delayed,
             data_source=data_source,
+            data_source_fallback=bool(live_bridge and data_source_fallback and is_live),
         )
 
-    def _statsapi_enabled(self) -> bool:
-        return bool((self.entry.options or {}).get(OPT_STATSAPI_FALLBACK, DEFAULT_STATSAPI_FALLBACK))
+    def _prefer_mlb(self) -> bool:
+        preference = (self.entry.options or {}).get(OPT_DATA_SOURCE_PREFERENCE, DEFAULT_DATA_SOURCE_PREFERENCE)
+        return preference == DATA_SOURCE_PREFERENCE_MLB
 
-    def _log_data_source(self, event_id: str, data_source: str) -> None:
-        """Log a switch of the live-view source once each way, not every poll."""
+    def _log_data_source(self, event_id: str, data_source: str, prefer_mlb: bool) -> None:
+        """Log a switch onto or off the fallback source once each way, not every poll."""
         previous = self._data_source_logged
         self._data_source_logged = (event_id, data_source)
         if previous == (event_id, data_source):
             return
-        if data_source == DATA_SOURCE_MLB:
+        preferred = DATA_SOURCE_MLB if prefer_mlb else DATA_SOURCE_ESPN
+        names = {DATA_SOURCE_MLB: "MLB's Stats API", DATA_SOURCE_ESPN: "ESPN"}
+        if data_source != preferred:
             _LOGGER.info(
-                "%s: ESPN has no play-by-play for event %s; filling the live view from MLB's Stats API",
+                "%s: %s unavailable for event %s; using %s for the live view",
                 self.team_abbr,
+                names[preferred],
                 event_id,
+                names[data_source],
             )
-        elif previous is not None and previous[0] == event_id and previous[1] == DATA_SOURCE_MLB:
-            _LOGGER.info("%s: ESPN play-by-play is back for event %s; using ESPN again", self.team_abbr, event_id)
+        elif previous is not None and previous[0] == event_id and previous[1] != preferred:
+            _LOGGER.info("%s: %s is back for event %s", self.team_abbr, names[preferred], event_id)
 
     async def _statsapi_summary(
         self, event_id: str, summary: dict[str, Any], display_comp: dict[str, Any] | None

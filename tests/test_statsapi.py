@@ -21,7 +21,7 @@ from types import SimpleNamespace
 from urllib.parse import urlparse
 
 from custom_components.mlb_live_scoreboard import statsapi as sa
-from custom_components.mlb_live_scoreboard.const import OPT_STATSAPI_FALLBACK
+from custom_components.mlb_live_scoreboard.const import OPT_DATA_SOURCE_PREFERENCE
 from custom_components.mlb_live_scoreboard.coordinator import (
     MlbLiveScoreboardCoordinator as Coord,
 )
@@ -429,9 +429,32 @@ def _coord(options: dict | None = None, responses: dict | None = None) -> Coord:
     return coord
 
 
-def test_option_defaults_on_and_can_be_turned_off():
-    assert _coord()._statsapi_enabled() is True
-    assert _coord({OPT_STATSAPI_FALLBACK: False})._statsapi_enabled() is False
+def test_preference_defaults_to_espn():
+    assert _coord()._prefer_mlb() is False
+    assert _coord({OPT_DATA_SOURCE_PREFERENCE: "espn"})._prefer_mlb() is False
+    assert _coord({OPT_DATA_SOURCE_PREFERENCE: "mlb"})._prefer_mlb() is True
+
+
+def test_mlb_preferred_always_tries_mlb_even_when_espn_is_complete():
+    espn = _load("espn_summary_401907991_full.json")
+    assert sa.wants_statsapi(espn, prefer_mlb=True, already_using=False) is True
+    assert sa.wants_statsapi(espn, prefer_mlb=False, already_using=False) is False
+
+
+def test_espn_preferred_uses_mlb_only_as_the_fallback():
+    espn, _feed = _tb_end_of_b6()
+    assert sa.wants_statsapi(espn, prefer_mlb=False, already_using=False) is True
+    assert sa.wants_statsapi(dict(espn, plays=[{"id": "1"}]), prefer_mlb=False, already_using=True) is False
+
+
+def test_mlb_preferred_on_a_fully_covered_game_keeps_espn_ids():
+    # MLB preferred replaces ESPN's own plays on a covered game; every player
+    # must still resolve to ESPN's id, or headshots/popups would degrade.
+    espn = _load("espn_summary_401907991_full.json")
+    full = sa.summary_from_statsapi(espn, _load("mlb_feed_849834_final.json"))
+    assert _at_bats(full) == _at_bats(espn)
+    ids = {x["athlete"]["id"] for p in full["plays"] for x in p["participants"]}
+    assert not [i for i in ids if sa.is_mlb_id(i)]
 
 
 def test_statsapi_summary_end_to_end_and_game_pk_cached():

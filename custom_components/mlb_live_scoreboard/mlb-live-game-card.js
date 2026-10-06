@@ -3362,6 +3362,7 @@ class MlbLiveGameCard extends HTMLElement {
       stateObj?.state,
       attrs.mode,
       attrs.data_source,
+      attrs.data_source_fallback,
       // Visible scoreboard inputs
       away.score,
       away.recordSummary,
@@ -3796,8 +3797,10 @@ class MlbLiveGameCard extends HTMLElement {
                 `${countDotsPanel}${matchupPanel}${onDeckHtml}${baseOccupancyHtml}${recentPlaysPanel}`
           }
           ${
-            attrs.data_source === "mlb_statsapi"
-              ? `<div class="source-tag" title="ESPN has no play-by-play for this game, so the batter, pitcher, count and plays come from MLB's Stats API">via MLB</div>`
+            attrs.data_source_fallback
+              ? attrs.data_source === "mlb_statsapi"
+                ? `<div class="source-tag" title="ESPN has no play-by-play for this game, so the batter, pitcher, count and plays come from MLB's Stats API">via MLB</div>`
+                : `<div class="source-tag" title="MLB's Stats API is unavailable for this game, so the batter, pitcher, count and plays come from ESPN">via ESPN</div>`
               : ""
           }
         </div>`
@@ -5206,7 +5209,7 @@ white-space: nowrap;
         /* Live-card collapse/expand. The header (score rows + chevron strip)
            is one click target; the strip reuses the inning-pager's triangle
            glyphs so the two affordances read as the same language. */
-        /* Shown only while the MLB Stats API fallback fills the live view. */
+        /* Shown only while the live view comes from the NON-preferred feed. */
         .source-tag {
           text-align: right;
           font-size: 0.7em;

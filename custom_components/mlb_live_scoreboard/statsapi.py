@@ -220,6 +220,15 @@ def should_use_statsapi(summary: dict[str, Any], already_using: bool) -> bool:
     return bool(already_using and summary and not (summary.get("plays") or []))
 
 
+def wants_statsapi(summary: dict[str, Any], prefer_mlb: bool, already_using: bool) -> bool:
+    """Whether this live refresh should try MLB first.
+
+    MLB preferred: always (ESPN's summary, as-is, is then the fallback).
+    ESPN preferred: only when ESPN has no play-by-play (:func:`should_use_statsapi`).
+    """
+    return True if prefer_mlb else should_use_statsapi(summary, already_using)
+
+
 def schedule_window(espn_date: Any) -> tuple[str, str] | None:
     """``(startDate, endDate)`` for the MLB schedule query around an ESPN start.
 
