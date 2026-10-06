@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.31.3...v1.32.0) (2026-10-06)
+
+
+### Features
+
+* fill a live game ESPN doesn't cover from MLB's Stats API ([#125](https://github.com/johnbr/mlb-live-scoreboard/issues/125)) ([80b11f9](https://github.com/johnbr/mlb-live-scoreboard/commit/80b11f9b3ebc63951e45cf4f10b8cec6447e71f7))
+
 ## [1.31.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.31.2...v1.31.3) (2026-10-02)
 
 
