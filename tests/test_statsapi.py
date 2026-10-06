@@ -363,7 +363,7 @@ def _types_of(summary: dict) -> list[str]:
 def test_completed_at_bat_gets_result_and_end_marker():
     s = sa.summary_from_statsapi({}, _feed_with([_at_bat("field_out", "Al Batter flies out to center.")]))
     assert _types_of(s) == ["start-batterpitcher", "play-result", "end-batterpitcher"]
-    assert s["plays"][1]["text"] == "Al Batter flied out to center."
+    assert s["plays"][1]["text"] == "Batter flied out to center."
 
 
 def test_out_on_the_bases_leaves_the_at_bat_open_like_espn():
@@ -613,3 +613,139 @@ def test_abs_challenge_failure_reuses_the_last_good_count_briefly():
     gpk, _ts, cached = coord._abs_challenges_cache
     coord._abs_challenges_cache = (gpk, 0.0, cached)  # long expired
     assert asyncio.run(coord._abs_challenges("401907986", comp, sa.DATA_SOURCE_ESPN)) == {}
+
+
+# ---------------------------------------------------------------------------
+# ESPN-style play text
+# ---------------------------------------------------------------------------
+
+
+def _text_roster() -> sa._Roster:
+    people = {
+        10: ("Kyle Tucker", "Kyle", "Tucker", "away"),
+        11: ("Yoshinobu Yamamoto", "Yoshinobu", "Yamamoto", "away"),
+        12: ("Braden Montgomery", "Braden", "Montgomery", "away"),
+        13: ("Colson Montgomery", "Colson", "Montgomery", "away"),
+        20: ("Mauricio Dubón", "Mauricio", "Dubón", "home"),
+        21: ("Ronald Acuña Jr.", "Ronald", "Acuña Jr.", "home"),
+        22: ("Michael Harris II", "Michael", "Harris II", "home"),
+        23: ("José Ramírez", "José", "Ramírez", "home"),
+        24: ("Chris Sale", "Chris", "Sale", "home"),
+    }
+    feed = {
+        "gameData": {
+            "teams": {
+                "away": {"id": 119, "name": "Los Angeles Dodgers", "teamName": "Dodgers"},
+                "home": {"id": 144, "name": "Atlanta Braves", "teamName": "Braves"},
+            },
+            "players": {
+                f"ID{pid}": {"id": pid, "fullName": full, "firstName": first, "lastName": last}
+                for pid, (full, first, last, _side) in people.items()
+            },
+        },
+        "liveData": {
+            "boxscore": {
+                "teams": {
+                    side: {"players": {f"ID{pid}": {} for pid, p in people.items() if p[3] == side}}
+                    for side in ("away", "home")
+                }
+            }
+        },
+    }
+    return sa._Roster({}, feed)
+
+
+def _espn(text: str, batter: int | None = None, distance: int | None = None) -> str:
+    return sa.espn_play_text(text, _text_roster(), batter, distance)
+
+
+def test_espn_text_hits_and_steals():
+    # The two Tucker plays from LAD @ ATL, NLDS 2026-10-06, as ESPN wrote them.
+    assert _espn("Kyle Tucker singles on a line drive to left fielder Mauricio Dubón.", 10) == "Tucker singled to left."
+    assert _espn("Kyle Tucker steals (2) 2nd base.") == "Tucker stole second."
+
+
+def test_espn_text_outs_keep_only_the_first_fielder():
+    assert (
+        _espn("José Ramírez grounds out sharply, shortstop Kyle Tucker to first baseman Chris Sale.", 23)
+        == "Ramírez grounded out to shortstop."
+    )
+    assert _espn("Jose Ramirez pops out to third baseman Kyle Tucker in foul territory.", 23) == (
+        "Ramírez fouled out to third."
+    )
+
+
+def test_espn_text_runners_fold_into_one_sentence():
+    assert (
+        _espn("Michael Harris II doubles (1) on a sharp line drive to right fielder Kyle Tucker. "
+              "José Ramírez scores. Ronald Acuña Jr. scores. Mauricio Dubón to 3rd.", 22)
+        == "Harris II doubled to right, Ramírez scored and Acuña Jr. scored, Dubón to third."
+    )
+
+
+def test_espn_text_double_play_drops_the_batters_own_out():
+    assert (
+        _espn("José Ramírez grounds into a double play, second baseman Kyle Tucker to first baseman Chris Sale. "
+              "Mauricio Dubón out at 2nd. José Ramírez out at 1st.", 23)
+        == "Ramírez grounded into double play, second to first, Dubón out at second."
+    )
+
+
+def test_espn_text_home_run_distance_and_shared_last_names():
+    assert (
+        _espn("Braden Montgomery homers (12) on a fly ball to right center field. Colson Montgomery scores.", 12, 412)
+        == "B. Montgomery homered to right center (412 feet), C. Montgomery scored."
+    )
+
+
+def test_espn_text_wild_pitch_credits_each_runner():
+    assert (
+        _espn("Wild pitch by pitcher Chris Sale. Kyle Tucker to 3rd.")
+        == "Tucker to third on wild pitch by Sale."
+    )
+
+
+def test_espn_text_infield_and_bunt_singles():
+    assert _espn("Michael Harris II singles on a soft bunt ground ball to pitcher Yoshinobu Yamamoto.", 22) == (
+        "Harris II reached on bunt single to pitcher."
+    )
+    assert _espn("Kyle Tucker singles on a ground ball to first baseman Chris Sale.", 10) == (
+        "Tucker reached on infield single to first."
+    )
+
+
+def test_espn_text_challenge_leads_with_the_play_and_credits_the_team():
+    assert (
+        _espn("Ronald Acuña Jr. challenged (pitch result), call on the field was confirmed: "
+              "Ronald Acuña Jr. called out on strikes.", 21)
+        == "Acuña Jr. struck out looking. Atlanta Braves challenged: call on the field was upheld."
+    )
+    assert _espn("Dodgers challenged (tag play), call on the field was overturned: Kyle Tucker steals (3) 3rd base.") == (
+        "Tucker stole third. Los Angeles Dodgers challenged: call on the field was overturned."
+    )
+
+
+def test_espn_text_unrecognised_wording_is_kept_but_shortened():
+    assert _espn("Throwing error by pitcher Chris Sale on the pickoff attempt.") == (
+        "Throwing error by pitcher Sale on the pickoff attempt."
+    )
+
+
+def test_oracle_play_text_reads_like_espn():
+    # CHW @ CLE was covered by both feeds: nearly every translated play must
+    # match ESPN's text exactly. The few left differ only in runner order or
+    # error wording ("reached on" vs ESPN's "safe at first").
+    espn, mine = _cle_oracle()
+
+    def texts(s: dict) -> list[tuple]:
+        return [
+            (p["period"]["type"], p["period"]["number"], p.get("text", ""))
+            for p in s["plays"]
+            if p["type"]["text"] not in ("Start Inning", "End Inning", "Start Batter/Pitcher", "End Batter/Pitcher")
+            and not p.get("text", "").startswith("Pitch ")
+        ]
+
+    espn_texts = set(texts(espn))
+    ours = texts(mine)
+    exact = sum(t in espn_texts for t in ours)
+    assert exact >= 79, f"{exact}/{len(ours)}"

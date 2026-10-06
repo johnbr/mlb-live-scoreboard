@@ -294,10 +294,18 @@ _MLB Live Scoreboard_ → **Configure** → **Preferred live data source**:
 | `ESPN` (default)  | ESPN for everything; MLB fills in when ESPN publishes no play-by-play for a live game             |
 | `MLB Stats API`   | MLB for the live batter, pitcher, count, plays, and box score; ESPN whenever MLB's feed is unavailable |
 
-While the fallback (non-preferred) feed is in use, the card shows a small
-**via MLB** or **via ESPN** tag, and the sensor's `data_source` /
-`data_source_fallback` attributes (below) report it. Neither feed requires an
-API key.
+Whenever MLB is supplying the live view (as the preferred source or as the
+fallback), a small MLB logo appears at the bottom right of the expanded live
+card; while ESPN is the fallback for an MLB preference, a **via ESPN** tag
+appears instead. The sensor's `data_source` / `data_source_fallback`
+attributes (below) report the same. Neither feed requires an API key.
+
+MLB's play descriptions are rewritten into ESPN's terse style, so the
+play-by-play reads the same whichever feed it comes from: last names only (an
+initial when two players share one), plain field positions, runners folded
+into one sentence. For example, MLB's "Kyle Tucker singles on a line drive to
+left fielder Mauricio Dubón." reads "Tucker singled to left.", and "Kyle
+Tucker steals (2) 2nd base." reads "Tucker stole second."
 
 ABS challenge counts (`show_challenges`) always come from MLB, since ESPN
 doesn't publish them. During live games the integration polls a field-filtered

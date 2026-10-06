@@ -342,10 +342,19 @@ Details that each matter:
   view), and the card renders those names unlinked.
 - **Wording.** MLB writes plays in the present tense and ESPN in the past,
   and several helpers match ESPN's words (`_AT_BAT_END_KEYWORDS`, the outcome
-  patterns). `past_tense()` rewrites the verbs ("grounds out" → "grounded
-  out"). Intentional walks and substitutions are reworded into ESPN's form
-  ("Adell intentionally walked.", "Burke relieved Newcomb", "Grichuk hit for
-  Benintendi").
+  patterns). `espn_play_text()` rewrites each description into ESPN's
+  terse form: `past_tense()` for the verbs ("grounds out" → "grounded out"),
+  names tokenized then swapped for ESPN's play name (`_Roster.play_name_for_id`:
+  last name, accented spelling from whichever feed has it, an initial when
+  two players share it), batted-ball type / season counts / adverbs dropped,
+  fielders reduced to positions (a simple out keeps only the first), runner
+  sentences folded into one clause list, wild pitches credited per runner,
+  infield/bunt singles and challenges reworded. On the CHW @ CLE oracle 79 of
+  84 plays match ESPN exactly; the rest differ in runner order or error
+  wording (MLB's "reached on", which the at-bat keywords rely on, vs ESPN's
+  "safe at first"). Intentional walks and substitutions are reworded into
+  ESPN's form ("Adell intentionally walked.", "Burke relieved Newcomb",
+  "Grichuk hit for Benintendi").
 - **Outs on the bases.** An at-bat ending in a caught stealing or pickoff
   gets a result but **no** `End Batter/Pitcher`, which is exactly how ESPN
   marks the carry-over at-bat that `_last_batter_of_half` reads.
@@ -363,8 +372,9 @@ Details that each matter:
 
 `data_source` (`"espn"` | `"mlb_statsapi"`) and `data_source_fallback`
 (true while that source is NOT the preferred one) are sensor attributes.
-While a fallback is in use, the card shows a small **"via MLB"** or **"via
-ESPN"** tag in the expanded live view. Switching onto or off the fallback is
+Whenever MLB supplies the live view (preferred or fallback) the expanded live
+view shows MLB's league logo (`renderMlbSourceTag`, MLB-hosted dark/light SVG
+picked from `hass.themes.darkMode`); an ESPN fallback shows a **"via ESPN"** tag. Switching onto or off the fallback is
 logged at INFO, once each way.
 
 **ABS challenges are always MLB's.** ESPN publishes no ball-strike challenge

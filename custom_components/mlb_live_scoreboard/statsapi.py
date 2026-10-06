@@ -192,6 +192,45 @@ _REMAINS_DH_RE = re.compile(r"^(.+?)\s+remains in the game as the designated hit
 
 _SUFFIX_TOKENS = frozenset({"jr", "sr", "ii", "iii", "iv", "v"})
 
+# ESPN's terse play wording ("Tucker singled to left.") from MLB's long form
+# ("Kyle Tucker singles on a line drive to left fielder Mauricio Dubón.").
+# See :func:`espn_play_text`.
+_FIELDER_POSITIONS = {
+    "pitcher": "pitcher",
+    "catcher": "catcher",
+    "first baseman": "first",
+    "second baseman": "second",
+    "third baseman": "third",
+    "shortstop": "shortstop",
+    "left fielder": "left",
+    "center fielder": "center",
+    "right fielder": "right",
+}
+_POS_RE = "|".join(sorted(_FIELDER_POSITIONS, key=len, reverse=True))
+_NAME_TOKEN = r"\x00\d+\x00"
+_BASE_WORDS = {"1st": "first", "2nd": "second", "3rd": "third"}
+_SEASON_COUNT_RE = re.compile(r" \(\d+\)")
+_BATTED_BALL_RE = re.compile(
+    r" on an? (?:(?:sharp|soft|weak|hard|bunt) )*(?:ground ball|line drive|fly ball|pop up|bunt)", re.IGNORECASE
+)
+_ADVERB_RE = re.compile(r" (?:sharply|softly)(?= to|,|\.|$)")
+_FOUL_TERRITORY_RE = re.compile(r"\b(?:flied|popped|lined) out(?P<rest>.*?) in foul territory")
+_SIMPLE_OUT_CHAIN_RE = re.compile(
+    rf"\b(?P<verb>grounded out|flied out|lined out|popped out|fouled out|bunted out)(?:,| to) "
+    rf"(?P<pos>{_POS_RE}) {_NAME_TOKEN}(?: to (?:{_POS_RE}) {_NAME_TOKEN})*"
+)
+_FIELDER_RE = re.compile(rf"(?:(?<=to )|(?<=, ))(?P<pos>{_POS_RE}) {_NAME_TOKEN}")
+_FIELD_DIRECTION_RE = re.compile(r"\bto (left|right|center|left center|right center) field\b")
+_STEAL_RE = re.compile(r"\bstole (1st|2nd|3rd) base\b")
+_BASE_RE = re.compile(r"\b(to|at|stealing) (1st|2nd|3rd)(?: base)?\b")
+_BALL_GOT_AWAY_RE = re.compile(rf"^(?P<what>Wild pitch|Passed ball) by (?:pitcher|catcher) (?P<who>{_NAME_TOKEN})$")
+_CHALLENGE_RE = re.compile(
+    r"^(?P<who>.+?) challenged \([^)]*\), call on the field was (?P<result>\w+):\s*(?P<play>.+)$", re.DOTALL
+)
+_CHALLENGE_RESULTS = {"confirmed": "upheld", "upheld": "upheld", "overturned": "overturned", "stands": "stands"}
+_INFIELD_SINGLE_RE = re.compile(rf"^(?P<who>{_NAME_TOKEN}) singled to (?P<pos>pitcher|catcher|first|second|third|shortstop)$")
+_SCORED_RE = re.compile(rf"^(?P<who>{_NAME_TOKEN}) (?:scores|scored)$")
+
 
 def is_mlb_id(athlete_id: Any) -> bool:
     """True for a synthetic id this module minted (no ESPN athlete behind it)."""
@@ -316,6 +355,97 @@ def past_tense(text: str) -> str:
     return out
 
 
+def _strip_accents(text: str) -> str:
+    return "".join(ch for ch in unicodedata.normalize("NFKD", text) if not unicodedata.combining(ch))
+
+
+def espn_play_text(
+    text: str, roster: _Roster, batter_mlb: Any = None, hit_distance: Any = None
+) -> str:
+    """Rewrite one MLB play description in ESPN's terse style.
+
+    "Kyle Tucker singles on a line drive to left fielder Mauricio Dubón." ->
+    "Tucker singled to left."; "Kyle Tucker steals (2) 2nd base." -> "Tucker
+    stole second."; runner sentences fold into one clause list ("Vargas
+    walked, Teel to second."). Anything not recognised keeps MLB's wording,
+    past-tensed, with names shortened -- never worse than the input.
+    """
+    tokens: list[str] = []
+    token_pids: list[int | None] = []
+
+    def tokenize(match: re.Match[str]) -> str:
+        tokens.append(roster.play_name_for(match.group(0)))
+        token_pids.append(roster.pid_for(match.group(0)))
+        return f"\x00{len(tokens) - 1}\x00"
+
+    pattern = roster.name_pattern()
+    out = text.strip()
+    if pattern is not None:
+        out = pattern.sub(tokenize, out)
+    # "Braves challenged (pitch result), call on the field was confirmed: X
+    # strikes out looking." -> ESPN leads with the play and appends the review.
+    challenge = ""
+    review = _CHALLENGE_RE.match(out)
+    if review:
+        result = _CHALLENGE_RESULTS.get(review.group("result").lower(), review.group("result").lower())
+        who = review.group("who")
+        # A player's (ABS) challenge is credited to his team, as ESPN does.
+        token = re.fullmatch(_NAME_TOKEN, who)
+        pid = token_pids[int(who[1:-1])] if token else None
+        who = roster.team_name_of(pid) or roster.team_names_by_nickname.get(who, who)
+        challenge = f" {who} challenged: call on the field was {result}."
+        out = review.group("play")
+    bunt = re.search(r"\bbunt\b", out) is not None
+    out = past_tense(out)
+    out = _SEASON_COUNT_RE.sub("", out)
+    out = _BATTED_BALL_RE.sub("", out)
+    out = _ADVERB_RE.sub("", out)
+    out = _FOUL_TERRITORY_RE.sub(lambda m: f"fouled out{m.group('rest')}", out)
+    out = out.replace("into a double play", "into double play").replace("into a triple play", "into triple play")
+    out = _SIMPLE_OUT_CHAIN_RE.sub(lambda m: f"{m.group('verb')} to {_FIELDER_POSITIONS[m.group('pos')]}", out)
+    out = _FIELDER_RE.sub(lambda m: _FIELDER_POSITIONS[m.group("pos")], out)
+    out = _FIELD_DIRECTION_RE.sub(r"to \1", out)
+    out = _STEAL_RE.sub(lambda m: f"stole {_BASE_WORDS[m.group(1)]}", out)
+    out = _BASE_RE.sub(lambda m: f"{m.group(1)} {_BASE_WORDS[m.group(2)]}", out)
+
+    sentences = [part.strip() for part in re.split(r"\.\s+|\.$", out) if part.strip()]
+    if not sentences:
+        return text
+    main, runners = sentences[0], sentences[1:]
+    batter_name = roster.play_name_for_id(batter_mlb) if batter_mlb else ""
+
+    def name_of(token_text: str) -> str:
+        return re.sub(_NAME_TOKEN, lambda m: tokens[int(m.group(0)[1:-1])], token_text)
+
+    # The batter's own out at first in a double play is implied by the verb.
+    if "double play" in main or "triple play" in main:
+        runners = [r for r in runners if not (name_of(r) == f"{batter_name} out at first" and batter_name)]
+
+    clauses: list[str] = []
+    got_away = _BALL_GOT_AWAY_RE.match(main)
+    if got_away and runners:
+        # "Wild pitch by pitcher X. A to 3rd." -> "A to third on wild pitch by X."
+        cause = f"on {got_away.group('what').lower()} by {got_away.group('who')}"
+        clauses = [f"{r} {cause}" for r in runners]
+    else:
+        infield = _INFIELD_SINGLE_RE.match(main)
+        if infield:
+            kind = "bunt single" if bunt else "infield single"
+            main = f"{infield.group('who')} reached on {kind} to {infield.group('pos')}"
+        distance = _safe_int(hit_distance)
+        if distance and "homered" in main:
+            main = f"{main} ({distance} feet)"
+        clauses = [main]
+        for runner in runners:
+            scored = _SCORED_RE.match(runner)
+            runner = f"{scored.group('who')} scored" if scored else runner
+            if scored and clauses[-1].endswith(" scored") and len(clauses) > 1:
+                clauses[-1] = f"{clauses[-1]} and {runner}"
+            else:
+                clauses.append(runner)
+    return name_of(", ".join(clauses) + "." + challenge)
+
+
 def _slug(text: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")
 
@@ -333,6 +463,10 @@ class _Roster:
         teams = game_data.get("teams") or {}
         self.mlb_team_id = {side: int((teams.get(side) or {}).get("id") or 0) for side in ("away", "home")}
         self.espn_team_id = {side: MLB_TO_ESPN_TEAM_ID.get(self.mlb_team_id[side], "") for side in ("away", "home")}
+        self.team_names = {side: str((teams.get(side) or {}).get("name") or "") for side in ("away", "home")}
+        self.team_names_by_nickname = {
+            str((teams.get(side) or {}).get("teamName") or ""): self.team_names[side] for side in ("away", "home")
+        }
 
         # ESPN athletes the summary still lists, per ESPN team id.
         espn_by_team: dict[str, list[dict[str, Any]]] = {}
@@ -378,6 +512,9 @@ class _Roster:
                 if pid:
                     self.side_of[pid] = side
         self._cache: dict[int, dict[str, Any]] = {}
+        self._variants: dict[str, int] | None = None
+        self._last_counts: dict[str, int] | None = None
+        self._name_re: re.Pattern[str] | bool | None = None
 
     def athlete(self, mlb_id: Any) -> dict[str, Any]:
         pid = _safe_int(mlb_id)
@@ -416,6 +553,71 @@ class _Roster:
             if normalize_name(person.get("fullName")) == key:
                 return str(self.athlete(pid).get("lastName") or person.get("lastName") or "")
         return full_name.split()[-1] if full_name.split() else full_name
+
+    def play_name_for_id(self, mlb_id: Any) -> str:
+        """ESPN's name for a player in play text: last name, or "B. Montgomery"
+        when another player in the game shares it."""
+        athlete = self.athlete(mlb_id)
+        person = self.people.get(_safe_int(mlb_id)) or {}
+        last = str(athlete.get("lastName") or person.get("lastName") or "")
+        # ESPN's athlete records often drop accents ("Jose Ramirez") while its
+        # play text keeps them ("Ramírez"); take whichever source spells the
+        # same name with its accents.
+        for candidate in (str(person.get("lastName") or ""), str(athlete.get("lastName") or "")):
+            plain = _strip_accents(candidate)
+            if candidate != plain and _strip_accents(last).startswith(plain):
+                last = candidate + last[len(plain) :]  # keeps a suffix: "Acuña" + " Jr."
+                break
+        if not last:
+            return str(athlete.get("displayName") or person.get("fullName") or "")
+        if self._last_name_counts().get(normalize_name(last), 0) > 1:
+            short = str(athlete.get("shortName") or "")
+            initial = short.split()[0] if short.split() and short.split()[0].endswith(".") else ""
+            return f"{initial} {last}" if initial else (short or last)
+        return last
+
+    def play_name_for(self, name_in_text: str) -> str:
+        pid = self.pid_for(name_in_text)
+        return self.play_name_for_id(pid) if pid else name_in_text
+
+    def pid_for(self, name_in_text: str) -> int | None:
+        return self._pid_by_variant().get(name_in_text)
+
+    def team_name_of(self, mlb_id: Any) -> str:
+        """Full team name ("Atlanta Braves") of the side a player is on."""
+        side = self.side_of.get(_safe_int(mlb_id), "")
+        return self.team_names.get(side, "") if side else ""
+
+    def name_pattern(self) -> re.Pattern[str] | None:
+        """Regex matching any player's name as MLB writes it in play text."""
+        if self._name_re is None:
+            variants = sorted(self._pid_by_variant(), key=len, reverse=True)
+            self._name_re = (
+                re.compile("(?<![\\w.])(?:" + "|".join(re.escape(v) for v in variants) + ")(?!\\w)")
+                if variants
+                else False
+            )
+        return self._name_re or None
+
+    def _pid_by_variant(self) -> dict[str, int]:
+        if self._variants is None:
+            self._variants = {}
+            for pid, person in self.people.items():
+                for key in ("fullName", "nameFirstLast", "firstLastName"):
+                    name = str(person.get(key) or "").strip()
+                    if name:
+                        self._variants.setdefault(name, pid)
+                        self._variants.setdefault(_strip_accents(name), pid)
+        return self._variants
+
+    def _last_name_counts(self) -> dict[str, int]:
+        if self._last_counts is None:
+            self._last_counts = {}
+            for person in self.people.values():
+                key = normalize_name(person.get("lastName"))
+                if key:
+                    self._last_counts[key] = self._last_counts.get(key, 0) + 1
+        return self._last_counts
 
     def espn_id(self, mlb_id: Any) -> str:
         return str(self.athlete(mlb_id).get("id") or "")
@@ -656,7 +858,7 @@ def _build_plays(feed: dict[str, Any], roster: _Roster) -> list[dict[str, Any]]:
                     home_score,
                     type={"id": "57", "text": "Play Result", "type": "play-result"},
                     alternativeType={"text": str(details.get("event") or ""), "type": alt},
-                    text=past_tense(desc),
+                    text=desc if event_type in _LINEUP_CHANGE_EVENT_TYPES else espn_play_text(desc, roster),
                     wallclock=ev.get("startTime"),
                     outs=outs,
                     scoringPlay=bool(details.get("isScoringPlay")),
@@ -673,15 +875,23 @@ def _build_plays(feed: dict[str, Any], roster: _Roster) -> list[dict[str, Any]]:
         home_score = _safe_int(result.get("homeScore"))
         result_outs = _safe_int((ap.get("count") or {}).get("outs"))
         event_type = str(result.get("eventType") or "")
-        text = past_tense(str(result.get("description") or result.get("event") or "").strip())
-        mlb_name = str(((matchup.get("batter") or {}).get("fullName")) or "")
-        espn_name = roster.display_name(batter_mlb)
-        if event_type == "intent_walk" and espn_name:
+        batter_name = roster.play_name_for_id(batter_mlb)
+        if event_type == "intent_walk" and batter_name:
             # MLB words it from the pitcher's side ("Newcomb intentionally
             # walks Adell."); ESPN, and the outcome matching, lead with the batter.
-            text = f"{espn_name} intentionally walked."
-        elif mlb_name and espn_name and text.startswith(mlb_name):
-            text = espn_name + text[len(mlb_name) :]
+            text = f"{batter_name} intentionally walked."
+        else:
+            hit_distance = next(
+                (
+                    (ev.get("hitData") or {}).get("totalDistance")
+                    for ev in reversed(events)
+                    if (ev.get("hitData") or {}).get("totalDistance")
+                ),
+                None,
+            )
+            text = espn_play_text(
+                str(result.get("description") or result.get("event") or ""), roster, batter_mlb, hit_distance
+            )
         out.append(
             _play(
                 common,
