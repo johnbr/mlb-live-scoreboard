@@ -286,6 +286,78 @@ verbatim** (not a break, the side hasn't batted yet, a slot the box score can't
 fill), so an unrecognized payload shape degrades to the old behaviour rather
 than to an empty or truncated panel.
 
+## MLB Stats API fallback (`statsapi.py`)
+
+ESPN occasionally covers a live game with **score and status only**. The
+summary's `header.competitions[0].playByPlaySource` reads `"none"`, and
+`plays` is empty, `situation` absent and every box-score cell `--`, so the
+expanded card goes blank. Observed 2026-10-05 on ALDS Game 2, NYY @ TB (ESPN
+`401907986`), while MLB's own feed (gamePk `849839`) had everything. Other
+games the same day were fully covered, so this is a per-game coverage gap,
+not an API change.
+
+**Trigger:** the live refresh only (`live_bridge=True`, so navigated games
+stay on ESPN). The game must be live, the flag must read `"none"`, and
+`plays` must be empty. The flag is ESPN's own statement; an empty `plays` on
+its own also happens in a covered game's first seconds. The check runs every
+poll, so if ESPN fills the game in later, the next poll goes back to ESPN.
+The options flow can turn it off (`statsapi_fallback`, on by default).
+
+**Design:** translate, don't duplicate. `summary_from_statsapi` returns a
+copy of ESPN's summary with:
+
+- `plays`, `situation`, `boxscore` and `rosters` rebuilt from MLB's
+  `feed/live`, **in ESPN's shape**;
+- the status block's **inning** taken from MLB's linescore, because ESPN's
+  status lagged MLB by up to a minute all game and left a three-out matchup
+  on screen.
+
+Every existing normalizer then runs unchanged: the at-bat hand-off, the due-up
+re-anchoring, the third-out hold, current pitches, lineups and the inning
+pager. Score and game state (live/final) stay ESPN's, so the bus events
+don't change source.
+
+Details that each matter:
+
+- **Identity.** Everything downstream keys on ESPN athlete ids. MLB players
+  are matched within their team, by a case-, accent- and suffix-insensitive
+  name, to the ESPN athletes the uncovered summary still lists (both starting
+  nines plus the listed pitchers); an ambiguous name is no match. Anyone else
+  gets a synthetic **`mlb-<mlbamId>`** id with MLB's headshot. **Every ESPN
+  athlete fetch skips `mlb-` ids** (season stats, career popup, lineup Season
+  view), and the card renders those names unlinked.
+- **Wording.** MLB writes plays in the present tense and ESPN in the past,
+  and several helpers match ESPN's words (`_AT_BAT_END_KEYWORDS`, the outcome
+  patterns). `past_tense()` rewrites the verbs ("grounds out" → "grounded
+  out"). Intentional walks and substitutions are reworded into ESPN's form
+  ("Adell intentionally walked.", "Burke relieved Newcomb", "Grichuk hit for
+  Benintendi").
+- **Outs on the bases.** An at-bat ending in a caught stealing or pickoff
+  gets a result but **no** `End Batter/Pitcher`, which is exactly how ESPN
+  marks the carry-over at-bat that `_last_batter_of_half` reads.
+- **Between halves.** `situation.batter` stays the batter who made the third
+  out (ESPN's behaviour). The stale-situation bridge compares the next half's
+  batter against it, so naming MLB's already-rolled leadoff man would pin the
+  Due Up panel.
+- **Game lookup.** MLB's schedule is queried for the ESPN start's UTC day and
+  the day before. Teams are matched by the static `ESPN_TO_MLB_TEAM_ID` map
+  (abbreviations disagree between the two), and the nearest start time
+  wins, which also separates a doubleheader. The result is cached per game.
+- **Failure.** A failed feed reuses the last good copy for 60 s and then
+  returns `None`, and so does an untranslatable shape. The card can only ever
+  fall back to what ESPN alone would show.
+
+`data_source` (`"espn"` | `"mlb_statsapi"`) is a sensor attribute. The card
+shows a small **"via MLB"** tag in the expanded live view while it reads
+`mlb_statsapi`. The switch is logged at INFO once each way.
+
+**Proof is the oracle test.** The CHW @ CLE game the same day was fully
+covered by both feeds. Translating MLB's copy reproduces ESPN's at-bat
+sequence (all 71), every box-score line, the scoring plays and every
+lineup-change text (`tests/test_statsapi.py`). The live path only runs when
+ESPN drops a game, so those real-payload fixtures
+(`tests/fixtures/statsapi/`) are the regression suite.
+
 ## Card configuration
 
 All card options have safe defaults. Minimum required is `entity`.
@@ -335,6 +407,9 @@ and the editor so unset toggles still reflect their true on/off state.
 | `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>/stats`                  | popup career table (position-defaulted)                                                                                                                       | 6 h (`PLAYER_CARD_TTL_SECONDS`)                             |
 | `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>`                        | player bio (popup header)                                                                                                                                     | 6 h (`PLAYER_CARD_TTL_SECONDS`) + 24 h stale fallback       |
 | `site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/<id>/stats`                  | lineup popup Season view (batch, lazy)                                                                                                                        | 6 h (`TEAM_SEASON_STATS_TTL_SECONDS`) + 24 h stale fallback |
+
+| `statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=…&endDate=…&teamId=<mlb id>`                | **fallback only**: ESPN event → MLB gamePk                                                                                                                    | per game (retry a miss after 5 min)                         |
+| `statsapi.mlb.com/api/v1.1/game/<gamePk>/feed/live`                                              | **fallback only**: plays / situation / box score for a live game ESPN has no play-by-play for                                                                 | per refresh + 60 s stale fallback                           |
 
 These are unauthenticated public endpoints. Calls share a single aiohttp
 session and are awaited concurrently where independent.

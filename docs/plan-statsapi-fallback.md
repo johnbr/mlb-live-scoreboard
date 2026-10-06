@@ -1,6 +1,6 @@
 # Plan: MLB Stats API fallback when ESPN has no play-by-play
 
-**Status: PLAN, not implemented (2026-10-05).**
+**Status: IMPLEMENTED 2026-10-05** (`statsapi.py`); the design record is `ARCHITECTURE.md` → "MLB Stats API fallback". Two changes from this plan, both found live: the status block's *inning* is also taken from MLB (ESPN's lagged), and substitutions are reworded into ESPN's form.
 
 ## The problem, as observed
 
@@ -145,10 +145,9 @@ make the card worse than it is now.**
   dashboard or the user can tell which source is in use.
 - Log once at INFO when a game switches to MLB, naming the event and gamePk,
   and once when it switches back.
-- **Card:** a small "via MLB" tag in the expanded view's footer while the
-  attribute reads `mlb_statsapi`. This is the only card change, and it is
-  optional; it helps when, for example, stat columns differ subtly between
-  the two sources.
+- **Card:** a small "via MLB" tag in the expanded live view while the
+  attribute reads `mlb_statsapi`, so differences between the two sources
+  are explained on screen.
 
 ### Config
 
@@ -214,9 +213,8 @@ whether it has fired since.
   trigger needs `playByPlaySource == "none"`, so a partial game stays on
   ESPN. Revisit only if it is seen in practice.
 
-## Open questions
+## Decisions (2026-10-05)
 
-- Should a **final** game that ESPN never covered also use the fallback (for
-  the scoring-plays panel)? The proposal is no for the first cut, live only;
-  it is a small extension once the translator exists.
-- Is the "via MLB" card tag wanted, or is the attribute enough?
+- **Live games only.** A final game ESPN never covered stays as it is today.
+- **The "via MLB" tag ships**: shown in the expanded live view only while
+  `data_source` is `mlb_statsapi`.

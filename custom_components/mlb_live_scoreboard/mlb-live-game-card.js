@@ -904,7 +904,9 @@ function shortPersonName(name) {
 function playerNameMarkup(name, athleteId) {
   const text = escapeHtml(name == null ? "" : name);
   const id = String(athleteId || "").trim();
-  if (!id || !text) return text;
+  // An "mlb-" id was minted by the MLB Stats API fallback for a player ESPN
+  // doesn't list: there is no ESPN profile or career popup behind it.
+  if (!id || !text || id.startsWith("mlb-")) return text;
   return `<span class="player-link" role="link" tabindex="0" data-athlete-id="${escapeHtml(id)}" title="View ${text} on ESPN">${text}</span>`;
 }
 
@@ -3359,6 +3361,7 @@ class MlbLiveGameCard extends HTMLElement {
     return [
       stateObj?.state,
       attrs.mode,
+      attrs.data_source,
       // Visible scoreboard inputs
       away.score,
       away.recordSummary,
@@ -3791,6 +3794,11 @@ class MlbLiveGameCard extends HTMLElement {
               ? `${thirdOutCountDotsPanel}${matchupPanel}${recentPlaysPanel}`
               : dueUpPanel ||
                 `${countDotsPanel}${matchupPanel}${onDeckHtml}${baseOccupancyHtml}${recentPlaysPanel}`
+          }
+          ${
+            attrs.data_source === "mlb_statsapi"
+              ? `<div class="source-tag" title="ESPN has no play-by-play for this game, so the batter, pitcher, count and plays come from MLB's Stats API">via MLB</div>`
+              : ""
           }
         </div>`
         : "";
@@ -5198,6 +5206,15 @@ white-space: nowrap;
         /* Live-card collapse/expand. The header (score rows + chevron strip)
            is one click target; the strip reuses the inning-pager's triangle
            glyphs so the two affordances read as the same language. */
+        /* Shown only while the MLB Stats API fallback fills the live view. */
+        .source-tag {
+          text-align: right;
+          font-size: 0.7em;
+          letter-spacing: 0.03em;
+          color: var(--secondary-text-color);
+          opacity: 0.8;
+          margin-top: 4px;
+        }
         .series-banner {
           text-align: center;
           font-size: 0.85em;
