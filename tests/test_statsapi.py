@@ -18,6 +18,7 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 from custom_components.mlb_live_scoreboard import statsapi as sa
 from custom_components.mlb_live_scoreboard.const import OPT_STATSAPI_FALLBACK
@@ -237,7 +238,7 @@ def test_uncovered_game_fills_batter_pitcher_and_box_score():
     assert pitcher["display_name"] == "John Schreiber"
     # ESPN never listed this reliever: synthetic id, MLB headshot, no popup.
     assert sa.is_mlb_id(pitcher_id)
-    assert "mlbstatic.com" in pitcher["headshot"]
+    assert urlparse(pitcher["headshot"]).hostname == "img.mlbstatic.com"
     stats = Coord._normalize_batter_stats(s, batter_id, {}, is_live=True)
     assert stats["hits_ab"] == "2-4"
     lineups = Coord._normalize_lineups(s, batter_id, _ctx(s), True)
