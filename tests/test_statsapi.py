@@ -412,6 +412,7 @@ def _coord(options: dict | None = None, responses: dict | None = None) -> Coord:
     coord.team_abbr = "TB"
     coord._statsapi_game_pk_cache = {}
     coord._statsapi_feed_cache = None
+    coord._abs_challenges_cache = None
     coord._data_source_logged = None
     calls: list[str] = []
 
@@ -532,3 +533,83 @@ def test_substitutions_read_like_espn():
         return [p["text"] for p in summary["plays"] if (p.get("alternativeType") or {}).get("type") == "lineup-change"]
 
     assert sorted(changes(mlb)) == sorted(changes(espn))
+
+
+# ---------------------------------------------------------------------------
+# ABS (ball-strike) challenges
+# ---------------------------------------------------------------------------
+
+
+def _abs_feed(remaining: tuple[int, int] = (2, 2), reviews: list[dict] | None = None) -> dict:
+    return {
+        "gameData": {
+            "teams": {"away": {"id": 147}, "home": {"id": 139}},
+            "absChallenges": {
+                "hasChallenges": True,
+                "away": {"usedSuccessful": 0, "usedFailed": 2 - remaining[0], "remaining": remaining[0]},
+                "home": {"usedSuccessful": 0, "usedFailed": 2 - remaining[1], "remaining": remaining[1]},
+            },
+        },
+        "liveData": {"plays": {"currentPlay": {"playEvents": [{"reviewDetails": r} for r in reviews or []]}}},
+    }
+
+
+def test_abs_challenges_read_mlb_counts():
+    # The real filtered response: each side won its only challenge, so both keep 2.
+    out = sa.abs_challenges(_load("mlb_abs_849839_final.json"))
+    assert out == {
+        "has_challenges": True,
+        "away": {"remaining": 2, "used_successful": 1, "used_failed": 0, "in_progress": False},
+        "home": {"remaining": 2, "used_successful": 1, "used_failed": 0, "in_progress": False},
+    }
+
+
+def test_abs_challenges_empty_without_abs():
+    assert sa.abs_challenges({}) == {}
+    assert sa.abs_challenges({"gameData": {"absChallenges": {"hasChallenges": False}}}) == {}
+
+
+def test_abs_challenge_in_progress_marks_only_the_challenging_side():
+    reviews = [
+        {"inProgress": True, "reviewType": "MJ", "challengeTeamId": 139},
+        # A finished ABS review and a pending manager replay review don't count.
+        {"inProgress": False, "reviewType": "MJ", "challengeTeamId": 147},
+        {"inProgress": True, "reviewType": "MA", "challengeTeamId": 147},
+    ]
+    out = sa.abs_challenges(_abs_feed((1, 2), reviews))
+    assert out["away"]["remaining"] == 1 and out["away"]["used_failed"] == 1
+    assert out["away"]["in_progress"] is False
+    assert out["home"]["in_progress"] is True
+
+
+def test_abs_challenges_poll_the_filtered_feed_on_espn():
+    espn, _feed = _tb_end_of_b6()
+    comp = espn["header"]["competitions"][0]
+    schedule = _schedule((849839, 147, 139, "2026-10-06T00:00:00Z"))
+    coord = _coord(responses={"/schedule": schedule, "/feed/live?fields=": _abs_feed((1, 2))})
+    out = asyncio.run(coord._abs_challenges("401907986", comp, sa.DATA_SOURCE_ESPN))
+    assert out["away"]["remaining"] == 1
+    assert [u for u in coord.calls if "/feed/live" in u] == [sa.STATSAPI_CHALLENGES_URL.format(game_pk=849839)]
+
+
+def test_abs_challenges_reuse_the_full_feed_when_mlb_is_the_source():
+    espn, _feed = _tb_end_of_b6()
+    comp = espn["header"]["competitions"][0]
+    coord = _coord(responses={"/schedule": _schedule((849839, 147, 139, "2026-10-06T00:00:00Z"))})
+    coord._statsapi_feed_cache = (849839, 0.0, _abs_feed((2, 0)))
+    out = asyncio.run(coord._abs_challenges("401907986", comp, sa.DATA_SOURCE_MLB))
+    assert out["home"]["remaining"] == 0
+    assert not [u for u in coord.calls if "/feed/live" in u]
+
+
+def test_abs_challenge_failure_reuses_the_last_good_count_briefly():
+    espn, _feed = _tb_end_of_b6()
+    comp = espn["header"]["competitions"][0]
+    schedule = _schedule((849839, 147, 139, "2026-10-06T00:00:00Z"))
+    coord = _coord(responses={"/schedule": schedule, "/feed/live": _abs_feed((1, 1))})
+    good = asyncio.run(coord._abs_challenges("401907986", comp, sa.DATA_SOURCE_ESPN))
+    coord._get_json = _coord(responses={"/feed/live": RuntimeError("503")})._get_json  # type: ignore[method-assign]
+    assert asyncio.run(coord._abs_challenges("401907986", comp, sa.DATA_SOURCE_ESPN)) == good
+    gpk, _ts, cached = coord._abs_challenges_cache
+    coord._abs_challenges_cache = (gpk, 0.0, cached)  # long expired
+    assert asyncio.run(coord._abs_challenges("401907986", comp, sa.DATA_SOURCE_ESPN)) == {}

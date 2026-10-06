@@ -83,6 +83,10 @@ const CARD_DEFAULTS = {
   // above the score rows. Renders nothing outside the postseason (the sensor's
   // `series` attribute is empty), so it's safe to leave on year-round.
   show_series: true,
+  // Ball-strike (ABS) challenges remaining, as dots left of each team's score
+  // on the live card (filled = remaining, hollow = lost). Comes from MLB's
+  // feed; renders nothing when MLB reports no ABS challenges for the game.
+  show_challenges: true,
   // Left/right arrows above the play-by-play on the live card to page back
   // through earlier half-innings ("what happened in the 4th?"). Snaps back to
   // the live half after a short idle. On by default.
@@ -223,6 +227,7 @@ const EDITOR_SCHEMA = [
     type: "grid",
     schema: [
       { name: "show_series", selector: { boolean: {} } },
+      { name: "show_challenges", selector: { boolean: {} } },
       { name: "show_batter", selector: { boolean: {} } },
       { name: "show_records", selector: { boolean: {} } },
       { name: "show_linescore", selector: { boolean: {} } },
@@ -251,6 +256,7 @@ const EDITOR_LABELS = {
   show_schedule_nav: "Schedule navigation arrows",
   show_inning_nav: "Past half-inning pager",
   show_series: "Series standing (postseason)",
+  show_challenges: "ABS challenges remaining",
   show_batter: "Batter",
   show_records: "Team records",
   show_linescore: "Linescore",
@@ -278,6 +284,8 @@ const EDITOR_HELPERS = {
     "Adds a small ▾ strip below the live play-by-play that swaps the panel to the previous half-inning (one half at a time; the inning marker by the box score shows which). Snaps back to the live half after ~20s of no taps.",
   show_series:
     "During the postseason, shows the series standing above the score, e.g. 'NLDS · Dodgers lead 2-0'. Nothing shows during the regular season.",
+  show_challenges:
+    "Dots left of each team's score on the live card: filled = ball-strike challenges remaining, hollow = lost. A dot pulses while that team's challenge is under review.",
   show_pitch_zone:
     "Adds a small strike-zone graphic below the base diamond with one colored dot per pitch in the current at-bat. Auto-hides between at-bats.",
   show_highlights:
@@ -632,6 +640,34 @@ function renderDots(count, total, klass) {
     { length: total },
     (_, i) => `<span class="dot ${klass} ${i < count ? "on" : ""}"></span>`,
   ).join("");
+}
+
+// One team's ABS challenge budget for the fingerprint.
+function challengeFp(side) {
+  return side
+    ? `${side.remaining}/${side.used_successful}/${side.used_failed}/${side.in_progress ? 1 : 0}`
+    : "";
+}
+
+// Dots left of a team's score: one filled dot per ABS challenge remaining,
+// hollow for the rest of the two-per-game budget (MLB grants a team that has
+// run out one more in extra innings, which simply refills a slot). The next
+// dot at stake pulses while that team's challenge is under review. Always
+// renders at least two slots so both rows' scores stay aligned.
+function renderChallengeDots(side) {
+  if (!side) return "";
+  const remaining = Math.max(0, Number(side.remaining) || 0);
+  const slots = Math.max(2, remaining);
+  const won = Number(side.used_successful) || 0;
+  const lost = Number(side.used_failed) || 0;
+  const pending = side.in_progress === true;
+  const dots = Array.from({ length: slots }, (_, i) => {
+    const on = i < remaining;
+    const cls = on ? (pending && i === remaining - 1 ? "on pending" : "on") : "";
+    return `<span class="chal-dot ${cls}"></span>`;
+  }).join("");
+  const title = `ABS challenges: ${remaining} remaining (${won} won, ${lost} lost)${pending ? " — challenge under review" : ""}`;
+  return `<div class="abs-chal" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${dots}</div>`;
 }
 
 function renderBaseOccupancyRow(situation) {
@@ -3363,6 +3399,8 @@ class MlbLiveGameCard extends HTMLElement {
       attrs.mode,
       attrs.data_source,
       attrs.data_source_fallback,
+      challengeFp(attrs.abs_challenges?.away),
+      challengeFp(attrs.abs_challenges?.home),
       // Visible scoreboard inputs
       away.score,
       away.recordSummary,
@@ -3856,6 +3894,12 @@ class MlbLiveGameCard extends HTMLElement {
       return;
     }
 
+    const challenges =
+      this.config.show_challenges !== false &&
+      stateInfo.pillClass === "live" &&
+      attrs.abs_challenges?.has_challenges
+        ? attrs.abs_challenges
+        : null;
     // The score rows double as the live card's expander. The chevron strip
     // underneath is the visible affordance (without it a collapsed card looks
     // like a card that's simply missing its details) and shares the same click
@@ -3863,8 +3907,8 @@ class MlbLiveGameCard extends HTMLElement {
     const scoreboardMain = `
         <div class="scoreboard-main">
           <div class="scoreboard scoreboard-rich">
-            ${this.teamRow(awayTeam, awayMeta, "", dispAwayScore, awayWon, false, away, dispAwayTotals)}
-            ${this.teamRow(homeTeam, homeMeta, "", dispHomeScore, homeWon, true, home, dispHomeTotals)}
+            ${this.teamRow(awayTeam, awayMeta, "", dispAwayScore, awayWon, false, away, dispAwayTotals, challenges?.away)}
+            ${this.teamRow(homeTeam, homeMeta, "", dispHomeScore, homeWon, true, home, dispHomeTotals, challenges?.home)}
           </div>
           <div class="inning-marker-side">
             <div class="inning-marker-wrap"><div class="inning-marker ${markerClass}">${displayMarker}</div></div>
@@ -4128,6 +4172,7 @@ class MlbLiveGameCard extends HTMLElement {
     isHome = false,
     competitor = {},
     totals = { hits: "—", errors: "—" },
+    challenges = null,
   ) {
     const logoRaw =
       team?.logo || get(team, ["logos", 0, "href"], "") || teamMeta?.logo || "";
@@ -4148,6 +4193,7 @@ class MlbLiveGameCard extends HTMLElement {
             <div class="name">${escapeHtml(displayName)}${record ? ` <span class="record-inline">(${escapeHtml(record)})</span>` : ""}</div>
           </div>
         </div>
+        ${renderChallengeDots(challenges)}
         <div class="team-right rhe-values">
           <div class="score rhe-score">${score.text || "—"}</div>
           <div class="rhe-num hits">${totals.hits}</div>
@@ -4310,6 +4356,38 @@ color: var(--primary-text-color);
           align-items:center;
           gap:6px;
           margin-left:auto;
+        }
+        /* ABS challenge dots, right-aligned against the R column. */
+        .abs-chal {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          margin-left: auto;
+          flex: 0 0 auto;
+        }
+        .abs-chal + .team-right {
+          margin-left: 0;
+        }
+        .chal-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          box-sizing: border-box;
+          border: 1px solid var(--secondary-text-color);
+          opacity: 0.55;
+        }
+        .chal-dot.on {
+          background: var(--secondary-text-color);
+          opacity: 0.9;
+        }
+        .chal-dot.pending {
+          animation: mlb-chal-pulse 1s ease-in-out infinite;
+        }
+        @keyframes mlb-chal-pulse {
+          50% { opacity: 0.15; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .chal-dot.pending { animation: none; opacity: 0.35; }
         }
         .rhe-header {
           display:flex;

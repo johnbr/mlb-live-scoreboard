@@ -367,6 +367,17 @@ While a fallback is in use, the card shows a small **"via MLB"** or **"via
 ESPN"** tag in the expanded live view. Switching onto or off the fallback is
 logged at INFO, once each way.
 
+**ABS challenges are always MLB's.** ESPN publishes no ball-strike challenge
+data, so for every live game `_abs_challenges` reads
+`gameData.absChallenges` (plus any in-progress `reviewType: "MJ"` review in
+the current play) via `statsapi.abs_challenges`. On ESPN it polls
+`STATSAPI_CHALLENGES_URL`, the feed trimmed by MLB's `fields` filter to
+~270 bytes; on MLB it reuses the full feed already fetched that refresh. MLB's
+`remaining` already keeps won challenges, so no counting happens here. A
+failed poll reuses the last good count for 60 s, then yields `{}` and the card
+hides the dots. Exposed as the `abs_challenges` attribute; the card draws it
+as dots left of each live score row (`show_challenges`).
+
 **Proof is the oracle test.** The CHW @ CLE game the same day was fully
 covered by both feeds. Translating MLB's copy reproduces ESPN's at-bat
 sequence (all 71), every box-score line, the scoring plays and every

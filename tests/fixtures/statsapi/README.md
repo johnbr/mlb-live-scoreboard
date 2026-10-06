@@ -9,6 +9,7 @@ can't be recaptured, because the fallback only runs when ESPN drops a game.
 | `mlb_feed_849839_b6_end.json` | same game, MLB gamePk 849839 | third out of the bottom 6th just made |
 | `espn_summary_401907986_t7_mid_at_bat.json`, `mlb_feed_849839_t7_mid_at_bat.json` | same game, 19:33:55 PT | top 7th, Wells at 1-2 with two out, 3 pitches |
 | `espn_summary_401907986_end7.json`, `mlb_feed_849839_end7.json` | same game, 19:46:58 PT | end of the 7th, between halves |
+| `mlb_abs_849839_final.json` | NYY @ TB, ALDS G2, captured 2026-10-06 after the final | `STATSAPI_CHALLENGES_URL` response (already field-filtered by MLB, not trimmed): one ABS challenge won by each side, 2 remaining each |
 | `espn_summary_401907991_full.json`, `mlb_feed_849834_final.json` | CHW @ CLE, ALDS G2 (ESPN 401907991 / MLB 849834) | final. **Fully covered by both**, so it is the oracle: MLB's copy, translated, must read like ESPN's own |
 
 ## Provenance / how to regenerate
