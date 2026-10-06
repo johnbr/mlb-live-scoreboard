@@ -3930,7 +3930,12 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # plays, no situation, an empty box score). Fill those parts from MLB's
         # Stats API, live refresh only -- a navigated game stays on ESPN.
         data_source = DATA_SOURCE_ESPN
-        if live_bridge and statsapi.espn_lacks_play_by_play(summary) and self._statsapi_enabled():
+        already_on_mlb = bool(
+            self.data is not None
+            and self.data.data_source == DATA_SOURCE_MLB
+            and str(self.data.display_event_id) == str(display_id)
+        )
+        if live_bridge and statsapi.should_use_statsapi(summary, already_on_mlb) and self._statsapi_enabled():
             _detail, live_now, _delayed = self._resolve_status_info(display_comp)
             if live_now:
                 translated = await self._statsapi_summary(str(display_id), summary, display_comp)

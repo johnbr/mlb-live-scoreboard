@@ -76,6 +76,17 @@ def test_trigger_needs_both_the_flag_and_empty_plays():
     assert sa.espn_lacks_play_by_play({}) is False
 
 
+def test_switching_back_waits_for_espn_plays_not_just_the_flag():
+    # 2026-10-05 20:06: ESPN flipped to "full" with 0 plays, plays ~1 min later.
+    espn, _feed = _tb_end_of_b6()
+    flipped = json.loads(json.dumps(espn))
+    flipped["header"]["competitions"][0]["playByPlaySource"] = "full"
+    assert sa.should_use_statsapi(espn, already_using=False) is True
+    assert sa.should_use_statsapi(flipped, already_using=True) is True  # stay on MLB
+    assert sa.should_use_statsapi(flipped, already_using=False) is False  # a covered game's first seconds
+    assert sa.should_use_statsapi(dict(flipped, plays=[{"id": "1"}]), already_using=True) is False
+
+
 # ---------------------------------------------------------------------------
 # Game matching
 # ---------------------------------------------------------------------------

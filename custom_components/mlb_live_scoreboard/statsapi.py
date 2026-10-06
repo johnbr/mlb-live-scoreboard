@@ -206,6 +206,20 @@ def espn_lacks_play_by_play(summary: dict[str, Any]) -> bool:
     return not (summary.get("plays") or [])
 
 
+def should_use_statsapi(summary: dict[str, Any], already_using: bool) -> bool:
+    """Whether this refresh should fill the live view from MLB.
+
+    Starting needs ESPN's ``"none"`` flag (see :func:`espn_lacks_play_by_play`).
+    Stopping needs ESPN's PLAYS, not just its flag: when coverage resumed on
+    2026-10-05 ESPN flipped to ``"full"`` about a minute before its plays
+    arrived, which would have blanked the card for that minute. So a game
+    already on MLB stays there until ``plays`` is non-empty.
+    """
+    if espn_lacks_play_by_play(summary):
+        return True
+    return bool(already_using and summary and not (summary.get("plays") or []))
+
+
 def schedule_window(espn_date: Any) -> tuple[str, str] | None:
     """``(startDate, endDate)`` for the MLB schedule query around an ESPN start.
 

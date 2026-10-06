@@ -300,7 +300,10 @@ not an API change.
 stay on ESPN). The game must be live, the flag must read `"none"`, and
 `plays` must be empty. The flag is ESPN's own statement; an empty `plays` on
 its own also happens in a covered game's first seconds. The check runs every
-poll, so if ESPN fills the game in later, the next poll goes back to ESPN.
+poll. Going **back** to ESPN waits for ESPN's plays, not just its flag:
+when coverage resumed mid-game on 2026-10-05, ESPN flipped to `"full"` about
+a minute before any plays arrived, which would have blanked the card for that
+minute (`should_use_statsapi`).
 The options flow can turn it off (`statsapi_fallback`, on by default).
 
 **Design:** translate, don't duplicate. `summary_from_statsapi` returns a
