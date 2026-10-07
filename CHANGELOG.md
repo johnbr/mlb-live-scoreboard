@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.36.0...v1.37.0) (2026-10-07)
+
+
+### Features
+
+* **card:** color the ABS challenge dots yellow ([#136](https://github.com/johnbr/mlb-live-scoreboard/issues/136)) ([d12409d](https://github.com/johnbr/mlb-live-scoreboard/commit/d12409d3305856cf634d8679752f96eb5810c736))
+
 ## [1.36.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.35.0...v1.36.0) (2026-10-07)
 
 
