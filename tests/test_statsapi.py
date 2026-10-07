@@ -570,6 +570,24 @@ def test_abs_challenges_empty_without_abs():
     assert sa.abs_challenges({"gameData": {"absChallenges": {"hasChallenges": False}}}) == {}
 
 
+def test_abs_challenges_show_before_the_first_challenge():
+    # LAD @ ATL, 2026-10-07, bottom 3rd: no challenge made yet, so MLB's
+    # hasChallenges is false -- but ABS is in effect and both sides have 2.
+    feed = {
+        "gameData": {
+            "teams": {"away": {"id": 119}, "home": {"id": 144}},
+            "absChallenges": {
+                "hasChallenges": False,
+                "away": {"usedSuccessful": 0, "usedFailed": 0, "remaining": 2},
+                "home": {"usedSuccessful": 0, "usedFailed": 0, "remaining": 2},
+            },
+        }
+    }
+    out = sa.abs_challenges(feed)
+    assert out["has_challenges"] is True
+    assert (out["away"]["remaining"], out["home"]["remaining"]) == (2, 2)
+
+
 def test_abs_challenge_in_progress_marks_only_the_challenging_side():
     reviews = [
         {"inProgress": True, "reviewType": "MJ", "challengeTeamId": 139},
