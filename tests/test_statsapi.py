@@ -879,3 +879,55 @@ def test_espn_header_is_not_mutated():
     espn = _espn_header("1", "0")
     sa._header_with_mlb_live_state(espn, _mlb_linescore_feed())
     assert espn["competitions"][0]["competitors"][1]["score"] == "1"
+
+
+# ---------------------------------------------------------------------------
+# End of game follows MLB
+# ---------------------------------------------------------------------------
+
+
+def _game_over_feed(coded: str = "O", inning: int = 9) -> dict:
+    # MIL @ SD, NLDS 2026-10-06: Yelich's double play made the third out of the
+    # top 9th with the Padres ahead 4-3. MLB read "Game Over" at once but left
+    # the linescore on "Top 9th, 3 outs"; ESPN still said in progress.
+    return {
+        "gameData": {"status": {"abstractGameState": "Final", "codedGameState": coded, "detailedState": "Game Over"}},
+        "liveData": {
+            "linescore": {
+                "currentInning": inning,
+                "inningState": "Top",
+                "isTopInning": True,
+                "outs": 3,
+                "teams": {"away": {"runs": 3, "hits": 7, "errors": 0}, "home": {"runs": 4, "hits": 8, "errors": 1}},
+                "innings": [],
+            }
+        },
+    }
+
+
+def test_game_over_at_a_top_half_third_out_reads_final_at_once():
+    comp = sa._header_with_mlb_live_state(_espn_header("3", "4"), _game_over_feed())["competitions"][0]
+    status_type = comp["status"]["type"]
+    assert (status_type["state"], status_type["completed"], status_type["name"]) == ("post", True, "STATUS_FINAL")
+    assert status_type["shortDetail"] == "Final"
+    winners = {c["homeAway"]: c["winner"] for c in comp["competitors"]}
+    assert winners == {"away": False, "home": True}
+    # The coordinator then treats the game as over (no live view, no Due Up).
+    _detail, is_live, _delayed = Coord._resolve_status_info(comp)
+    assert is_live is False
+
+
+def test_extra_innings_final_reads_final_slash_inning():
+    comp = sa._header_with_mlb_live_state(_espn_header("3", "4"), _game_over_feed("F", 11))["competitions"][0]
+    assert comp["status"]["type"]["detail"] == "Final/11"
+
+
+def test_postponed_or_live_mlb_states_leave_espns_state():
+    for status in (
+        {"abstractGameState": "Final", "codedGameState": "D"},  # postponed
+        {"abstractGameState": "Live", "codedGameState": "I"},
+    ):
+        feed = _game_over_feed()
+        feed["gameData"]["status"] = status
+        comp = sa._header_with_mlb_live_state(_espn_header("3", "4"), feed)["competitions"][0]
+        assert comp["status"]["type"]["state"] == "in"

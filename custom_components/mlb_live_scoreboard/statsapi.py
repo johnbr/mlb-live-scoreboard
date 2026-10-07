@@ -1157,8 +1157,14 @@ def _competitor_with_mlb_score(competitor: dict[str, Any], linescore: dict[str, 
     return out
 
 
+# MLB ``codedGameState`` values for a game that is over and stands ("O" =
+# Game Over, the moment of the last out; "F" = Final). Postponed / suspended
+# games also read abstractGameState "Final" but carry other codes.
+_MLB_FINAL_CODES = frozenset({"F", "O"})
+
+
 def _header_with_mlb_live_state(header: dict[str, Any], feed: dict[str, Any]) -> dict[str, Any]:
-    """Copy of ESPN's header whose inning and score are MLB's.
+    """Copy of ESPN's header whose inning, score and end of game are MLB's.
 
     ESPN's status block lagged MLB by up to a minute all through the uncovered
     game, so the card sat on a three-out matchup under "Bottom 7th" while the
@@ -1166,7 +1172,13 @@ def _header_with_mlb_live_state(header: dict[str, Any], feed: dict[str, Any]) ->
     score lags the same way: a run showed in the (MLB) play-by-play several
     seconds before the score above it moved. Taking the inning, runs, hits,
     errors and per-inning line from the same feed keeps them on one clock.
-    Only the live/final state stays ESPN's.
+
+    The end of the game follows MLB too: its feed reads "Game Over" at the
+    final out, while ESPN stayed "in progress" for several seconds. A game
+    ending on the third out of a top half (home team ahead) is left by MLB
+    at "Top 9th, 3 outs", which the card took for the break before a bottom
+    half that is never played, flashing its Due Up panel until ESPN caught
+    up. Otherwise the live/final state stays ESPN's.
     """
     linescore = (feed.get("liveData") or {}).get("linescore") or {}
     comps = header.get("competitions") or []
@@ -1194,7 +1206,43 @@ def _header_with_mlb_live_state(header: dict[str, Any], feed: dict[str, Any]) ->
             )
         status["type"] = status_type
         comp["status"] = status
+    game_status = (feed.get("gameData") or {}).get("status") or {}
+    if (
+        str(game_status.get("abstractGameState") or "") == "Final"
+        and str(game_status.get("codedGameState") or "") in _MLB_FINAL_CODES
+    ):
+        comp = _final_competition(comp, linescore, inning)
     return dict(header, competitions=[comp, *comps[1:]])
+
+
+def _final_competition(comp: dict[str, Any], linescore: dict[str, Any], inning: int) -> dict[str, Any]:
+    """Mark ``comp`` final in ESPN's shape ("Final", or "Final/10" in extras)."""
+    label = f"Final/{inning}" if inning > 9 else "Final"
+    status = dict(comp.get("status") or {})
+    status["type"] = dict(
+        status.get("type") or {},
+        state="post",
+        completed=True,
+        name="STATUS_FINAL",
+        description="Final",
+        detail=label,
+        shortDetail=label,
+        statusPrimary=label,
+    )
+    out = dict(comp, status=status)
+    teams = linescore.get("teams") or {}
+    away_runs = (teams.get("away") or {}).get("runs")
+    home_runs = (teams.get("home") or {}).get("runs")
+    if away_runs is None or home_runs is None or away_runs == home_runs:
+        return out
+    winning_side = "away" if _safe_int(away_runs) > _safe_int(home_runs) else "home"
+    competitors = []
+    for competitor in out.get("competitors") or []:
+        if isinstance(competitor, dict) and competitor.get("homeAway") in ("away", "home"):
+            competitor = dict(competitor, winner=competitor["homeAway"] == winning_side)
+        competitors.append(competitor)
+    out["competitors"] = competitors
+    return out
 
 
 def flatten_espn_roster(payload: Any) -> list[dict[str, Any]]:

@@ -887,11 +887,20 @@ function deriveInningState(attrs) {
     awayScore != null && homeScore != null && awayScore === homeScore;
   const homeLeading =
     awayScore != null && homeScore != null && homeScore > awayScore;
+  // The game is over while the feed still reads live: after a full 9th+, at
+  // the break with the home side ahead, at the third out of a top half with
+  // the home side ahead (the feed can sit on "Top 9th, 3 outs" -- the bottom
+  // half is never played), or the home side taking the lead in a bottom half
+  // (a walk-off).
+  const outs = Number(attrs.situation?.outs);
   const pseudoFinal =
     attrs.is_live === true &&
     period >= 9 &&
     !tied &&
-    (lower.startsWith("end") || (lower.startsWith("mid") && homeLeading));
+    (lower.startsWith("end") ||
+      (lower.startsWith("mid") && homeLeading) ||
+      (lower.startsWith("top") && homeLeading && outs >= 3) ||
+      ((lower.startsWith("bot") || lower.startsWith("b ")) && homeLeading));
   const isTop = lower.startsWith("top") || lower.startsWith("t ");
   const isBottom =
     lower.startsWith("bottom") ||

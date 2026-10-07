@@ -298,9 +298,10 @@ not an API change.
 
 **Preference (options flow, `data_source_preference`):** which feed drives
 the live view. The other feed is the fallback. The score follows whichever
-feed supplies the plays; the game state (live/final) stays ESPN's, and
-navigated games stay on ESPN, since only the live refresh (`live_bridge=True`)
-translates.
+feed supplies the plays, and so does the end of the game (MLB's "Game Over"
+ends a live game at once); otherwise the live/final state is ESPN's.
+Navigated games stay on ESPN, since only the live refresh
+(`live_bridge=True`) translates.
 
 - **`espn`:** MLB fills in only when ESPN has no play-by-play for
   the live game. That needs ESPN's flag to read `"none"` **and** `plays` to be
@@ -330,13 +331,22 @@ copy of ESPN's summary with:
   from MLB's linescore too (`_header_with_mlb_live_state`), because ESPN's
   score lagged the (MLB) play-by-play by several seconds: a run showed in
   the plays before the score above it moved. The run-scored bus events read
-  the same competition, so they fire with the play. Only the live/final
-  **state** stays ESPN's.
+  the same competition, so they fire with the play;
+- the game marked **final** (`_final_competition`: `post`, `STATUS_FINAL`,
+  "Final" / "Final/10", winner flags) as soon as MLB's `gameData.status`
+  reads Final with code `O` (Game Over) or `F`. MLB leaves a game that ends
+  at a top half's third out on "Top 9th, 3 outs"; with ESPN still "in
+  progress" the card took that for the break and flashed a Due Up panel for
+  a bottom half never played (MIL @ SD, 2026-10-06). Postponed/suspended
+  codes are ignored, and otherwise the live/final state stays ESPN's. The
+  card's `pseudoFinal` also recognises that state and a bottom-half
+  walk-off, for ESPN-sourced games.
 
 Every existing normalizer then runs unchanged: the at-bat hand-off, the due-up
 re-anchoring, the third-out hold, current pitches, lineups and the inning
-pager. Score and game state (live/final) stay ESPN's, so the bus events
-don't change source.
+pager. The bus events read the translated competition, so score and
+game-end events fire on MLB's clock while MLB is the source; the
+once-per-game dedupe stops ESPN's later "final" re-firing them.
 
 Details that each matter:
 
