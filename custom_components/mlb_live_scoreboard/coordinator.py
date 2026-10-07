@@ -71,6 +71,7 @@ from .const import (
     STATUS_NAME_IN_PROGRESS,
     SUPPLEMENT_SCHEDULE_STALE_FALLBACK_SECONDS,
     TEAM_METADATA_TTL_SECONDS,
+    TEAM_ROSTER_TTL_SECONDS,
     TEAM_SEASON_STATS_STALE_FALLBACK_SECONDS,
     TEAM_SEASON_STATS_TTL_SECONDS,
     THIRD_OUT_HOLD_SECONDS,
@@ -370,6 +371,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # team_id -> (fetched_at_ts, payload). Refreshed lazily once TTL expires;
         # entries are also reused as a fallback when a refresh attempt fails.
         self._team_payload_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # team_id -> (fetched_at_ts, ESPN roster athletes) for MLB-feed id matching.
+        self._team_roster_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
         # athlete_id -> (fetched_at_ts, payload). Avoids repeat fetches for the
         # same batter during a single at-bat.
         self._batter_stats_cache: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -3047,6 +3050,28 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         self._team_payload_cache[team_id] = (now_ts, payload)
         return payload
 
+    async def _fetch_team_roster(self, team_id: str) -> list[dict[str, Any]]:
+        """ESPN's active roster for ``team_id`` (trimmed athlete dicts), TTL-cached.
+
+        Falls back to the last copy (even if expired) on failure, else ``[]``.
+        """
+        if not team_id or not team_id.isdigit():
+            return []
+        cached = self._team_roster_cache.get(team_id)
+        now_ts = time.time()
+        if cached is not None and (now_ts - cached[0]) < TEAM_ROSTER_TTL_SECONDS:
+            return cached[1]
+        try:
+            payload = await self._get_json(
+                f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}/roster"
+            )
+        except Exception as err:
+            _LOGGER.debug("Unable to fetch ESPN roster for team %s: %s", team_id, err)
+            return cached[1] if cached is not None else []
+        athletes = statsapi.flatten_espn_roster(payload)
+        self._team_roster_cache[team_id] = (now_ts, athletes)
+        return athletes
+
     async def _get_standings(self) -> dict[str, Any]:
         """Fetch league standings, served from a TTL cache.
 
@@ -4218,8 +4243,15 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         feed = await self._statsapi_feed(game_pk)
         if not feed:
             return None
+        # ESPN's summary lists only players who have appeared, and MLB's feed
+        # is faster: without the full rosters, a just-entered reliever would
+        # get a synthetic id and an unclickable name until ESPN caught up.
+        away_id, home_id = self._resolve_competitor_ids(display_comp)
+        away_roster, home_roster = await asyncio.gather(
+            self._fetch_team_roster(away_id), self._fetch_team_roster(home_id)
+        )
         try:
-            return statsapi.summary_from_statsapi(summary, feed)
+            return statsapi.summary_from_statsapi(summary, feed, {away_id: away_roster, home_id: home_roster})
         except Exception as err:  # an unrecognised MLB shape must not break the refresh
             _LOGGER.warning("Unable to translate MLB feed %s for event %s: %s", game_pk, event_id, err)
             return None

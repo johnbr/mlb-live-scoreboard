@@ -74,6 +74,10 @@ SHOW_NEXT_AFTER_PREV_SECONDS = 16 * 60 * 60
 # changes only on roster moves and standings updates, so refetching every 5 s
 # is wasteful — re-use the previous payload until this many seconds have passed.
 TEAM_METADATA_TTL_SECONDS = 3600
+# ESPN team rosters (full active roster with ESPN athlete ids), used to give
+# players in MLB's feed an ESPN id before ESPN's own game summary lists them
+# (a reliever who has just entered). Rosters change with call-ups, so hourly.
+TEAM_ROSTER_TTL_SECONDS = 3600
 
 # How long to cache an athlete's season stats. Season stats only change when
 # the player completes a plate appearance, so a short cache eliminates the
@@ -196,7 +200,7 @@ OPT_DATA_SOURCE_PREFERENCE = "data_source_preference"
 DATA_SOURCE_PREFERENCE_ESPN = "espn"
 DATA_SOURCE_PREFERENCE_MLB = "mlb"
 DATA_SOURCE_PREFERENCES = (DATA_SOURCE_PREFERENCE_ESPN, DATA_SOURCE_PREFERENCE_MLB)
-DEFAULT_DATA_SOURCE_PREFERENCE = DATA_SOURCE_PREFERENCE_ESPN
+DEFAULT_DATA_SOURCE_PREFERENCE = DATA_SOURCE_PREFERENCE_MLB
 
 # Mapping from event name -> option key. Used by the coordinator to look up
 # and run the configured action sequence when an event fires.

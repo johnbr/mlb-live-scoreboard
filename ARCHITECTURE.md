@@ -301,14 +301,14 @@ the live view. The other feed is the fallback. Either way the score and the
 game state (live/final) stay ESPN's, and navigated games stay on ESPN, since
 only the live refresh (`live_bridge=True`) translates.
 
-- **`espn` (default):** MLB fills in only when ESPN has no play-by-play for
+- **`espn`:** MLB fills in only when ESPN has no play-by-play for
   the live game. That needs ESPN's flag to read `"none"` **and** `plays` to be
   empty, because an empty `plays` on its own also happens in a covered game's
   first seconds. Going **back** to ESPN waits for ESPN's plays, not just its
   flag: when coverage resumed mid-game on 2026-10-05, ESPN flipped to
   `"full"` about a minute before any plays arrived, which would have blanked
   the card for that minute (`should_use_statsapi`).
-- **`mlb`:** every live refresh tries MLB first. ESPN's summary, untouched,
+- **`mlb` (default since 1.36):** every live refresh tries MLB first. ESPN's summary, untouched,
   is the fallback whenever the MLB lookup, the fetch or the translation fails
   (`wants_statsapi`). On a fully covered game this replaces ESPN's own plays.
   The oracle shows every player still resolves to his ESPN id there.
@@ -372,10 +372,17 @@ Details that each matter:
 
 `data_source` (`"espn"` | `"mlb_statsapi"`) and `data_source_fallback`
 (true while that source is NOT the preferred one) are sensor attributes.
-Whenever MLB supplies the live view (preferred or fallback) the expanded live
-view shows MLB's league logo (`renderMlbSourceTag`, MLB-hosted dark/light SVG
-picked from `hass.themes.darkMode`); an ESPN fallback shows a **"via ESPN"** tag. Switching onto or off the fallback is
-logged at INFO, once each way.
+While a fallback is in use, the expanded live view shows a small **"via
+MLB"** or **"via ESPN"** tag. Switching onto or off the fallback is logged at
+INFO, once each way.
+
+**Every player keeps an ESPN id.** ESPN's summary lists only players who
+have appeared, and MLB's feed runs ahead of it, so a just-entered reliever
+used to get a synthetic `mlb-` id (unlinked name, no career popup) until
+ESPN caught up. `_statsapi_summary` now also passes both teams' full ESPN
+rosters (`teams/{id}/roster`, `flatten_espn_roster`, cached hourly by
+`_fetch_team_roster`) to `_Roster`, so every active player matches an ESPN
+athlete by name. `mlb-` ids remain only for a player on neither list.
 
 **ABS challenges are always MLB's.** ESPN publishes no ball-strike challenge
 data, so for every live game `_abs_challenges` reads
