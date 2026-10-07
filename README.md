@@ -21,7 +21,7 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Schedule navigation** - `‹ ›` arrows on the non-live card page back through previous results and forward through upcoming games (`show_schedule_nav`)
 - **Postseason support** - Playoff games are included in the schedule, a series banner (e.g. `NLDS · Dodgers lead 2-0`) sits above the score (`show_series`), postseason batting lines use playoff stats, and the expand panel shows the day's playoff games in place of division standings
 - **All-Star Game** - On All-Star Game day every card automatically shows the All-Star Game, whichever team it follows; `AL` / `NL` can also be configured as teams for a dedicated All-Star card
-- **MLB Stats API fallback** - When ESPN publishes a live game with no play-by-play, the batter, pitcher, count, plays and box score are filled in from MLB's official Stats API. You can also make MLB the preferred source with ESPN as the fallback. See [Live data source](#live-data-source) below
+- **MLB Stats API live feed** - The live batter, pitcher, count, plays and box score come from MLB's official Stats API by default (faster than ESPN), with ESPN as the fallback; MLB's play text is rewritten in ESPN's terse style. You can switch the preference to ESPN, in which case MLB fills in for games ESPN publishes without play-by-play. See [Live data source](#live-data-source) below
 - **Delays and postponements** - Rain/weather delays and suspensions show ESPN's specific delay reason; postponed games show `PPD`
 - **Player career popup** - Click any (yellow) player name to open an in-card popup with their bio and season-by-season career stats; configurable to open ESPN's player page instead (`player_link_target`)
 - **Team lineup popup** - Click a team's side of the pitcher/batter matchup (anywhere but the player name) to open an in-card popup with that team's full lineup and every player who appeared in the game, toggleable between **Game** (this game's box score) and **Season** stats for hitters and pitchers
@@ -279,25 +279,26 @@ automations they're nested under `trigger.event.data` (e.g.
 
 ## Live data source
 
-By default ESPN is the primary feed, but for some games it publishes only the score, with
-no play-by-play. When that happens during a live game, the integration fills in
-the batter, pitcher, count, plays, and box score from
-[MLB's Stats API](https://statsapi.mlb.com) (`feed/live`), so the card keeps
-working as normal. It switches back to ESPN as soon as ESPN's play-by-play
-arrives. The score itself always comes from ESPN.
+By default, the live batter, pitcher, count, plays, and box score come from
+[MLB's Stats API](https://statsapi.mlb.com) (`feed/live`), which updates
+noticeably faster than ESPN. If MLB's feed is unavailable, the card falls back
+to ESPN. The score itself always comes from ESPN, and player names stay
+linked to ESPN's player pages and career popup whichever feed is in use.
+
+With ESPN preferred instead, MLB still fills in for games ESPN covers with the
+score only (no play-by-play), switching back as soon as ESPN's plays arrive.
 
 You can choose which feed is preferred under Settings → Devices & Services →
 _MLB Live Scoreboard_ → **Configure** → **Preferred live data source**:
 
 | Option            | Behavior                                                                                         |
 | ----------------- | ------------------------------------------------------------------------------------------------ |
-| `ESPN` (default)  | ESPN for everything; MLB fills in when ESPN publishes no play-by-play for a live game             |
-| `MLB Stats API`   | MLB for the live batter, pitcher, count, plays, and box score; ESPN whenever MLB's feed is unavailable |
+| `MLB Stats API` (default) | MLB for the live batter, pitcher, count, plays, and box score; ESPN whenever MLB's feed is unavailable |
+| `ESPN`            | ESPN for everything; MLB fills in when ESPN publishes no play-by-play for a live game             |
 
-Whenever MLB is supplying the live view (as the preferred source or as the
-fallback), a small MLB logo appears at the bottom right of the expanded live
-card; while ESPN is the fallback for an MLB preference, a **via ESPN** tag
-appears instead. The sensor's `data_source` / `data_source_fallback`
+While the fallback (non-preferred) feed is in use, the card shows a small
+**via ESPN** or **via MLB** tag at the bottom right of the expanded live view.
+The sensor's `data_source` / `data_source_fallback`
 attributes (below) report the same. Neither feed requires an API key.
 
 MLB's play descriptions are rewritten into ESPN's terse style, so the

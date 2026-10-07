@@ -453,7 +453,12 @@ def _slug(text: Any) -> str:
 class _Roster:
     """MLB player id -> ESPN-shaped athlete dict, plus team bookkeeping."""
 
-    def __init__(self, espn_summary: dict[str, Any], feed: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        espn_summary: dict[str, Any],
+        feed: dict[str, Any],
+        team_rosters: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> None:
         game_data = feed.get("gameData") or {}
         self.people: dict[int, dict[str, Any]] = {}
         for person in (game_data.get("players") or {}).values():
@@ -484,6 +489,13 @@ class _Roster:
                 athlete = entry.get("athlete") or {}
                 if athlete.get("id"):
                     espn_by_team.setdefault(tid, []).append(athlete)
+
+        # ESPN's full team rosters (``flatten_espn_roster``) cover players the
+        # summary doesn't list yet: everyone who hasn't appeared in the game.
+        for tid, athletes in (team_rosters or {}).items():
+            for athlete in athletes or []:
+                if athlete.get("id"):
+                    espn_by_team.setdefault(str(tid), []).append(athlete)
 
         # name -> athlete, keeping only names that resolve to ONE ESPN id; a
         # name shared by two different ids is no match at all.
@@ -1150,7 +1162,39 @@ def _header_with_mlb_inning(header: dict[str, Any], feed: dict[str, Any]) -> dic
     return dict(header, competitions=[comp, *comps[1:]])
 
 
-def summary_from_statsapi(espn_summary: dict[str, Any], feed: dict[str, Any]) -> dict[str, Any]:
+def flatten_espn_roster(payload: Any) -> list[dict[str, Any]]:
+    """ESPN ``teams/{id}/roster`` -> athlete dicts trimmed to what matching uses.
+
+    The endpoint groups athletes by position (``athletes[].items[]``); a flat
+    ``athletes[]`` list is accepted too.
+    """
+    groups = (payload or {}).get("athletes") if isinstance(payload, dict) else None
+    out: list[dict[str, Any]] = []
+    for group in groups or []:
+        items = group.get("items") if isinstance(group, dict) and "items" in group else [group]
+        for athlete in items or []:
+            if not isinstance(athlete, dict) or not athlete.get("id"):
+                continue
+            trimmed = {
+                key: athlete[key]
+                for key in ("id", "fullName", "displayName", "shortName", "firstName", "lastName", "jersey")
+                if athlete.get(key)
+            }
+            href = (athlete.get("headshot") or {}).get("href")
+            if href:
+                trimmed["headshot"] = {"href": href, "alt": str(athlete.get("displayName") or "")}
+            abbr = (athlete.get("position") or {}).get("abbreviation")
+            if abbr:
+                trimmed["position"] = {"abbreviation": abbr}
+            out.append(trimmed)
+    return out
+
+
+def summary_from_statsapi(
+    espn_summary: dict[str, Any],
+    feed: dict[str, Any],
+    team_rosters: dict[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
     """Return a copy of ``espn_summary`` with MLB's live data filled in.
 
     Everything ESPN DID publish (game state, series, competitors and score,
@@ -1159,7 +1203,7 @@ def summary_from_statsapi(espn_summary: dict[str, Any], feed: dict[str, Any]) ->
     MLB's feed, in ESPN's shape, with ESPN athlete ids wherever a name match
     exists, and the status block's INNING follows MLB so it agrees with them.
     """
-    roster = _Roster(espn_summary, feed)
+    roster = _Roster(espn_summary, feed, team_rosters)
     boxscore, rosters = _build_boxscore(espn_summary, feed, roster)
     summary = dict(espn_summary)
     if isinstance(espn_summary.get("header"), dict):

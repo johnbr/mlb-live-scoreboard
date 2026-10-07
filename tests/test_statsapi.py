@@ -413,6 +413,7 @@ def _coord(options: dict | None = None, responses: dict | None = None) -> Coord:
     coord._statsapi_game_pk_cache = {}
     coord._statsapi_feed_cache = None
     coord._abs_challenges_cache = None
+    coord._team_roster_cache = {}
     coord._data_source_logged = None
     calls: list[str] = []
 
@@ -430,8 +431,8 @@ def _coord(options: dict | None = None, responses: dict | None = None) -> Coord:
     return coord
 
 
-def test_preference_defaults_to_espn():
-    assert _coord()._prefer_mlb() is False
+def test_preference_defaults_to_mlb():
+    assert _coord()._prefer_mlb() is True
     assert _coord({OPT_DATA_SOURCE_PREFERENCE: "espn"})._prefer_mlb() is False
     assert _coord({OPT_DATA_SOURCE_PREFERENCE: "mlb"})._prefer_mlb() is True
 
@@ -749,3 +750,69 @@ def test_oracle_play_text_reads_like_espn():
     ours = texts(mine)
     exact = sum(t in espn_texts for t in ours)
     assert exact >= 79, f"{exact}/{len(ours)}"
+
+
+# ---------------------------------------------------------------------------
+# ESPN team rosters: every player keeps an ESPN id
+# ---------------------------------------------------------------------------
+
+
+def _espn_roster_payload(*athletes: tuple[str, str, str]) -> dict:
+    return {
+        "athletes": [
+            {
+                "position": "Pitchers",
+                "items": [
+                    {
+                        "id": aid,
+                        "fullName": name,
+                        "displayName": name,
+                        "shortName": f"{name[0]}. {name.split()[-1]}",
+                        "lastName": name.split()[-1],
+                        "headshot": {"href": f"https://a.espncdn.com/{aid}.png"},
+                        "position": {"abbreviation": pos},
+                        "links": [{"href": "dropped"}],
+                    }
+                    for aid, name, pos in athletes
+                ],
+            }
+        ]
+    }
+
+
+def test_flatten_espn_roster_trims_to_matching_fields():
+    out = sa.flatten_espn_roster(_espn_roster_payload(("4242", "Ray Kerr", "RP")))
+    assert out == [
+        {
+            "id": "4242",
+            "fullName": "Ray Kerr",
+            "displayName": "Ray Kerr",
+            "shortName": "R. Kerr",
+            "lastName": "Kerr",
+            "headshot": {"href": "https://a.espncdn.com/4242.png", "alt": "Ray Kerr"},
+            "position": {"abbreviation": "RP"},
+        }
+    ]
+    assert sa.flatten_espn_roster(None) == []
+
+
+def test_team_roster_gives_a_player_espn_has_not_listed_yet_an_espn_id():
+    # A reliever MLB already shows but ESPN's summary doesn't list yet.
+    feed = _feed_with([])
+    feed["gameData"]["players"]["ID3"] = {"id": 3, "fullName": "Ray Kerr", "firstName": "Ray", "lastName": "Kerr"}
+    feed["liveData"]["boxscore"]["teams"]["home"]["players"]["ID3"] = {}
+    home_espn = sa.MLB_TO_ESPN_TEAM_ID[139]
+    assert sa.is_mlb_id(sa._Roster({}, feed).espn_id(3))
+    rosters = {home_espn: sa.flatten_espn_roster(_espn_roster_payload(("4242", "Ray Kerr", "RP")))}
+    assert sa._Roster({}, feed, rosters).espn_id(3) == "4242"
+
+
+def test_statsapi_summary_fetches_both_rosters_once_per_hour():
+    espn, feed = _tb_end_of_b6()
+    comp = espn["header"]["competitions"][0]
+    schedule = _schedule((849839, 147, 139, "2026-10-06T00:00:00Z"))
+    coord = _coord(responses={"/schedule": schedule, "/feed/live": feed, "/roster": _espn_roster_payload()})
+    assert asyncio.run(coord._statsapi_summary("401907986", espn, comp)) is not None
+    asyncio.run(coord._statsapi_summary("401907986", espn, comp))
+    assert sum("/roster" in u for u in coord.calls) == 2  # away + home, then cached
+
