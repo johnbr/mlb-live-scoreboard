@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.35.0...v1.36.0) (2026-10-07)
+
+
+### Features
+
+* make MLB the default live source and keep every player's name linked to ESPN ([#134](https://github.com/johnbr/mlb-live-scoreboard/issues/134)) ([cd31f8e](https://github.com/johnbr/mlb-live-scoreboard/commit/cd31f8ee94525c57b5e4625ceb2ed7c131409b6d))
+
 ## [1.35.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.34.0...v1.35.0) (2026-10-06)
 
 
