@@ -297,9 +297,10 @@ games the same day were fully covered, so this is a per-game coverage gap,
 not an API change.
 
 **Preference (options flow, `data_source_preference`):** which feed drives
-the live view. The other feed is the fallback. Either way the score and the
-game state (live/final) stay ESPN's, and navigated games stay on ESPN, since
-only the live refresh (`live_bridge=True`) translates.
+the live view. The other feed is the fallback. The score follows whichever
+feed supplies the plays; the game state (live/final) stays ESPN's, and
+navigated games stay on ESPN, since only the live refresh (`live_bridge=True`)
+translates.
 
 - **`espn`:** MLB fills in only when ESPN has no play-by-play for
   the live game. That needs ESPN's flag to read `"none"` **and** `plays` to be
@@ -324,7 +325,13 @@ copy of ESPN's summary with:
   `feed/live`, **in ESPN's shape**;
 - the status block's **inning** taken from MLB's linescore, because ESPN's
   status lagged MLB by up to a minute all game and left a three-out matchup
-  on screen.
+  on screen;
+- each competitor's **score, hits, errors and per-inning linescores** taken
+  from MLB's linescore too (`_header_with_mlb_live_state`), because ESPN's
+  score lagged the (MLB) play-by-play by several seconds: a run showed in
+  the plays before the score above it moved. The run-scored bus events read
+  the same competition, so they fire with the play. Only the live/final
+  **state** stays ESPN's.
 
 Every existing normalizer then runs unchanged: the at-bat hand-off, the due-up
 re-anchoring, the third-out hold, current pitches, lineups and the inning

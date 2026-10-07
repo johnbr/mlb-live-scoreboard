@@ -816,3 +816,66 @@ def test_statsapi_summary_fetches_both_rosters_once_per_hour():
     asyncio.run(coord._statsapi_summary("401907986", espn, comp))
     assert sum("/roster" in u for u in coord.calls) == 2  # away + home, then cached
 
+
+
+# ---------------------------------------------------------------------------
+# Score in sync with MLB's plays
+# ---------------------------------------------------------------------------
+
+
+def _espn_header(away_score: str, home_score: str, state: str = "in") -> dict:
+    return {
+        "competitions": [
+            {
+                "status": {"period": 5, "type": {"state": state, "detail": "Top 5th"}},
+                "competitors": [
+                    {"homeAway": "home", "score": home_score, "hits": 2, "errors": 0, "linescores": []},
+                    {"homeAway": "away", "score": away_score, "hits": 3, "errors": 0, "linescores": []},
+                ],
+            }
+        ]
+    }
+
+
+def _mlb_linescore_feed() -> dict:
+    # Shape of LAD @ ATL's feed (2026-10-06): mid-5th, the home side has
+    # batted 4 innings; Dodgers just scored the run ESPN hasn't shown yet.
+    innings = [{"num": n, "away": {"runs": 0, "hits": 1, "errors": 0}, "home": {"runs": 0, "hits": 0, "errors": 1}} for n in range(1, 5)]
+    innings[3]["away"]["runs"] = 0
+    innings.append({"num": 5, "away": {"runs": 2, "hits": 2, "errors": 0}, "home": {}})
+    return {
+        "liveData": {
+            "linescore": {
+                "currentInning": 5,
+                "inningState": "Middle",
+                "teams": {"away": {"runs": 2, "hits": 6, "errors": 0}, "home": {"runs": 0, "hits": 0, "errors": 4}},
+                "innings": innings,
+            }
+        }
+    }
+
+
+def test_score_hits_errors_and_innings_follow_mlb():
+    header = sa._header_with_mlb_live_state(_espn_header("1", "0"), _mlb_linescore_feed())
+    comp = header["competitions"][0]
+    away = next(c for c in comp["competitors"] if c["homeAway"] == "away")
+    home = next(c for c in comp["competitors"] if c["homeAway"] == "home")
+    assert (away["score"], away["hits"], away["errors"]) == ("2", 6, 0)
+    assert (home["score"], home["hits"], home["errors"]) == ("0", 0, 4)
+    assert [i["displayValue"] for i in away["linescores"]] == ["0", "0", "0", "0", "2"]
+    assert len(home["linescores"]) == 4  # hasn't batted in the 5th yet
+    # The inning follows MLB too; live/final state stays ESPN's.
+    assert (comp["status"]["period"], comp["status"]["periodPrefix"]) == (5, "Mid")
+    assert comp["status"]["type"]["state"] == "in"
+
+
+def test_score_stays_espns_without_mlb_totals():
+    feed = {"liveData": {"linescore": {"currentInning": 5, "inningState": "Top"}}}
+    comp = sa._header_with_mlb_live_state(_espn_header("1", "0"), feed)["competitions"][0]
+    assert [c["score"] for c in comp["competitors"]] == ["0", "1"]
+
+
+def test_espn_header_is_not_mutated():
+    espn = _espn_header("1", "0")
+    sa._header_with_mlb_live_state(espn, _mlb_linescore_feed())
+    assert espn["competitions"][0]["competitors"][1]["score"] == "1"

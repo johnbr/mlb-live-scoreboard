@@ -282,8 +282,10 @@ automations they're nested under `trigger.event.data` (e.g.
 By default, the live batter, pitcher, count, plays, and box score come from
 [MLB's Stats API](https://statsapi.mlb.com) (`feed/live`), which updates
 noticeably faster than ESPN. If MLB's feed is unavailable, the card falls back
-to ESPN. The score itself always comes from ESPN, and player names stay
-linked to ESPN's player pages and career popup whichever feed is in use.
+to ESPN. The score, hits, errors and inning-by-inning line come from the same
+feed as the plays, so a run shows in the score the moment its play appears.
+Player names stay linked to ESPN's player pages and career popup whichever
+feed is in use.
 
 With ESPN preferred instead, MLB still fills in for games ESPN covers with the
 score only (no play-by-play), switching back as soon as ESPN's plays arrive.

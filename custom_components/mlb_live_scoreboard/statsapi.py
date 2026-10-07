@@ -1128,37 +1128,72 @@ def _ordinal(n: int) -> str:
     return f"{n}{suffix}"
 
 
-def _header_with_mlb_inning(header: dict[str, Any], feed: dict[str, Any]) -> dict[str, Any]:
-    """Copy of ESPN's header whose inning (period / prefix / detail) is MLB's.
+def _competitor_with_mlb_score(competitor: dict[str, Any], linescore: dict[str, Any]) -> dict[str, Any]:
+    """Copy of one ESPN competitor with MLB's runs / hits / errors / innings."""
+    side = competitor.get("homeAway")
+    totals = (linescore.get("teams") or {}).get(side) if side in ("away", "home") else None
+    if not isinstance(totals, dict) or totals.get("runs") is None:
+        return competitor
+    out = dict(competitor, score=str(_safe_int(totals.get("runs"))))
+    for key in ("hits", "errors"):
+        if totals.get(key) is not None:
+            out[key] = _safe_int(totals.get(key))
+    innings = []
+    for inning in linescore.get("innings") or []:
+        half = (inning or {}).get(side) or {}
+        if half.get("runs") is None:
+            break  # this side hasn't batted in that inning yet
+        runs = _safe_int(half.get("runs"))
+        innings.append(
+            {
+                "value": runs,
+                "displayValue": str(runs),
+                "hits": _safe_int(half.get("hits")),
+                "errors": _safe_int(half.get("errors")),
+            }
+        )
+    if innings:
+        out["linescores"] = innings
+    return out
+
+
+def _header_with_mlb_live_state(header: dict[str, Any], feed: dict[str, Any]) -> dict[str, Any]:
+    """Copy of ESPN's header whose inning and score are MLB's.
 
     ESPN's status block lagged MLB by up to a minute all through the uncovered
     game, so the card sat on a three-out matchup under "Bottom 7th" while the
-    plays and situation -- already MLB's -- had moved to the break. Taking the
-    inning from the same feed keeps them on one clock. Only the inning is
-    replaced: live/final state and the score stay ESPN's.
+    plays and situation -- already MLB's -- had moved to the break. ESPN's
+    score lags the same way: a run showed in the (MLB) play-by-play several
+    seconds before the score above it moved. Taking the inning, runs, hits,
+    errors and per-inning line from the same feed keeps them on one clock.
+    Only the live/final state stays ESPN's.
     """
     linescore = (feed.get("liveData") or {}).get("linescore") or {}
+    comps = header.get("competitions") or []
+    if not linescore or not comps or not isinstance(comps[0], dict):
+        return header
+    comp = dict(comps[0])
+    comp["competitors"] = [
+        _competitor_with_mlb_score(c, linescore) if isinstance(c, dict) else c for c in comp.get("competitors") or []
+    ]
     inning = _safe_int(linescore.get("currentInning"))
     names = _INNING_STATE_TO_ESPN.get(str(linescore.get("inningState") or "").lower())
-    comps = header.get("competitions") or []
-    if not inning or not names or not comps or not isinstance(comps[0], dict):
-        return header
-    prefix, detail_word, short_word = names
-    comp = dict(comps[0])
-    status = dict(comp.get("status") or {})
-    status_type = dict(status.get("type") or {})
-    ordinal = _ordinal(inning)
-    status.update({"period": inning, "periodPrefix": prefix, "displayPeriod": ordinal})
-    if str(status_type.get("state") or "").lower() == "in":
-        status_type.update(
-            {
-                "detail": f"{detail_word} {ordinal}",
-                "shortDetail": f"{short_word} {ordinal}",
-                "statusPrimary": f"{short_word} {ordinal}",
-            }
-        )
-    status["type"] = status_type
-    comp["status"] = status
+    if inning and names:
+        prefix, detail_word, short_word = names
+        status = dict(comp.get("status") or {})
+        status_type = dict(status.get("type") or {})
+        ordinal = _ordinal(inning)
+        status.update({"period": inning, "periodPrefix": prefix, "displayPeriod": ordinal})
+        if str(status_type.get("state") or "").lower() == "in":
+            status_type.update(
+                {
+                    "detail": f"{detail_word} {ordinal}",
+                    "shortDetail": f"{short_word} {ordinal}",
+                    "statusPrimary": f"{short_word} {ordinal}",
+                }
+            )
+        status["type"] = status_type
+        comp["status"] = status
     return dict(header, competitions=[comp, *comps[1:]])
 
 
@@ -1207,7 +1242,7 @@ def summary_from_statsapi(
     boxscore, rosters = _build_boxscore(espn_summary, feed, roster)
     summary = dict(espn_summary)
     if isinstance(espn_summary.get("header"), dict):
-        summary["header"] = _header_with_mlb_inning(espn_summary["header"], feed)
+        summary["header"] = _header_with_mlb_live_state(espn_summary["header"], feed)
     summary["plays"] = _build_plays(feed, roster)
     summary["situation"] = _build_situation(feed, roster)
     summary["boxscore"] = boxscore
