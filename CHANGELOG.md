@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.1...v1.37.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* end the game at the final out instead of flashing Due Up for an unplayed half ([#140](https://github.com/johnbr/mlb-live-scoreboard/issues/140)) ([9e2804d](https://github.com/johnbr/mlb-live-scoreboard/commit/9e2804dbf675d3a53dd1855abcee6ccb57c218e7))
+
 ## [1.37.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.0...v1.37.1) (2026-10-07)
 
 
