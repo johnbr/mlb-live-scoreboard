@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.0...v1.37.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* move the score with MLB's plays instead of seconds behind them ([#138](https://github.com/johnbr/mlb-live-scoreboard/issues/138)) ([da770a5](https://github.com/johnbr/mlb-live-scoreboard/commit/da770a5ea823970971406564e25f09ba29d162b4))
+
 ## [1.37.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.36.0...v1.37.0) (2026-10-07)
 
 
