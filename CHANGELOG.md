@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.2...v1.37.3) (2026-10-07)
+
+
+### Bug Fixes
+
+* show the challenge dots before either team has challenged ([#142](https://github.com/johnbr/mlb-live-scoreboard/issues/142)) ([a142822](https://github.com/johnbr/mlb-live-scoreboard/commit/a142822f31b7de155b5fb878cb995669c465dd32))
+
 ## [1.37.2](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.1...v1.37.2) (2026-10-07)
 
 
