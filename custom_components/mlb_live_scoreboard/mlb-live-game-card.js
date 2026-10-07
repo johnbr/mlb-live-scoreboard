@@ -85,7 +85,7 @@ const CARD_DEFAULTS = {
   show_series: true,
   // Ball-strike (ABS) challenges remaining, as yellow dots left of each team's
   // score on the live card (filled = remaining, hollow = lost). Comes from MLB's
-  // feed; renders nothing when MLB reports no ABS challenges for the game.
+  // feed; renders nothing when MLB has no challenge counts for the game.
   show_challenges: true,
   // Left/right arrows above the play-by-play on the live card to page back
   // through earlier half-innings ("what happened in the 4th?"). Snaps back to

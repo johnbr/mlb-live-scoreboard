@@ -648,14 +648,19 @@ def _safe_int(value: Any) -> int:
 def abs_challenges(feed: dict[str, Any]) -> dict[str, Any]:
     """ABS (ball-strike) challenges per team from an MLB ``feed/live`` payload.
 
-    Returns the ``AbsChallenges`` shape, or ``{}`` when MLB reports no ABS
-    challenges for the game. ``remaining`` is MLB's own count (a won challenge
-    is retained). ``in_progress`` marks the team whose challenge of a pitch in
-    the current at-bat is still under review.
+    Returns the ``AbsChallenges`` shape, or ``{}`` when MLB's feed carries no
+    per-team challenge counts for the game. ``remaining`` is MLB's own count
+    (a won challenge is retained). ``in_progress`` marks the team whose
+    challenge of a pitch in the current at-bat is still under review.
+
+    MLB's ``hasChallenges`` is NOT "this game uses ABS": it stays false until
+    the first challenge is made (2026-10-07, LAD @ ATL read false with both
+    sides at 2 remaining), so gating on it hid the dots until then. The
+    presence of the per-team counts is the signal.
     """
     game_data = feed.get("gameData") or {}
     abs_data = game_data.get("absChallenges") or {}
-    if not abs_data.get("hasChallenges"):
+    if not any(isinstance(abs_data.get(side), dict) and "remaining" in abs_data[side] for side in ("away", "home")):
         return {}
     teams = game_data.get("teams") or {}
     side_by_team = {str((teams.get(side) or {}).get("id") or ""): side for side in ("away", "home")}

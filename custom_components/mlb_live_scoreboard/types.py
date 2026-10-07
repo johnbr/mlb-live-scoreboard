@@ -448,8 +448,9 @@ class AbsChallenges(TypedDict, total=False):
     Sourced from MLB's ``feed/live`` ``gameData.absChallenges`` (ESPN carries
     no equivalent). MLB's ``remaining`` already applies the rule that a
     successful challenge is retained and only a failed one is spent. Empty
-    (``{}``) unless the displayed game is live and MLB reports
-    ``hasChallenges`` for it.
+    (``{}``) unless the displayed game is live and MLB's feed has per-team
+    challenge counts for it. ``has_challenges`` means "counts available"
+    (not MLB's ``hasChallenges``, which only turns true after a challenge).
     """
 
     has_challenges: bool
