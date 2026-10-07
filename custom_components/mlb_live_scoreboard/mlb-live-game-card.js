@@ -83,8 +83,8 @@ const CARD_DEFAULTS = {
   // above the score rows. Renders nothing outside the postseason (the sensor's
   // `series` attribute is empty), so it's safe to leave on year-round.
   show_series: true,
-  // Ball-strike (ABS) challenges remaining, as dots left of each team's score
-  // on the live card (filled = remaining, hollow = lost). Comes from MLB's
+  // Ball-strike (ABS) challenges remaining, as yellow dots left of each team's
+  // score on the live card (filled = remaining, hollow = lost). Comes from MLB's
   // feed; renders nothing when MLB reports no ABS challenges for the game.
   show_challenges: true,
   // Left/right arrows above the play-by-play on the live card to page back
@@ -4368,17 +4368,18 @@ color: var(--primary-text-color);
         .abs-chal + .team-right {
           margin-left: 0;
         }
+        /* The card's yellow (player names, playoff round label). */
         .chal-dot {
           width: 7px;
           height: 7px;
           border-radius: 50%;
           box-sizing: border-box;
-          border: 1px solid var(--secondary-text-color);
+          border: 1px solid var(--warning-color, #ffa600);
           opacity: 0.55;
         }
         .chal-dot.on {
-          background: var(--secondary-text-color);
-          opacity: 0.9;
+          background: var(--warning-color, #ffa600);
+          opacity: 1;
         }
         .chal-dot.pending {
           animation: mlb-chal-pulse 1s ease-in-out infinite;

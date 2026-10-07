@@ -13,7 +13,7 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Play-by-play** - Recent plays and pitch-by-pitch updates (pitch type, velocity, result)
 - **Half-inning pager** - Page the live play-by-play back to earlier half-innings ("what happened in the 4th?"); snaps back to the live half after ~20s (`show_inning_nav`)
 - **Pitch-zone graphic** - Optional strike-zone plot with one numbered, color-coded dot per pitch in the current at-bat (`show_pitch_zone`, off by default)
-- **ABS challenges remaining** - Dots beside each team's score on the live card show its ball-strike challenges left (filled = remaining, hollow = lost); a dot pulses while that team's challenge is under review (`show_challenges`)
+- **ABS challenges remaining** - Yellow dots beside each team's score on the live card show its ball-strike challenges left (filled = remaining, hollow = lost); a dot pulses while that team's challenge is under review (`show_challenges`)
 - **Due-up panel** - Between half-innings, the matchup row shows the next three batters with portraits and stats
 - **Pre-game info** - Scheduled game times and probable pitchers
 - **Post-game results** - Final scores and game leaders
