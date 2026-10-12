@@ -4167,8 +4167,16 @@ class MlbLiveGameCard extends HTMLElement {
       return `<div class="inning-stack up"><div class="arrow">▲</div><div class="num">${period}</div></div>`;
     if (inningState.isBottom)
       return `<div class="inning-stack down"><div class="num">${period}</div><div class="arrow">▼</div></div>`;
-    if (inningState.isMid)
-      return `<div class="inning-stack mid"><div class="num">${period}</div></div>`;
+    // Between halves the marker names the half coming up, not the one just
+    // finished: "Mid 3rd" leads into the bottom of the 3rd (same number),
+    // "End 3rd" into the top of the 4th.
+    if (inningState.isMid) {
+      const upcoming =
+        inningState.lower.startsWith("end") && inningState.period
+          ? inningState.period + 1
+          : period;
+      return `<div class="inning-stack mid"><div class="num">${upcoming}</div></div>`;
+    }
     return `<div class="marker-text">LIVE</div>`;
   }
 
