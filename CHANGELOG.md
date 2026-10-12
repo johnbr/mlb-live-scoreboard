@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.38.0...v1.39.0) (2026-10-12)
+
+
+### Features
+
+* make the pre-game countdown window configurable (default 6h) ([#148](https://github.com/johnbr/mlb-live-scoreboard/issues/148)) ([2617452](https://github.com/johnbr/mlb-live-scoreboard/commit/26174522117c9b9c1f1eb1507abde546e187854f))
+
 ## [1.38.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.4...v1.38.0) (2026-10-12)
 
 
