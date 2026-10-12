@@ -18,6 +18,13 @@ const THIRD_OUT_HOLD_SECONDS = 30;
 // just-completed third out, even without an explicit `third_out_play` attribute.
 const THIRD_OUT_RECENT_WINDOW_SECONDS = 8;
 
+// Inside this window before first pitch the non-live card swaps the start time
+// for a countdown that ticks every second, client-side (no server polling).
+const COUNTDOWN_WINDOW_MS = 2 * 60 * 60 * 1000;
+// Stand-in for the countdown digits while the compact HTML is compared, so the
+// per-second text change alone never forces an innerHTML rewrite.
+const COUNTDOWN_TOKEN = "\u0000countdown\u0000";
+
 const EDITOR_TAG = "mlb-live-game-card-editor";
 // Integration domain — used by the visual editor's entity picker to filter
 // the dropdown to this integration's sensors only (robust even if the user
@@ -531,6 +538,15 @@ function formatEventDate(dateRaw, timeValid = true) {
     day: "numeric",
   });
   return `${dateText} ${timeText}`;
+}
+
+// "1:05:09" / "4:07" — h:mm:ss above an hour, m:ss below.
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = String(total % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
 
 function deriveGameState(attrs) {
@@ -3295,8 +3311,57 @@ class MlbLiveGameCard extends HTMLElement {
     }
   }
 
+  // Drives the pre-game countdown entirely client-side off the element's
+  // data-game-start. Inside the window it rewrites only the digits, once per
+  // second on the second boundary; outside it sleeps until the window opens.
+  // When the rendered mode (countdown vs start time) no longer matches the
+  // clock — window just opened, or first pitch passed while ESPN still says
+  // pre-game — it busts the memos and repaints on the next tick.
+  _syncCountdown() {
+    this._clearCountdownTimer();
+    const el = this.content?.querySelector("[data-game-start]");
+    const startMs = el ? Number(el.dataset.gameStart) : NaN;
+    if (!Number.isFinite(startMs)) return;
+    const remaining = startMs - Date.now();
+    const inWindow = remaining > 0 && remaining <= COUNTDOWN_WINDOW_MS;
+    let delay;
+    if (inWindow !== el.classList.contains("compact-countdown")) {
+      this._lastFingerprint = "";
+      this._lastCompactFp = "";
+      this._lastCompactHtml = "";
+      this._countdownTimer = setTimeout(() => {
+        this._countdownTimer = null;
+        this.render();
+      }, 0);
+      return;
+    }
+    if (inWindow) {
+      const text = formatCountdown(remaining);
+      if (el.textContent !== text) el.textContent = text;
+      delay = remaining % 1000 || 1000;
+    } else if (remaining > 0) {
+      // Capped so a sleeping laptop/tablet re-checks rather than trusting one
+      // long timeout across a suspend.
+      delay = Math.min(remaining - COUNTDOWN_WINDOW_MS, 10 * 60 * 1000);
+    } else {
+      return;
+    }
+    this._countdownTimer = setTimeout(() => {
+      this._countdownTimer = null;
+      this._syncCountdown();
+    }, delay);
+  }
+
+  _clearCountdownTimer() {
+    if (this._countdownTimer) {
+      clearTimeout(this._countdownTimer);
+      this._countdownTimer = null;
+    }
+  }
+
   disconnectedCallback() {
     this._clearRefreshTimer();
+    this._clearCountdownTimer();
     this._clearHoldExpiryTimer();
     this._clearNavIdleTimer();
     this._clearInningIdleTimer();
@@ -3327,6 +3392,9 @@ class MlbLiveGameCard extends HTMLElement {
     if (!this._refreshInterval) {
       this._setupRefreshTimer();
     }
+    // render() may have skipped the compact branch on an unchanged
+    // fingerprint (e.g. reattached after a tab switch cleared the timer).
+    if (!this._countdownTimer) this._syncCountdown();
   }
 
   getCardSize() {
@@ -3927,6 +3995,7 @@ class MlbLiveGameCard extends HTMLElement {
         expanded,
       );
       if (compactHtml !== null) this.content.innerHTML = compactHtml;
+      this._syncCountdown();
       return;
     }
 
@@ -4022,6 +4091,17 @@ class MlbLiveGameCard extends HTMLElement {
     const isUpcoming = stateInfo.pillClass === "next";
     const isFinalCompact = stateInfo.pillClass === "final";
     const canExpand = isUpcoming || isFinalCompact;
+    // Upcoming game with a real start time: within COUNTDOWN_WINDOW_MS of first
+    // pitch the time is replaced by a live countdown (ticked by _syncCountdown).
+    const startMs =
+      isUpcoming && competition?.timeValid !== false
+        ? new Date(competition?.date || "").getTime()
+        : NaN;
+    const untilStart = startMs - Date.now();
+    const showCountdown =
+      Number.isFinite(startMs) &&
+      untilStart > 0 &&
+      untilStart <= COUNTDOWN_WINDOW_MS;
     const compactFp = [
       stateInfo.pillClass,
       awayTeam?.abbreviation || awayMeta?.abbreviation,
@@ -4033,6 +4113,7 @@ class MlbLiveGameCard extends HTMLElement {
       awayRecord,
       homeRecord,
       expanded ? "exp" : "col",
+      showCountdown ? "cd" : "",
       canExpand ? this._upcomingDetailsFingerprint(attrs) : "",
       renderSeriesBanner(this, attrs),
       `nav:${this._navOffset}:${this._navHasPrev ? 1 : 0}${this._navHasNext ? 1 : 0}`,
@@ -4094,13 +4175,22 @@ class MlbLiveGameCard extends HTMLElement {
         : ""
     }</div>`;
     const postponedMarker = `<div class="compact-final-marker"><div class="compact-pill compact-pill-postponed">PPD</div></div>`;
-    const nextRight = when.isToday
+    // data-game-start marks the element _syncCountdown watches, both to tick
+    // the countdown and to repaint the moment the window opens or closes.
+    const startAttr = Number.isFinite(startMs)
+      ? ` data-game-start="${startMs}"`
+      : "";
+    const nextRight = showCountdown
       ? `<div class="compact-next-wrap today-only">
-          <div class="compact-time">${when.time || ""}</div>
+          <div class="compact-time compact-countdown"${startAttr} title="First pitch ${escapeHtml(when.time || "")}">${COUNTDOWN_TOKEN}</div>
+        </div>`
+      : when.isToday
+      ? `<div class="compact-next-wrap today-only">
+          <div class="compact-time"${startAttr}>${when.time || ""}</div>
         </div>`
       : `<div class="compact-next-wrap">
           <div class="compact-date">${when.date || ""}</div>
-          <div class="compact-time">${when.time || ""}</div>
+          <div class="compact-time"${startAttr}>${when.time || ""}</div>
         </div>`;
     const rightHtml = isPostponed
       ? postponedMarker
@@ -4176,9 +4266,13 @@ class MlbLiveGameCard extends HTMLElement {
       </div>`;
     // Identical output (e.g. a forced repaint whose time-derived text didn't
     // actually change) — skip the DOM write but keep the new fingerprint.
+    // Compared with the countdown still tokenized: its digits are kept current
+    // by _syncCountdown, not by rewriting the whole card every second.
     if (html === this._lastCompactHtml) return null;
     this._lastCompactHtml = html;
-    return html;
+    return showCountdown
+      ? html.replace(COUNTDOWN_TOKEN, formatCountdown(untilStart))
+      : html;
   }
 
   renderInningMarker(stateInfo, inningState) {
@@ -5283,6 +5377,10 @@ white-space: nowrap;
         .compact-next-wrap.today-only .compact-time {
           font-size: 1em !important;
           font-weight: 500 !important;
+        }
+        /* Fixed-width digits so the countdown doesn't jitter as it ticks. */
+        .compact-next-wrap .compact-countdown {
+          font-variant-numeric: tabular-nums;
         }
         .compact-pill {
 color: var(--secondary-text-color);
