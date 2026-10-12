@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.4...v1.38.0) (2026-10-12)
+
+
+### Features
+
+* count down to first pitch on the pre-game card ([#146](https://github.com/johnbr/mlb-live-scoreboard/issues/146)) ([958ca78](https://github.com/johnbr/mlb-live-scoreboard/commit/958ca78f04892b10682a3547d1a93cae5443a71e))
+
 ## [1.37.4](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.3...v1.37.4) (2026-10-12)
 
 
