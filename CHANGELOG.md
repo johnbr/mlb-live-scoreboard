@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.4](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.3...v1.37.4) (2026-10-12)
+
+
+### Bug Fixes
+
+* show the upcoming half-inning at the break (marker + Due Up heading) ([#144](https://github.com/johnbr/mlb-live-scoreboard/issues/144)) ([e1435b2](https://github.com/johnbr/mlb-live-scoreboard/commit/e1435b2a50a2c3cf23aa8bdf848050875ebb460d))
+
 ## [1.37.3](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.37.2...v1.37.3) (2026-10-07)
 
 
