@@ -15,7 +15,7 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Pitch-zone graphic** - Optional strike-zone plot with one numbered, color-coded dot per pitch in the current at-bat (`show_pitch_zone`, off by default)
 - **ABS challenges remaining** - Yellow dots beside each team's score on the live card show its ball-strike challenges left (filled = remaining, hollow = lost); a dot pulses while that team's challenge is under review (`show_challenges`)
 - **Due-up panel** - Between half-innings, the matchup row shows the next three batters with portraits and stats
-- **Pre-game info** - Scheduled game times and probable pitchers
+- **Pre-game info** - Scheduled game times and probable pitchers; within 2 hours of first pitch the start time becomes a live countdown that ticks every second (client-side, no extra polling)
 - **Post-game results** - Final scores and game leaders
 - **Compact-card expand panel** - Click an upcoming or completed game card to expand it. Upcoming games show probable starters + current division standings; completed games show the pitching decisions (W/L/SV with records and game lines), every scoring play of the game, and game leaders (top hitters / pitchers per side) above the same standings block. An optional "Watch highlights on ESPN" link appears once clips are published (`show_highlights`)
 - **Schedule navigation** - `‹ ›` arrows on the non-live card page back through previous results and forward through upcoming games (`show_schedule_nav`)
