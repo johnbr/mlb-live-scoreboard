@@ -18,9 +18,8 @@ const THIRD_OUT_HOLD_SECONDS = 30;
 // just-completed third out, even without an explicit `third_out_play` attribute.
 const THIRD_OUT_RECENT_WINDOW_SECONDS = 8;
 
-// Inside this window before first pitch the non-live card swaps the start time
-// for a countdown that ticks every second, client-side (no server polling).
-const COUNTDOWN_WINDOW_MS = 2 * 60 * 60 * 1000;
+// Hard ceiling on the `countdown_hours` window (see _countdownWindowMs).
+const COUNTDOWN_MAX_HOURS = 24;
 // Stand-in for the countdown digits while the compact HTML is compared, so the
 // per-second text change alone never forces an innerHTML rewrite.
 const COUNTDOWN_TOKEN = "\u0000countdown\u0000";
@@ -111,6 +110,10 @@ const CARD_DEFAULTS = {
   // for users who prefer a specific look. Modal popup avatars are
   // unaffected — they size against the viewport, not the card.
   headshot_size: "auto",
+  // Hours before first pitch at which the upcoming-game card swaps the start
+  // time for a countdown that ticks every second, client-side (no server
+  // polling). 0 turns the countdown off.
+  countdown_hours: 6,
 };
 
 // Pixel size for each `headshot_size` preset. Used by the CSS rules near
@@ -170,6 +173,18 @@ const EDITOR_SCHEMA = [
             step: 1,
             mode: "box",
             unit_of_measurement: "s",
+          },
+        },
+      },
+      {
+        name: "countdown_hours",
+        selector: {
+          number: {
+            min: 0,
+            max: COUNTDOWN_MAX_HOURS,
+            step: 0.5,
+            mode: "box",
+            unit_of_measurement: "h",
           },
         },
       },
@@ -255,6 +270,7 @@ const EDITOR_LABELS = {
   entity: "MLB Live Scoreboard entity",
   title: "Card title (optional)",
   refresh_rate: "Refresh rate (s, 0 = HA updates)",
+  countdown_hours: "Countdown to first pitch (h, 0 = off)",
   player_link_target: "Player name click",
   lineup_default_view: "Lineup popup default view",
   live_default_view: "Live game default view",
@@ -281,6 +297,8 @@ const EDITOR_LABELS = {
 const EDITOR_HELPERS = {
   entity: "Pick the sensor created by the MLB Live Scoreboard integration.",
   refresh_rate: "0 leaves refreshing to Home Assistant's own state updates.",
+  countdown_hours:
+    "Within this many hours of first pitch, the upcoming game's start time becomes a countdown that ticks every second. 0 always shows the start time.",
   live_default_view:
     "Collapsed keeps the live card at just the two score rows + inning marker; click that header (or the ⌄ strip under it) to expand to the full live view. Expanded starts fully open. Resets to this choice when a new game starts.",
   headshot_size:
@@ -2034,6 +2052,8 @@ class MlbLiveGameCard extends HTMLElement {
     this.config = { ...CARD_DEFAULTS, ...(config || {}) };
     // Clear any existing refresh timer when config changes
     this._clearRefreshTimer();
+    // Re-armed by the hass setter against the (possibly new) countdown window.
+    this._clearCountdownTimer();
     // Schedule-navigation view state (card-local; never touches the sensor).
     this._resetScheduleNav();
     // Inning-pager view state (card-local; live play-by-play only).
@@ -2045,6 +2065,16 @@ class MlbLiveGameCard extends HTMLElement {
     // Force the anchor-change checks on the next render to re-baseline.
     this._navAnchorId = undefined;
     this._inningAnchorKey = undefined;
+  }
+
+  // `countdown_hours` as milliseconds. A blank, negative or non-numeric value
+  // falls back to the default rather than silently disabling the countdown;
+  // only an explicit 0 turns it off.
+  _countdownWindowMs() {
+    const raw = this.config?.countdown_hours;
+    let hours = raw === "" || raw == null ? NaN : Number(raw);
+    if (!Number.isFinite(hours) || hours < 0) hours = CARD_DEFAULTS.countdown_hours;
+    return Math.min(hours, COUNTDOWN_MAX_HOURS) * 60 * 60 * 1000;
   }
 
   // The state a freshly-displayed live game starts in. Anything other than an
@@ -3323,7 +3353,8 @@ class MlbLiveGameCard extends HTMLElement {
     const startMs = el ? Number(el.dataset.gameStart) : NaN;
     if (!Number.isFinite(startMs)) return;
     const remaining = startMs - Date.now();
-    const inWindow = remaining > 0 && remaining <= COUNTDOWN_WINDOW_MS;
+    const windowMs = this._countdownWindowMs();
+    const inWindow = remaining > 0 && remaining <= windowMs;
     let delay;
     if (inWindow !== el.classList.contains("compact-countdown")) {
       this._lastFingerprint = "";
@@ -3339,10 +3370,10 @@ class MlbLiveGameCard extends HTMLElement {
       const text = formatCountdown(remaining);
       if (el.textContent !== text) el.textContent = text;
       delay = remaining % 1000 || 1000;
-    } else if (remaining > 0) {
+    } else if (remaining > 0 && windowMs > 0) {
       // Capped so a sleeping laptop/tablet re-checks rather than trusting one
       // long timeout across a suspend.
-      delay = Math.min(remaining - COUNTDOWN_WINDOW_MS, 10 * 60 * 1000);
+      delay = Math.min(remaining - windowMs, 10 * 60 * 1000);
     } else {
       return;
     }
@@ -4091,7 +4122,7 @@ class MlbLiveGameCard extends HTMLElement {
     const isUpcoming = stateInfo.pillClass === "next";
     const isFinalCompact = stateInfo.pillClass === "final";
     const canExpand = isUpcoming || isFinalCompact;
-    // Upcoming game with a real start time: within COUNTDOWN_WINDOW_MS of first
+    // Upcoming game with a real start time: within `countdown_hours` of first
     // pitch the time is replaced by a live countdown (ticked by _syncCountdown).
     const startMs =
       isUpcoming && competition?.timeValid !== false
@@ -4101,7 +4132,7 @@ class MlbLiveGameCard extends HTMLElement {
     const showCountdown =
       Number.isFinite(startMs) &&
       untilStart > 0 &&
-      untilStart <= COUNTDOWN_WINDOW_MS;
+      untilStart <= this._countdownWindowMs();
     const compactFp = [
       stateInfo.pillClass,
       awayTeam?.abbreviation || awayMeta?.abbreviation,

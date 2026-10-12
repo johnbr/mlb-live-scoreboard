@@ -108,7 +108,7 @@ A plain ES module custom element (not Lit). It:
   (encapsulated in `this._thirdOutHold`).
 - Renders one of three layouts based on `stateInfo.pillClass`:
   `live`, `final`, or `next` (compact pre-game layout).
-- Within `COUNTDOWN_WINDOW_MS` (2 h) of first pitch the `next` layout swaps
+- Within `countdown_hours` (default 6, `_countdownWindowMs`) of first pitch the `next` layout swaps
   the start time for a countdown. It ticks entirely client-side:
   `_syncCountdown` rewrites just the digits of the `[data-game-start]`
   element once a second (the compact HTML memo compares a tokenized copy, so
