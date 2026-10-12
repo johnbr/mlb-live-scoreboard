@@ -860,6 +860,24 @@ function renderBatterLineSecondary(stats) {
   return parts.join(" • ");
 }
 
+function ordinal(n) {
+  const v = n % 100;
+  const suffix =
+    v >= 10 && v <= 20 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th";
+  return `${n}${suffix}`;
+}
+
+// The half-inning that follows a break: "Mid N" leads into the bottom of N,
+// "End N" into the top of N+1. Null when not between halves.
+function upcomingHalfInning(prefix, period) {
+  const lower = String(prefix || "").trim().toLowerCase();
+  const inning = Number(period) || 0;
+  if (!(inning > 0)) return null;
+  if (lower.startsWith("mid")) return { inning, half: "bottom" };
+  if (lower.startsWith("end")) return { inning: inning + 1, half: "top" };
+  return null;
+}
+
 function deriveInningState(attrs) {
   const competition = attrs.competition || {};
   const status = competition?.status || {};
@@ -3713,17 +3731,26 @@ class MlbLiveGameCard extends HTMLElement {
         THIRD_OUT_RECENT_WINDOW_SECONDS
         ? latestRecentPlay
         : null;
-    const dueUpDesc = [
-      String(inningContext.period_prefix || "").trim(),
-      String(
-        inningContext.display_period ||
-          attrs.competition?.status?.displayPeriod ||
-          "",
-      ).trim(),
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
+    // Head the Due Up panel with the half those batters lead off ("Mid 3rd"
+    // -> "Bottom 3rd", "End 3rd" -> "Top 4th"), matching the inning marker;
+    // fall back to the feed's own label if the break can't be resolved.
+    const upcomingHalf = upcomingHalfInning(
+      String(inningContext.period_prefix || periodLower),
+      Number(inningContext.period) || inningState.period,
+    );
+    const dueUpDesc = upcomingHalf
+      ? `${upcomingHalf.half === "top" ? "Top" : "Bottom"} ${ordinal(upcomingHalf.inning)}`
+      : [
+          String(inningContext.period_prefix || "").trim(),
+          String(
+            inningContext.display_period ||
+              attrs.competition?.status?.displayPeriod ||
+              "",
+          ).trim(),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
     const dueUpList = Array.isArray(attrs.due_up)
       ? attrs.due_up.filter(Boolean)
       : [];
@@ -4171,11 +4198,8 @@ class MlbLiveGameCard extends HTMLElement {
     // finished: "Mid 3rd" leads into the bottom of the 3rd (same number),
     // "End 3rd" into the top of the 4th.
     if (inningState.isMid) {
-      const upcoming =
-        inningState.lower.startsWith("end") && inningState.period
-          ? inningState.period + 1
-          : period;
-      return `<div class="inning-stack mid"><div class="num">${upcoming}</div></div>`;
+      const upcoming = upcomingHalfInning(inningState.lower, inningState.period);
+      return `<div class="inning-stack mid"><div class="num">${upcoming?.inning || period}</div></div>`;
     }
     return `<div class="marker-text">LIVE</div>`;
   }
