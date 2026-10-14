@@ -3910,7 +3910,7 @@ def _sb_event(eid, *, away, home, state="post", detail="Final", note="NLDS - Gam
     return {"id": eid, "date": date, "season": {"type": season_type}, "competitions": [comp]}
 
 
-def test_normalize_playoff_scoreboard_builds_rows_and_skips_regular_season():
+def test_normalize_playoff_scoreboard_builds_rows_skipping_own_game_and_regular_season():
     payload = {
         "events": [
             _sb_event("E1", away=("16", "CHC", "Cubs", "3", False), home=("8", "MIL", "Brewers", "9", True),
@@ -3923,17 +3923,25 @@ def test_normalize_playoff_scoreboard_builds_rows_and_skips_regular_season():
     }
     board = Coord._normalize_playoff_scoreboard(payload, "20251004", "E2")
     assert board["date"] == "2025-10-04"
-    assert [g["id"] for g in board["games"]] == ["E1", "E2"]
-    first, second = board["games"]
+    # E2 is the card's own game: already on the card, so left out.
+    assert [g["id"] for g in board["games"]] == ["E1"]
+    (first,) = board["games"]
     assert first["series_summary"] == "NLDS · Brewers lead 1-0"
-    assert first["is_displayed"] is False
     assert first["away"] == {"id": "16", "abbreviation": "CHC", "name": "Cubs", "logo": "https://x/chc.png",
                              "score": "3", "winner": False}
     assert first["home"]["winner"] is True
     assert (first["round"], first["game_number"], first["state"], first["detail"]) == ("NLDS", 1, "post", "Final")
-    assert second["is_displayed"] is True
-    assert second["detail"] == "Final/11"
-    assert second["series_summary"] == "NLDS · Dodgers lead 1-0"
+
+    # Without a displayed id every postseason game is kept.
+    other = Coord._normalize_playoff_scoreboard(payload, "20251004", "")["games"][1]
+    assert other["detail"] == "Final/11"
+    assert other["series_summary"] == "NLDS · Dodgers lead 1-0"
+
+
+def test_normalize_playoff_scoreboard_empty_when_only_own_game():
+    payload = {"events": [_sb_event("E2", away=("19", "LAD", "Dodgers", "5", True),
+                                    home=("22", "PHI", "Phillies", "3", False), wins={"22": 0, "19": 1})]}
+    assert Coord._normalize_playoff_scoreboard(payload, "20251004", "E2") == {}
 
 
 def test_normalize_playoff_scoreboard_pregame_and_placeholder_time():

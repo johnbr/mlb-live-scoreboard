@@ -476,7 +476,7 @@ class PlayoffScoreboardGame(TypedDict, total=False):
     (``"NLDS · Brewers lead 1-0"``). ``state`` is ESPN's ``pre``/``in``/
     ``post``; ``detail`` is its short status ("Final/11", "Top 6th") — the
     card formats a ``pre`` game's start from ``date`` in local time instead,
-    honoring ``time_valid``. ``is_displayed`` marks the card's own game.
+    honoring ``time_valid``.
     """
 
     id: str
@@ -487,7 +487,6 @@ class PlayoffScoreboardGame(TypedDict, total=False):
     detail: str
     date: str
     time_valid: bool
-    is_displayed: bool
     away: PlayoffScoreboardTeam
     home: PlayoffScoreboardTeam
 
@@ -495,8 +494,8 @@ class PlayoffScoreboardGame(TypedDict, total=False):
 class PlayoffScoreboard(TypedDict, total=False):
     """Shape of the ``playoff_scoreboard`` attribute.
 
-    Every postseason game on the displayed game's (Eastern) date, from ESPN's
-    league scoreboard, in start order. Replaces the division standings in the
+    Every other postseason game on the displayed game's (Eastern) date (the
+    card's own game is left out), from ESPN's league scoreboard, in start order. Replaces the division standings in the
     card's expand panel during the postseason. ``{}`` outside the postseason.
     """
 
