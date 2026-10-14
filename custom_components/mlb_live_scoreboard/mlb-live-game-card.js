@@ -1543,14 +1543,14 @@ function playoffGameStatus(game) {
 }
 
 // Postseason replacement for the division standings in the expand panel:
-// every playoff game on the displayed game's date with its score, status and
-// series standing. The card's own game is highlighted.
+// every other playoff game on the displayed game's date with its score, status
+// and series standing (the backend leaves out the card's own game).
 function renderPlayoffScoreboardPanel(card, attrs) {
   const board = attrs?.playoff_scoreboard || {};
   const games = Array.isArray(board.games) ? board.games : [];
   if (!games.length) return "";
   const day = formatScoreboardDay(board.date);
-  const heading = day === "Today" ? "Today's playoff games" : `Playoff games${day ? ` · ${day}` : ""}`;
+  const heading = day === "Today" ? "Other playoff games today" : `Other playoff games${day ? ` · ${day}` : ""}`;
   const side = (team, state) => {
     const logo = requestCachedLogo(card, team?.logo || "");
     const decided = state === "post";
@@ -1563,7 +1563,7 @@ function renderPlayoffScoreboardPanel(card, attrs) {
     .map((game) => {
       const state = String(game?.state || "");
       return `
-      <div class="playoff-sb-game${game?.is_displayed ? " is-displayed" : ""}">
+      <div class="playoff-sb-game">
         <div class="playoff-sb-line">
           ${side(game?.away, state)}
           <span class="playoff-sb-at">@</span>
@@ -5823,9 +5823,6 @@ white-space: nowrap;
         .playoff-sb-game {
           padding: 3px 6px;
           border-radius: 6px;
-        }
-        .playoff-sb-game.is-displayed {
-          background: rgba(127, 127, 127, 0.16);
         }
         .playoff-sb-line {
           display: grid;

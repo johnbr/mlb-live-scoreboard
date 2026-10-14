@@ -3670,7 +3670,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
     ) -> PlayoffScoreboard:
         """Flatten a league scoreboard into the ``playoff_scoreboard`` attribute.
 
-        Keeps only postseason games (season type 3), in ESPN's start order.
+        Keeps only postseason games (season type 3), in ESPN's start order,
+        minus the card's own game (``display_id``) — the card already shows it.
         Each game's series line is worded like the card's banner.
         """
         games: list[dict[str, Any]] = []
@@ -3678,6 +3679,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             if not isinstance(event, dict):
                 continue
             if _safe_int((event.get("season") or {}).get("type")) != SEASON_TYPE_POSTSEASON:
+                continue
+            event_id = str(event.get("id") or "")
+            if display_id and event_id == str(display_id):
                 continue
             comps = event.get("competitions") or []
             comp = comps[0] if comps and isinstance(comps[0], dict) else {}
@@ -3714,7 +3718,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             standing = MlbLiveScoreboardCoordinator._series_standing(playoff, teams, game_number)
             status = ((comp.get("status") or event.get("status") or {}).get("type")) or {}
             time_valid = comp.get("timeValid", event.get("timeValid"))
-            event_id = str(event.get("id") or "")
             games.append(
                 {
                     "id": event_id,
@@ -3725,7 +3728,6 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                     "detail": str(status.get("shortDetail") or status.get("detail") or ""),
                     "date": str(event.get("date") or comp.get("date") or ""),
                     "time_valid": time_valid is not False,
-                    "is_displayed": event_id == str(display_id),
                     "away": sides.get("away") or {},
                     "home": sides.get("home") or {},
                 }
