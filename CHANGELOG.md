@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.39.0...v1.39.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* leave the card's own game out of the playoff-games panel ([#150](https://github.com/johnbr/mlb-live-scoreboard/issues/150)) ([fbca1c4](https://github.com/johnbr/mlb-live-scoreboard/commit/fbca1c4e3cf4d789965b7a613942cc4c21b06304))
+
 ## [1.39.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.38.0...v1.39.0) (2026-10-12)
 
 
