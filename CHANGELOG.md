@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.39.1...v1.40.0) (2026-10-15)
+
+
+### Features
+
+* every card follows the World Series once its team is done ([#152](https://github.com/johnbr/mlb-live-scoreboard/issues/152)) ([9817915](https://github.com/johnbr/mlb-live-scoreboard/commit/98179159ad9afd95deee5dfd20465f45e74a180a))
+
 ## [1.39.1](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.39.0...v1.39.1) (2026-10-14)
 
 
