@@ -3611,9 +3611,14 @@ def _resolve_coord(primary, supplement):
         calls.append(season_type)
         return supplement
 
+    async def _no_world_series(schedule, events):
+        return None
+
+    coord.team_id = 19
     coord._allstar_override = _no_allstar
     coord._fetch_schedule = _fetch_schedule
     coord._fetch_supplement_schedule = _fetch_supplement
+    coord._world_series_override = _no_world_series
     return coord, calls
 
 
@@ -3626,9 +3631,10 @@ def test_resolve_schedule_merges_postseason_after_regular_season_ends():
     )
     post = _schedule(3, [_ev("NLDS1", date=_iso(now + 5 * 86400))])
     coord, calls = _resolve_coord(primary, post)
-    schedule, events = asyncio.run(coord._resolve_schedule())
+    schedule, events, team_id = asyncio.run(coord._resolve_schedule())
     assert calls == [3]
     assert schedule is primary
+    assert team_id == 19
     assert [e["id"] for e in events] == ["R162", "NLDS1"]
     # The merged list feeds selection, so the playoff game is now "next".
     _prev, next_id, _live, _disp, _ = Coord._select_event(None, events)
@@ -3641,7 +3647,7 @@ def test_resolve_schedule_skips_supplement_mid_season():
     now = _time.time()
     primary = _schedule(2, [_ev("R1", date=_iso(now + 3600))])
     coord, calls = _resolve_coord(primary, _schedule(3, [_ev("X", date=_iso(now))]))
-    _schedule_out, events = asyncio.run(coord._resolve_schedule())
+    _schedule_out, events, _team_id = asyncio.run(coord._resolve_schedule())
     assert calls == []
     assert [e["id"] for e in events] == ["R1"]
 
@@ -3652,8 +3658,201 @@ def test_resolve_schedule_survives_missing_supplement():
     now = _time.time()
     primary = _schedule(2, [_ev("R162", date=_iso(now - 3600))])
     coord, _calls = _resolve_coord(primary, None)
-    _schedule_out, events = asyncio.run(coord._resolve_schedule())
+    _schedule_out, events, _team_id = asyncio.run(coord._resolve_schedule())
     assert [e["id"] for e in events] == ["R162"]
+
+
+# ---------------------------------------------------------------------------
+# World Series override: entries whose team is done follow the World Series
+# ---------------------------------------------------------------------------
+
+
+def _ws_event(eid, home_id, away_id, *, note="World Series - Game 1", date=None, state="pre"):
+    ev = _ev(eid, date=date, state=state)
+    comp = ev["competitions"][0]
+    comp["notes"] = [{"type": "event", "headline": note}]
+    comp["competitors"] = [
+        {"id": home_id, "homeAway": "home"},
+        {"id": away_id, "homeAway": "away"},
+    ]
+    return ev
+
+
+_WS_GROUPS = {
+    "groups": [
+        {
+            "children": [
+                {"name": "American League Central", "teams": [{"id": "5"}]},
+                {"name": "American League East", "teams": [{"id": "10"}]},
+            ]
+        },
+        {
+            "children": [
+                {"name": "National League Central", "teams": [{"id": "8"}]},
+                {"name": "National League West", "teams": [{"id": "19"}]},
+            ]
+        },
+    ]
+}
+
+
+def test_has_remaining_games():
+    import time as _time
+
+    now = _time.time()
+    final = _ev("F", date=_iso(now - 3600), state="post", name="STATUS_FINAL", completed=True)
+    assert Coord._has_remaining_games([final], now) is False
+    assert Coord._has_remaining_games([], now) is False
+    assert Coord._has_remaining_games([final, _ev("N", date=_iso(now + 86400))], now) is True
+    # A live game counts even when its scheduled start is in the past.
+    assert Coord._has_remaining_games([_ev("L", date=_iso(now - 600), state="in")], now) is True
+    # A future game already marked post (canceled) is nothing left to play.
+    assert Coord._has_remaining_games([_ev("C", date=_iso(now + 86400), state="post")], now) is False
+
+
+def test_world_series_teams_from_event():
+    assert Coord._world_series_teams_from_event(_ws_event("1", "5", "8")) == ("5", "8")
+    # Pennants undecided: ESPN's TBD placeholders carry ids -1 / -2.
+    assert Coord._world_series_teams_from_event(_ws_event("1", "-1", "-2")) is None
+    assert Coord._world_series_teams_from_event(_ws_event("1", "5", "-2")) is None
+    assert Coord._world_series_teams_from_event(_ws_event("1", "5", "8", note="NLCS - Game 7")) is None
+    assert Coord._world_series_teams_from_event(None) is None
+
+
+def test_pick_world_series_team_prefers_own_league():
+    index = Coord._team_id_division_index(_WS_GROUPS)
+    assert Coord._pick_world_series_team(19, ("5", "8"), index) == "8"  # LAD -> NL champ
+    assert Coord._pick_world_series_team(10, ("8", "5"), index) == "5"  # NYY -> AL champ
+    assert Coord._pick_world_series_team(31, ("8", "5"), index) == "5"  # AL All-Stars
+    assert Coord._pick_world_series_team(32, ("5", "8"), index) == "8"  # NL All-Stars
+    # League unknown (groups fetch failed): first listed.
+    assert Coord._pick_world_series_team(19, ("5", "8"), {}) == "5"
+
+
+_CORE = "https://sports.core.api.espn.com/v2/sports/baseball/leagues/mlb"
+
+
+def _ws_coord(responses, *, team_id=19):
+    coord = Coord.__new__(Coord)
+    coord.team_id = team_id
+    coord._world_series_teams_cache = None
+    coord._world_series_schedule_cache = {}
+    coord._groups_cache = None
+    urls = []
+
+    async def _get_json(url):
+        urls.append(url)
+        value = responses[url]
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    async def _get_groups():
+        return _WS_GROUPS
+
+    coord._get_json = _get_json
+    coord._get_groups = _get_groups
+    return coord, urls
+
+
+def _ws_responses(home_id="5", away_id="8", *, last_id="401908048"):
+    listing = {
+        "items": [
+            {"$ref": f"http://sports.core.api.espn.com/v2/sports/baseball/leagues/mlb/events/{eid}?lang=en"}
+            for eid in ("401908036", "401908042", last_id)
+        ]
+    }
+    return {
+        f"{_CORE}/seasons/2026/types/3/events?limit=100": listing,
+        f"{_CORE}/events/{last_id}": _ws_event(last_id, home_id, away_id, note="World Series - Game 7"),
+    }
+
+
+def test_fetch_world_series_teams_reads_last_postseason_event_and_caches():
+    coord, urls = _ws_coord(_ws_responses())
+    assert asyncio.run(coord._fetch_world_series_teams(2026)) == ("5", "8")
+    assert asyncio.run(coord._fetch_world_series_teams(2026)) == ("5", "8")
+    assert urls == [f"{_CORE}/seasons/2026/types/3/events?limit=100", f"{_CORE}/events/401908048"]
+
+
+def test_fetch_world_series_teams_caches_undecided_and_falls_back_on_failure():
+    import time as _time
+
+    coord, urls = _ws_coord(_ws_responses("-1", "-2"))
+    assert asyncio.run(coord._fetch_world_series_teams(2026)) is None
+    assert asyncio.run(coord._fetch_world_series_teams(2026)) is None
+    assert len(urls) == 2  # the TBD answer is cached too
+
+    boom = {f"{_CORE}/seasons/2026/types/3/events?limit=100": RuntimeError("503")}
+    coord, _urls = _ws_coord(boom)
+    assert asyncio.run(coord._fetch_world_series_teams(2026)) is None
+    # Expired TTL but inside the stale-fallback window -> reuse.
+    coord._world_series_teams_cache = (2026, _time.time() - 3600, ("5", "8"))
+    assert asyncio.run(coord._fetch_world_series_teams(2026)) == ("5", "8")
+    # A different season's cache never answers.
+    assert asyncio.run(coord._fetch_world_series_teams(2027)) is None
+
+
+def _ws_override_coord(*, team_id=19, home_id="5", away_id="8"):
+    import time as _time
+
+    now = _time.time()
+    responses = _ws_responses(home_id, away_id)
+    ws_schedule = {
+        "team": {"id": "8", "abbreviation": "MIL", "displayName": "Milwaukee Brewers"},
+        "events": [
+            _ws_event("401908030", "8", "19", note="NLCS - Game 1", date=_iso(now - 9 * 86400), state="post"),
+            _ws_event("401908042", "5", "8", date=_iso(now + 86400)),
+            _ws_event("401908043", "5", "8", note="World Series - Game 2", date=_iso(now + 2 * 86400)),
+        ],
+    }
+    responses["https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/8/schedule?seasontype=3&season=2026"] = ws_schedule
+    return (*_ws_coord(responses, team_id=team_id), now)
+
+
+def test_world_series_override_follows_same_league_club_once_team_is_done():
+    coord, _urls, now = _ws_override_coord()
+    own = _schedule(3, [_ev("NLCS4", date=_iso(now - 2 * 86400), state="post", completed=True)])
+    schedule, events, team_id = asyncio.run(coord._world_series_override(own, own["events"]))
+    assert team_id == 8
+    assert schedule["team"]["abbreviation"] == "MIL"
+    # Only the World Series games — not the followed club's earlier rounds.
+    assert [e["id"] for e in events] == ["401908042", "401908043"]
+
+
+def test_world_series_override_skips_while_team_still_playing_or_in_series():
+    coord, urls, now = _ws_override_coord()
+    own = _schedule(3, [_ev("NLCS5", date=_iso(now + 3600))])
+    assert asyncio.run(coord._world_series_override(own, own["events"])) is None
+    assert urls == []  # no lookup while the team has games left
+
+    coord, _urls, now = _ws_override_coord(team_id=8)
+    done = _schedule(3, [_ev("WS7", date=_iso(now - 3600), state="post", completed=True)])
+    assert asyncio.run(coord._world_series_override(done, done["events"])) is None
+
+
+def test_world_series_override_waits_for_both_pennants():
+    coord, _urls, now = _ws_override_coord(home_id="5", away_id="-2")
+    own = _schedule(3, [_ev("NLCS4", date=_iso(now - 86400), state="post", completed=True)])
+    assert asyncio.run(coord._world_series_override(own, own["events"])) is None
+
+
+def test_resolve_schedule_returns_world_series_override():
+    import time as _time
+
+    now = _time.time()
+    primary = _schedule(3, [_ev("NLCS4", date=_iso(now - 86400), state="post", completed=True)])
+    coord, _calls = _resolve_coord(primary, None)
+    ws = ({"team": {"abbreviation": "MIL"}}, [_ws_event("WS1", "5", "8")], 8)
+    seen = []
+
+    async def _world_series(schedule, events):
+        seen.append((schedule, events))
+        return ws
+
+    coord._world_series_override = _world_series
+    assert asyncio.run(coord._resolve_schedule()) == ws
+    assert seen == [(primary, primary["events"])]
 
 
 def _supplement_coord(get_json):

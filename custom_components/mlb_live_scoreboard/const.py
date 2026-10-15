@@ -153,6 +153,18 @@ ALLSTAR_TEAM_SLUG = "al"
 ALLSTAR_SCHEDULE_TTL_SECONDS = 24 * 60 * 60
 ALLSTAR_SCHEDULE_STALE_FALLBACK_SECONDS = 7 * 24 * 60 * 60
 
+# The World Series is auto-displayed by every entry whose team isn't playing in
+# it, once both pennants are decided — the card follows the pennant winner from
+# its own league, as if configured for that club. ESPN's core API lists a
+# season's postseason event ids in schedule order, so the last one is a World
+# Series game; its competitors stay TBD placeholders (ids -1/-2) until both LCS
+# end. Only probed once the entry's own team has no games left, so this costs
+# nothing mid-season; the TTL bounds how long after a pennant clinch the switch
+# takes, and the stale fallback rides out ESPN blips.
+WORLD_SERIES_NOTE_PREFIX = "World Series"
+WORLD_SERIES_LOOKUP_TTL_SECONDS = 30 * 60
+WORLD_SERIES_LOOKUP_STALE_FALLBACK_SECONDS = 6 * 60 * 60
+
 # How long to cache the division-standings payload. Standings change at most
 # a few times per day, so a 10-minute TTL eliminates per-poll calls without
 # making the displayed standings feel stale.

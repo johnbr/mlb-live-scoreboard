@@ -131,10 +131,11 @@ class MlbLiveScoreboardSensor(CoordinatorEntity[RuntimeData], SensorEntity):
 
     @property
     def device_info(self) -> dict[str, Any]:
-        data = self.coordinator.data
+        # The configured team, not ``data.team_abbr``: during the World Series
+        # override the data presents the followed club as the card's own.
         return {
             "identifiers": {(DOMAIN, self.coordinator.entry.entry_id)},
-            "name": f"MLB Live Scoreboard {data.team_abbr}",
+            "name": f"MLB Live Scoreboard {self.coordinator.team_abbr}",
             "manufacturer": "ESPN / Custom",
             "model": "MLB Live Scoreboard",
             "entry_type": DeviceEntryType.SERVICE,
