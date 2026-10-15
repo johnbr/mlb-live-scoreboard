@@ -76,6 +76,9 @@ from .const import (
     TEAM_SEASON_STATS_TTL_SECONDS,
     THIRD_OUT_HOLD_SECONDS,
     USER_AGENT,
+    WORLD_SERIES_LOOKUP_STALE_FALLBACK_SECONDS,
+    WORLD_SERIES_LOOKUP_TTL_SECONDS,
+    WORLD_SERIES_NOTE_PREFIX,
 )
 from .statsapi import DATA_SOURCE_ESPN, DATA_SOURCE_MLB, is_mlb_id
 from .types import (
@@ -405,6 +408,12 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         # calendar day the game is played, every entry can display it in place
         # of its own (mid-break, gameless) schedule. See ``_allstar_override``.
         self._allstar_schedule_cache: tuple[float, dict[str, Any]] | None = None
+        # (season_year, fetched_at_ts, (team_id, team_id) or None): the two World
+        # Series clubs once both pennants are decided. See ``_world_series_override``.
+        self._world_series_teams_cache: tuple[int, float, tuple[str, str] | None] | None = None
+        # "season:team_id" -> (fetched_at_ts, payload) for a World Series club's
+        # postseason schedule, shown by entries whose own team isn't playing.
+        self._world_series_schedule_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         # (fetched_at_ts, payload) for the league standings endpoint.
         # Standings change a few times per day at most, so we re-fetch lazily
         # once TTL expires and reuse the prior payload as a stale fallback if
@@ -3823,16 +3832,172 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             return None
         return schedule, events
 
-    async def _resolve_schedule(self) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        """Return the ``(schedule, events)`` the coordinator should display now:
-        the All-Star Game on the day it's played, otherwise the configured team's
-        schedule. Shared by the live refresh and schedule navigation so both
-        agree on which schedule is in effect (and the prev/next arrows correctly
-        find nothing to page to on the single-event All-Star schedule).
+    @staticmethod
+    def _has_remaining_games(events: list[dict[str, Any]], now_ts: float) -> bool:
+        """True while the schedule still has a game in progress or to come.
+
+        ESPN drops a series' unneeded "If Necessary" games once it's decided,
+        so an eliminated club's postseason schedule ends at its last final.
+        """
+        for event in events:
+            comps = event.get("competitions") or [{}]
+            status = ((comps[0] or {}).get("status") or event.get("status") or {}).get("type") or {}
+            state = str(status.get("state") or "").lower()
+            if state in LIVE_STATES or str(status.get("name") or "").upper() == STATUS_NAME_IN_PROGRESS:
+                return True
+            ts = _parse_iso_ts(event.get("date"))
+            if ts is not None and ts > now_ts and state != "post":
+                return True
+        return False
+
+    @staticmethod
+    def _is_world_series_event(event: dict[str, Any] | None) -> bool:
+        """True when an ESPN event's notes headline it as a World Series game."""
+        comps = (event or {}).get("competitions") or [{}]
+        notes = (comps[0] or {}).get("notes") or []
+        return any(
+            isinstance(note, dict) and str(note.get("headline") or "").startswith(WORLD_SERIES_NOTE_PREFIX)
+            for note in notes
+        )
+
+    @classmethod
+    def _world_series_teams_from_event(cls, event: dict[str, Any] | None) -> tuple[str, str] | None:
+        """Return the two team ids of a World Series event, or None.
+
+        None when the event isn't a World Series game or a side is still a TBD
+        placeholder (ESPN's non-positive ids), i.e. a pennant is undecided.
+        """
+        if not cls._is_world_series_event(event):
+            return None
+        comps = (event or {}).get("competitions") or [{}]
+        ids = [str(c.get("id") or "") for c in (comps[0] or {}).get("competitors") or [] if isinstance(c, dict)]
+        if len(ids) != 2 or not all(_safe_int(i) > 0 for i in ids):
+            return None
+        return ids[0], ids[1]
+
+    async def _fetch_world_series_teams(self, season_year: int) -> tuple[str, str] | None:
+        """Return the ``season_year`` World Series clubs' team ids, TTL cached.
+
+        Reads the season's last postseason event from ESPN's core API (see
+        ``WORLD_SERIES_NOTE_PREFIX``). Best-effort like the All-Star fetch: a
+        failure with no usable cache returns None so the entry keeps showing
+        its own schedule.
+        """
+        now_ts = time.time()
+        cached = self._world_series_teams_cache
+        if cached is not None and cached[0] == season_year and (now_ts - cached[1]) < WORLD_SERIES_LOOKUP_TTL_SECONDS:
+            return cached[2]
+        base = "https://sports.core.api.espn.com/v2/sports/baseball/leagues/mlb"
+        try:
+            listing = await self._get_json(
+                f"{base}/seasons/{season_year}/types/{SEASON_TYPE_POSTSEASON}/events?limit=100"
+            )
+            items = listing.get("items") or []
+            match = re.search(r"/events/(\d+)", str((items[-1] if items else {}).get("$ref") or ""))
+            teams = None
+            if match:
+                teams = self._world_series_teams_from_event(await self._get_json(f"{base}/events/{match.group(1)}"))
+        except Exception as err:
+            _LOGGER.debug("World Series lookup failed: %s", err)
+            if (
+                cached is not None
+                and cached[0] == season_year
+                and (now_ts - cached[1]) < WORLD_SERIES_LOOKUP_STALE_FALLBACK_SECONDS
+            ):
+                return cached[2]
+            return None
+        self._world_series_teams_cache = (season_year, now_ts, teams)
+        return teams
+
+    async def _fetch_world_series_schedule(self, team_id: str, season_year: int) -> dict[str, Any] | None:
+        """Fetch a World Series club's ``season_year`` postseason schedule, TTL
+        cached like the supplement schedule (None on failure with no usable
+        cache). The season is explicit so it always matches the lookup's."""
+        now_ts = time.time()
+        key = f"{season_year}:{team_id}"
+        cached = self._world_series_schedule_cache.get(key)
+        if cached is not None and (now_ts - cached[0]) < SCHEDULE_TTL_SECONDS:
+            return cached[1]
+        url = (
+            f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}/schedule"
+            f"?seasontype={SEASON_TYPE_POSTSEASON}&season={season_year}"
+        )
+        try:
+            payload = await self._get_json(url)
+        except Exception as err:
+            _LOGGER.debug("World Series schedule fetch for team %s failed: %s", team_id, err)
+            if cached is not None and (now_ts - cached[0]) < SUPPLEMENT_SCHEDULE_STALE_FALLBACK_SECONDS:
+                return cached[1]
+            return None
+        self._world_series_schedule_cache[key] = (now_ts, payload)
+        return payload
+
+    @staticmethod
+    def _pick_world_series_team(
+        own_team_id: int, ws_team_ids: tuple[str, str], division_index: dict[str, str]
+    ) -> str:
+        """Pick the World Series club an entry should follow: the pennant
+        winner from the entry's own league ("American League East" ->
+        "American"), else the first listed. The All-Star pseudo-teams map to
+        their leagues, so an AL card follows the AL champion.
+        """
+
+        def league(team_id: str) -> str:
+            if team_id == str(MLB_TEAM_MAP["AL"]):
+                return "American"
+            if team_id == str(MLB_TEAM_MAP["NL"]):
+                return "National"
+            return (division_index.get(team_id) or "").split(" ")[0]
+
+        own_league = league(str(own_team_id))
+        if own_league:
+            for team_id in ws_team_ids:
+                if league(team_id) == own_league:
+                    return team_id
+        return ws_team_ids[0]
+
+    async def _world_series_override(
+        self, schedule: dict[str, Any], events: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], int] | None:
+        """Return ``(schedule, events, team_id)`` for the World Series when the
+        entry's own team is done for the season and isn't playing in it.
+
+        ``schedule`` / ``events`` are the entry's own; once they have nothing
+        left to play and both pennants are decided, the card follows the
+        same-league World Series club's games as if configured for it.
+        ``self.team_id`` is left untouched, so ``_detect_game_events`` fires no
+        bus events for a series the configured team isn't in.
+        """
+        if self._has_remaining_games(events, time.time()):
+            return None
+        season = schedule.get("requestedSeason") or schedule.get("season") or {}
+        season_year = _safe_int(season.get("year"))
+        if season_year <= 0:
+            return None
+        ws_teams = await self._fetch_world_series_teams(season_year)
+        if not ws_teams or str(self.team_id) in ws_teams:
+            return None
+        division_index = self._team_id_division_index(await self._get_groups())
+        team_id = self._pick_world_series_team(self.team_id, ws_teams, division_index)
+        ws_schedule = await self._fetch_world_series_schedule(team_id, season_year)
+        ws_events = [e for e in (ws_schedule or {}).get("events") or [] if self._is_world_series_event(e)]
+        if not ws_events:
+            return None
+        return ws_schedule, ws_events, int(team_id)
+
+    async def _resolve_schedule(self) -> tuple[dict[str, Any], list[dict[str, Any]], int]:
+        """Return the ``(schedule, events, team_id)`` the coordinator should
+        display now: the All-Star Game on the day it's played, the World Series
+        once the configured team is done for the season, otherwise the
+        configured team's schedule. ``team_id`` is the club the card presents as
+        its own — the configured team, or the followed World Series club.
+        Shared by the live refresh and schedule navigation so both agree on
+        which schedule is in effect (and the prev/next arrows correctly find
+        nothing to page to on the single-event All-Star schedule).
         """
         override = await self._allstar_override()
         if override is not None:
-            return override
+            return override[0], override[1], self.team_id
         schedule = await self._fetch_schedule()
         events = schedule.get("events") or []
         supplement_type = self._supplement_season_type(schedule, time.time())
@@ -3840,7 +4005,10 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             supplement = await self._fetch_supplement_schedule(supplement_type)
             if supplement and supplement.get("events"):
                 events = self._merge_schedule_events(events, supplement["events"])
-        return schedule, events
+        world_series = await self._world_series_override(schedule, events)
+        if world_series is not None:
+            return world_series
+        return schedule, events, self.team_id
 
     async def async_get_game_at_offset(self, offset: int) -> dict[str, Any] | None:
         """Return a neighboring game's full card payload for schedule navigation.
@@ -3852,13 +4020,13 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         without disturbing the shared live sensor. Returns ``None`` when there
         is no game at the (clamped) offset.
         """
-        schedule, events = await self._resolve_schedule()
+        schedule, events, display_team_id = await self._resolve_schedule()
         prev_id, next_id, live_id, display_id, _ = self._select_event(events)
         target_id, clamped_offset, has_prev, has_next = self._event_at_offset(events, display_id, offset)
         if not target_id:
             return None
         data = await self._assemble_game_data(
-            events, target_id, prev_id, next_id, live_id, schedule, live_bridge=False
+            events, target_id, prev_id, next_id, live_id, schedule, live_bridge=False, team_id=display_team_id
         )
         # Lazy import avoids a module-load cycle (sensor imports the package).
         from .sensor import build_state_attributes
@@ -3930,6 +4098,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         schedule: dict[str, Any],
         *,
         live_bridge: bool,
+        team_id: int | None = None,
     ) -> MlbLiveScoreboardData:
         """Fetch the summary for ``display_id`` and normalize it into card data.
 
@@ -3939,7 +4108,15 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         so it runs only for the live refresh; a navigated final/scheduled game
         is never between-halves, so skipping it is both correct and
         side-effect-free.
+
+        ``team_id`` is the club the card presents as its own (team attrs,
+        division standings) when it differs from the configured team — the
+        followed World Series club; ``schedule`` is then that club's.
         """
+        if team_id is None or team_id == self.team_id:
+            team_id, team_abbr = self.team_id, self.team_abbr
+        else:
+            team_abbr = str((schedule.get("team") or {}).get("abbreviation") or "").upper()
         now_ts = time.time()
         display_event = next((e for e in events if str(e.get("id", "")) == str(display_id)), None)
 
@@ -4051,9 +4228,9 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
             else ""
         )
 
-        team_name = self.team_abbr
+        team_name = team_abbr
         if schedule.get("team") and isinstance(schedule["team"], dict):
-            team_name = str(schedule["team"].get("displayName") or schedule["team"].get("name") or self.team_abbr)
+            team_name = str(schedule["team"].get("displayName") or schedule["team"].get("name") or team_abbr)
 
         effective_between = False
         if live_bridge:
@@ -4133,7 +4310,7 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
 
         standings_payload, groups_payload = await asyncio.gather(self._get_standings(), self._get_groups())
         division_index = self._team_id_division_index(groups_payload)
-        division_standings = self._normalize_standings(standings_payload, division_index, self.team_id)
+        division_standings = self._normalize_standings(standings_payload, division_index, team_id)
         # ``records_map`` overrides the per-game ``recordSummary`` (which ESPN
         # leaves stale for hours after a final) with live standings W-L.
         records_map = self._records_from_standings(standings_payload)
@@ -4167,8 +4344,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 playoff_scoreboard = self._normalize_playoff_scoreboard(scoreboard, date_key, display_id)
 
         return MlbLiveScoreboardData(
-            team_abbr=self.team_abbr,
-            team_id=self.team_id,
+            team_abbr=team_abbr,
+            team_id=team_id,
             team_name=team_name,
             display_event_id=display_id,
             live_event_id=live_id,
@@ -4357,11 +4534,11 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         return timedelta(seconds=SCAN_INTERVAL_IDLE_SECONDS)
 
     async def _async_update_data(self) -> MlbLiveScoreboardData:
-        schedule, events = await self._resolve_schedule()
+        schedule, events, display_team_id = await self._resolve_schedule()
         prev_id, next_id, live_id, display_id, _ = self._select_event(events)
 
         new_data = await self._assemble_game_data(
-            events, display_id, prev_id, next_id, live_id, schedule, live_bridge=True
+            events, display_id, prev_id, next_id, live_id, schedule, live_bridge=True, team_id=display_team_id
         )
 
         # Adapt the poll cadence to the game state; the coordinator reads
