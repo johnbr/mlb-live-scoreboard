@@ -459,6 +459,21 @@ def test_mlb_preferred_on_a_fully_covered_game_keeps_espn_ids():
     assert not [i for i in ids if sa.is_mlb_id(i)]
 
 
+def test_statsapi_summary_ignores_the_configured_team():
+    # The World Series override shows a game the configured club isn't in:
+    # the MLB lookup must key off the displayed game's competitors alone.
+    espn, feed = _tb_end_of_b6()
+    comp = espn["header"]["competitions"][0]
+    schedule = _schedule((849839, 147, 139, "2026-10-06T00:00:00Z"))
+    coord = _coord(responses={"/schedule": schedule, "/feed/live": feed})
+    coord.team_abbr, coord.team_id = "LAD", 19
+    out = asyncio.run(coord._statsapi_summary("401907986", espn, comp))
+    assert out is not None and out["plays"]
+    home = next(c for c in comp["competitors"] if c["homeAway"] == "home")
+    home_mlb = sa.ESPN_TO_MLB_TEAM_ID[str(home["id"])]
+    assert any(f"teamId={home_mlb}" in u for u in coord.calls)
+
+
 def test_statsapi_summary_end_to_end_and_game_pk_cached():
     espn, feed = _tb_end_of_b6()
     comp = espn["header"]["competitions"][0]
