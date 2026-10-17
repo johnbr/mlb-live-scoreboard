@@ -326,6 +326,7 @@ state attributes. A few are handy for dashboards and automations:
 | Attribute     | Type   | Description                                                                                                       |
 | ------------- | ------ | --------------------------------------------------------------------------------------------------------------- |
 | `game_active` | bool   | `true` only while the card is displaying the live game (`mode == "live"`). Use it to gate cards/automations on "a game is on screen right now." |
+| `in_season`   | bool   | `false` between seasons: the displayed schedule has no game today and either hasn't started yet or has ended (team eliminated / season over). Once both pennants are decided, an entry whose team is out follows the World Series — and reads `false` until the day of Game 1. Shown through the day of a schedule's last game. |
 | `mode`        | string | Which event the card shows: `live`, `previous`, or `next`.                                                       |
 | `is_live`     | bool   | The displayed competition's status is in-progress (or delayed/suspended).                                        |
 | `status_text` | string | Human-readable status detail, e.g. `Top 3rd`, `Final`, `Rain Delay`.                                             |
@@ -346,6 +347,17 @@ conditions:
 card:
   type: custom:mlb-live-game-card
   entity: sensor.mlb_live_scoreboard_lad
+```
+
+Example — hide the card in the off-season (it returns for the World Series
+and when games resume):
+
+```yaml
+type: custom:mlb-live-game-card
+entity: sensor.mlb_live_scoreboard_lad
+visibility:
+  - condition: template
+    value_template: "{{ state_attr('sensor.mlb_live_scoreboard_lad', 'in_season') != false }}"
 ```
 
 ## Supported Teams

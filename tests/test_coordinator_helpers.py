@@ -3710,6 +3710,34 @@ def test_has_remaining_games():
     assert Coord._has_remaining_games([_ev("C", date=_iso(now + 86400), state="post")], now) is False
 
 
+def test_in_season():
+    from zoneinfo import ZoneInfo
+
+    # Fixed local noon so "today" vs "yesterday" can't straddle midnight.
+    now_local = datetime(2026, 10, 17, 12, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
+    now = now_local.timestamp()
+    day = 86400
+
+    def final(eid, ts):
+        return _ev(eid, date=_iso(ts), state="post", name="STATUS_FINAL", completed=True)
+
+    # Mid-season: games behind and ahead.
+    assert Coord._in_season([final("A", now - 2 * day), _ev("B", date=_iso(now + 2 * day))], now, now_local) is True
+    # Season over: the last game was yesterday, nothing left.
+    assert Coord._in_season([final("A", now - 3 * day), final("B", now - day)], now, now_local) is False
+    # ...but the day of the last game still shows it (6 PM local final).
+    assert Coord._in_season([final("A", now - day), final("B", now + 6 * 3600)], now, now_local) is True
+    # Before the first game day (off-season, or World Series before Game 1).
+    assert Coord._in_season([_ev("W1", date=_iso(now + 4 * day)), _ev("W2", date=_iso(now + 5 * day))], now, now_local) is False
+    # Game 1 day: a 5 PM PT first pitch (next day 00:00Z) counts as today.
+    assert Coord._in_season([_ev("W1", date=_iso(now + 5 * 3600)), _ev("W2", date=_iso(now + day))], now, now_local) is True
+    # A live game always counts, even one that started "yesterday" (past midnight).
+    assert Coord._in_season([_ev("L", date=_iso(now - 14 * 3600), state="in")], now, now_local) is True
+    # A canceled future game is not "ahead".
+    assert Coord._in_season([final("A", now - 2 * day), _ev("C", date=_iso(now + day), state="post")], now, now_local) is False
+    assert Coord._in_season([], now, now_local) is False
+
+
 def test_world_series_teams_from_event():
     assert Coord._world_series_teams_from_event(_ws_event("1", "5", "8")) == ("5", "8")
     # Pennants undecided: ESPN's TBD placeholders carry ids -1 / -2.

@@ -61,6 +61,9 @@ def build_state_attributes(data: Any) -> dict[str, Any]:
         # Stable boolean for dashboards/automations to gate on "a game is
         # on screen right now" without string-comparing `mode`.
         "game_active": data.mode == "live",
+        # False between seasons (and before the World Series starts for an
+        # entry whose team is out); gate the card on it to hide it then.
+        "in_season": getattr(data, "in_season", True),
         "is_live": data.is_live,
         "is_delayed": data.is_delayed,
         # "espn", or "mlb_statsapi" while ESPN publishes no play-by-play for the
