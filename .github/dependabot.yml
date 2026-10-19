@@ -8,3 +8,8 @@ updates:
       prefix: ci
     cooldown:
       default-days: 7
+    groups:
+      # init and analyze must run the same version, or CodeQL refuses to run
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
