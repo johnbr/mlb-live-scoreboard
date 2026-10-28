@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.40.0...v1.41.0) (2026-10-28)
+
+
+### Features
+
+* start the pre-game countdown 1 hour before first pitch ([#159](https://github.com/johnbr/mlb-live-scoreboard/issues/159)) ([b6343f6](https://github.com/johnbr/mlb-live-scoreboard/commit/b6343f644c5d3eff3f0d9c7cca573ecd18017abd))
+
 ## [1.40.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.39.1...v1.40.0) (2026-10-15)
 
 
