@@ -113,7 +113,7 @@ const CARD_DEFAULTS = {
   // Hours before first pitch at which the upcoming-game card swaps the start
   // time for a countdown that ticks every second, client-side (no server
   // polling). 0 turns the countdown off.
-  countdown_hours: 6,
+  countdown_hours: 1,
 };
 
 // Pixel size for each `headshot_size` preset. Used by the CSS rules near

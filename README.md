@@ -15,7 +15,7 @@ A Home Assistant custom integration and Lovelace card for displaying live MLB ga
 - **Pitch-zone graphic** - Optional strike-zone plot with one numbered, color-coded dot per pitch in the current at-bat (`show_pitch_zone`, off by default)
 - **ABS challenges remaining** - Yellow dots beside each team's score on the live card show its ball-strike challenges left (filled = remaining, hollow = lost); a dot pulses while that team's challenge is under review (`show_challenges`)
 - **Due-up panel** - Between half-innings, the matchup row shows the next three batters with portraits and stats
-- **Pre-game info** - Scheduled game times and probable pitchers; within 6 hours of first pitch (configurable, `countdown_hours`) the start time becomes a live countdown that ticks every second (client-side, no extra polling)
+- **Pre-game info** - Scheduled game times and probable pitchers; within 1 hour of first pitch (configurable, `countdown_hours`) the start time becomes a live countdown that ticks every second (client-side, no extra polling)
 - **Post-game results** - Final scores and game leaders
 - **Compact-card expand panel** - Click an upcoming or completed game card to expand it. Upcoming games show probable starters + current division standings; completed games show the pitching decisions (W/L/SV with records and game lines), every scoring play of the game, and game leaders (top hitters / pitchers per side) above the same standings block. An optional "Watch highlights on ESPN" link appears once clips are published (`show_highlights`)
 - **Schedule navigation** - `‹ ›` arrows on the non-live card page back through previous results and forward through upcoming games (`show_schedule_nav`)
@@ -115,7 +115,7 @@ Add the card to your dashboard — either way:
 | `entity`               | string  | **required** | The MLB scoreboard sensor entity                                                                                                                                                                                                                                                                         |
 | `title`                | string  | Team name    | Card title                                                                                                                                                                                                                                                                                               |
 | `refresh_rate`         | number  | `0`          | Auto-refresh interval in seconds (0 = disabled)                                                                                                                                                                                                                                                          |
-| `countdown_hours`      | number  | `6`          | Hours before first pitch at which the upcoming-game card swaps its start time for a countdown that ticks every second (client-side). `0` always shows the start time; max `24`                                                                                                                           |
+| `countdown_hours`      | number  | `1`          | Hours before first pitch at which the upcoming-game card swaps its start time for a countdown that ticks every second (client-side). `0` always shows the start time; max `24`                                                                                                                           |
 | `show_series`          | boolean | `true`       | Postseason only: show the series standing above the score rows (e.g. `NLDS · Dodgers lead 2-0`, `NLDS · Game 1` before the series starts). Renders nothing in the regular season                                                                                                                         |
 | `show_challenges`      | boolean | `true`       | Show ball-strike (ABS) challenges remaining as dots left of each team's score on the live card: filled = remaining, hollow = lost (a won challenge is kept). A dot pulses while that team's challenge is under review. Data comes from MLB's Stats API; renders nothing when MLB has no challenge counts for the game  |
 | `show_batter`          | boolean | `true`       | Show pitcher/batter matchup panel                                                                                                                                                                                                                                                                        |
@@ -145,7 +145,7 @@ type: custom:mlb-live-game-card
 entity: sensor.mlb_live_scoreboard_lad
 title: Dodgers
 refresh_rate: 10
-countdown_hours: 6
+countdown_hours: 1
 show_series: true
 show_challenges: true
 show_batter: true
