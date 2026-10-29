@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.41.0...v1.42.0) (2026-10-29)
+
+
+### Features
+
+* in_season attribute for hiding the card between seasons ([#161](https://github.com/johnbr/mlb-live-scoreboard/issues/161)) ([366bdc8](https://github.com/johnbr/mlb-live-scoreboard/commit/366bdc88bf005d9d14c3143d756c0c843ac10a5b))
+
 ## [1.41.0](https://github.com/johnbr/mlb-live-scoreboard/compare/v1.40.0...v1.41.0) (2026-10-28)
 
 
