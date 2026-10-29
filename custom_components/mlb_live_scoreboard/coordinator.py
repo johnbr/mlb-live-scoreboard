@@ -361,6 +361,10 @@ class MlbLiveScoreboardData:
     # Ball-strike (ABS) challenges remaining per team, from MLB's feed; ``{}``
     # unless the displayed game is live. See :class:`AbsChallenges`.
     abs_challenges: AbsChallenges = field(default_factory=dict)
+    # False between seasons: the displayed schedule (the team's own, or the
+    # World Series it follows) has no game today and either hasn't started or
+    # is over. See :meth:`MlbLiveScoreboardCoordinator._in_season`.
+    in_season: bool = True
 
 
 class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData]):
@@ -3850,6 +3854,34 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
                 return True
         return False
 
+    @classmethod
+    def _in_season(cls, events: list[dict[str, Any]], now_ts: float, now_local: datetime) -> bool:
+        """True while the displayed schedule is mid-run: a game is live or on
+        today's local calendar, or games lie both behind and ahead of now.
+
+        False before its first game day (the off-season once ESPN rolls to the
+        new schedule; the World Series override before Game 1, whose events
+        are WS games only) and from the day after its last game (eliminated,
+        or the World Series over). Dashboards gate the card on it.
+        """
+        played = upcoming = False
+        for event in events:
+            comps = event.get("competitions") or [{}]
+            status = ((comps[0] or {}).get("status") or event.get("status") or {}).get("type") or {}
+            state = str(status.get("state") or "").lower()
+            if state in LIVE_STATES or str(status.get("name") or "").upper() == STATUS_NAME_IN_PROGRESS:
+                return True
+            if cls._event_on_local_day(event.get("date"), now_local):
+                return True
+            ts = _parse_iso_ts(event.get("date"))
+            if ts is None:
+                continue
+            if ts > now_ts and state != "post":
+                upcoming = True
+            else:
+                played = True
+        return played and upcoming
+
     @staticmethod
     def _is_world_series_event(event: dict[str, Any] | None) -> bool:
         """True when an ESPN event's notes headline it as a World Series game."""
@@ -4540,6 +4572,8 @@ class MlbLiveScoreboardCoordinator(DataUpdateCoordinator[MlbLiveScoreboardData])
         new_data = await self._assemble_game_data(
             events, display_id, prev_id, next_id, live_id, schedule, live_bridge=True, team_id=display_team_id
         )
+
+        new_data.in_season = self._in_season(events, time.time(), self._local_now())
 
         # Adapt the poll cadence to the game state; the coordinator reads
         # ``update_interval`` when it schedules the refresh after this one.
